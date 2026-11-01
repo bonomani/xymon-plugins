@@ -46,18 +46,18 @@ export XYMONAPI_RAG_DOCS="$work/docs" XYMONAPI_RAG_INDEX="$work/index.npz" \
 # The search's own requirements first, with the API not yet started, so a
 # missing module skips here rather than fails below.
 rc=0
-"$ROOT/rag/xymonapi-rag.sh" search 'anything' > /dev/null 2> "$work/rag.err" || rc=$?
+"$ROOT/plugins/xymonapi-rag/xymonapi-rag.sh" search 'anything' > /dev/null 2> "$work/rag.err" || rc=$?
 [ "$rc" -eq 77 ] && skip "$(cat "$work/rag.err")"
 
 # 1. Nothing listens on the API's port when index starts; the API comes up
 #    some seconds later, as at boot. index must wait and then succeed.
 API_PORT=$(free_port) || fail "no free port for the API"
 export XYMONAPI_URL="http://127.0.0.1:$API_PORT"
-"$ROOT/rag/xymonapi-rag.sh" index > "$work/index.out" 2> "$work/rag.err" &
+"$ROOT/plugins/xymonapi-rag/xymonapi-rag.sh" index > "$work/index.out" 2> "$work/rag.err" &
 RAG_PID=$!
 sleep 12
 kill -0 "$RAG_PID" 2>/dev/null || fail "index gave up within 12 seconds of an API that was not up yet: $(tail -n 3 "$work/rag.err")"
-env $HIST XYMONAPI_LISTEN="127.0.0.1:$API_PORT" "$ROOT/xymonapi.sh" > "$work/api.log" 2>&1 &
+env $HIST XYMONAPI_LISTEN="127.0.0.1:$API_PORT" "$ROOT/plugins/xymonapi/xymonapi.sh" > "$work/api.log" 2>&1 &
 API_PID=$!
 deadline=$(( $(date +%s) + 60 ))
 until curl -s --max-time 5 -o /dev/null "$XYMONAPI_URL/xymon/api/v1/health"; do
@@ -72,7 +72,7 @@ wait "$RAG_PID" || rc=$?
 [ "$rc" -eq 0 ] || fail "index exited with $rc once the API was up: $(tail -n 5 "$work/rag.err")"
 assert_contains "indexed" "$(cat "$work/index.out")" "index built the index after waiting for the API"
 assert_contains 'web.example.com http' \
-	"$("$ROOT/rag/xymonapi-rag.sh" search -k 1 --kind history 'HTTP 500 on the login page' 2>/dev/null)" \
+	"$("$ROOT/plugins/xymonapi-rag/xymonapi-rag.sh" search -k 1 --kind history 'HTTP 500 on the login page' 2>/dev/null)" \
 	"and the history read through the late API is in it"
 
 # 2. An API that answers, with a 401, is not waited for.
@@ -84,7 +84,7 @@ export XYMONAPI_URL="http://127.0.0.1:$API_PORT"
 unset XYMONAPI_TOKEN XYMONAPI_TOKEN_FILE
 began=$(date +%s)
 rc=0
-XYMONAPI_RAG_INDEX="$work/index2.npz" "$ROOT/rag/xymonapi-rag.sh" index > /dev/null 2> "$work/rag.err" || rc=$?
+XYMONAPI_RAG_INDEX="$work/index2.npz" "$ROOT/plugins/xymonapi-rag/xymonapi-rag.sh" index > /dev/null 2> "$work/rag.err" || rc=$?
 took=$(( $(date +%s) - began ))
 [ "$rc" -ne 0 ] || fail "index succeeded against an API that answered 401"
 assert_contains 'answered 401' "$(cat "$work/rag.err")" "a 401 is reported"

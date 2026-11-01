@@ -1,8 +1,8 @@
-.TH XYMONAPI-MCP 1 "October 30, 2026" "xymon-api"
+.TH XYMONAPI-MCP 1 "October 30, 2026" "xymon-plugins"
 .SH NAME
 xymonapi-mcp \- MCP server for the Xymon API
 .SH SYNOPSIS
-.B "mcp-server/xymonapi-mcp.sh"
+.B "xymonapi-mcp/xymonapi-mcp.sh"
 
 .SH DESCRIPTION
 xymonapi-mcp gives an AI client that speaks the Model Context Protocol --
@@ -14,7 +14,7 @@ so the client gets what the API answers at that moment: nothing is stored,
 and nothing in Xymon is changed. Every tool is marked read-only.
 
 It runs where the client runs, which need not be the Xymon server, and needs
-Python 3.10 or later with the module mcp (mcp-server/requirements.txt) and
+Python 3.10 or later with the module mcp (xymonapi-mcp/requirements.txt) and
 nothing else: the searches too are the API's. When either is missing it
 says so on stderr and exits with status 77. It writes nothing but protocol
 messages on stdout. \fBmake install-client\fR puts it under a PREFIX of

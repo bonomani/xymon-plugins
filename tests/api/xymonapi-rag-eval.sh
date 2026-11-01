@@ -21,7 +21,7 @@ ROOT=$(find_root)
 work=$(mktempdir)
 
 export XYMONAPI_RAG_DOCS="$XYMON_SRC" XYMONAPI_RAG_INDEX="$work/docs.npz"
-rag() { "$ROOT/rag/xymonapi-rag.sh" "$@" 2> "$work/rag.err"; }
+rag() { "$ROOT/plugins/xymonapi-rag/xymonapi-rag.sh" "$@" 2> "$work/rag.err"; }
 
 rc=0
 rag index --no-history > "$work/index.out" || rc=$?

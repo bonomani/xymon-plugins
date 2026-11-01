@@ -139,12 +139,12 @@ assert_contains 'cleaning old kernels' "$(api_get '/status?entity=disk.example.c
 stop_process "$API_PID"; API_PID=""
 printf 'password=(\n' > "$work/badhide"
 rc=0
-XYMONAPI_HIDE="$work/badhide" XYMONAPI_LISTEN="127.0.0.1:$API_PORT" "$ROOT/xymonapi.sh" > "$work/badhide.log" 2>&1 || rc=$?
+XYMONAPI_HIDE="$work/badhide" XYMONAPI_LISTEN="127.0.0.1:$API_PORT" "$ROOT/plugins/xymonapi/xymonapi.sh" > "$work/badhide.log" 2>&1 || rc=$?
 assert_equal "1" "$rc" "the API with an expression that is not one"
 assert_contains 'XYMONAPI_HIDE' "$(cat "$work/badhide.log")" "and says which setting"
 assert_contains 'line 1' "$(cat "$work/badhide.log")" "and which line"
 rc=0
-XYMONAPI_HIDE="$work/no-such-file" XYMONAPI_LISTEN="127.0.0.1:$API_PORT" "$ROOT/xymonapi.sh" > "$work/nohide.log" 2>&1 || rc=$?
+XYMONAPI_HIDE="$work/no-such-file" XYMONAPI_LISTEN="127.0.0.1:$API_PORT" "$ROOT/plugins/xymonapi/xymonapi.sh" > "$work/nohide.log" 2>&1 || rc=$?
 assert_equal "1" "$rc" "the API with a hide file it cannot read"
 assert_contains 'cannot read XYMONAPI_HIDE' "$(cat "$work/nohide.log")" "and says so"
 unset XYMONAPI_HIDE

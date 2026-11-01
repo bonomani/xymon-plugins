@@ -54,11 +54,11 @@ assert_contains "CAFILE=" "$(api_get /client)" "and knows where a certificate to
 # for no password, and the test pins the message. git and make are stubs,
 # and the virtualenv is there, so nothing is fetched or built.
 lap=$work/lap
-mkdir -p "$work/stub" "$lap/src/.git" "$lap/prefix/libexec/xymonapi/venv/bin" "$lap/cfg"
+mkdir -p "$work/stub" "$lap/src/.git" "$lap/prefix/libexec/xymon-plugins/venv/bin" "$lap/cfg"
 printf '#!/bin/sh\nexit 0\n' > "$work/stub/git"
 cp "$work/stub/git" "$work/stub/make"
-cp "$work/stub/git" "$lap/prefix/libexec/xymonapi/venv/bin/python3"
-chmod 755 "$work/stub/git" "$work/stub/make" "$lap/prefix/libexec/xymonapi/venv/bin/python3"
+cp "$work/stub/git" "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
+chmod 755 "$work/stub/git" "$work/stub/make" "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
 api_get /client > "$work/setup.sh"
 rc=0
 out=$(cd "$lap" && printf 'secret\n' | HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src" PATH="$work/stub:$PATH" \
@@ -91,16 +91,16 @@ stop_process "$API_PID"; API_PID=""
 unset XYMONAPI_TLS_CERT
 chmod 644 "$work/other.key"
 rc=0
-XYMONAPI_TLS_CERT="$work/other.pem" XYMONAPI_TLS_KEY="$work/other.key" "$ROOT/xymonapi.sh" > "$work/open.log" 2>&1 || rc=$?
+XYMONAPI_TLS_CERT="$work/other.pem" XYMONAPI_TLS_KEY="$work/other.key" "$ROOT/plugins/xymonapi/xymonapi.sh" > "$work/open.log" 2>&1 || rc=$?
 assert_equal "1" "$rc" "a key others can read"
 assert_contains 'readable by others' "$(cat "$work/open.log")" "and it says so"
 rc=0
-XYMONAPI_TLS_CERT="$work/other.pem" XYMONAPI_TLS_KEY="$work/no-such.key" "$ROOT/xymonapi.sh" > "$work/nokey.log" 2>&1 || rc=$?
+XYMONAPI_TLS_CERT="$work/other.pem" XYMONAPI_TLS_KEY="$work/no-such.key" "$ROOT/plugins/xymonapi/xymonapi.sh" > "$work/nokey.log" 2>&1 || rc=$?
 assert_equal "1" "$rc" "a certificate without its key"
 assert_contains 'cannot read the TLS key' "$(cat "$work/nokey.log")" "and it says which"
 rm "$work/home/etc/tls/xymond.key"
 rc=0
-XYMONHOME="$work/home" "$ROOT/xymonapi.sh" > "$work/half.log" 2>&1 || rc=$?
+XYMONHOME="$work/home" "$ROOT/plugins/xymonapi/xymonapi.sh" > "$work/half.log" 2>&1 || rc=$?
 assert_equal "1" "$rc" "xymond's certificate present but not its key"
 assert_contains 'xymond.key' "$(cat "$work/half.log")" "and it names the file"
 

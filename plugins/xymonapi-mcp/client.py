@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """A client for xymonapi(8), with nothing but the standard library: the MCP
-server and the search in rag/ both read the API through it.
+server and the search in xymonapi-rag/ both read the API through it.
 
 XYMONAPI_URL is where the API is, http://127.0.0.1:1986 by default.
 XYMONAPI_TOKEN_FILE names a file holding a client token -- the one the setup

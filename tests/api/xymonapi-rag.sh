@@ -64,7 +64,7 @@ export TZ=UTC XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" \
 	XYMONAPI_RAG_DOCS="$work/docs" XYMONAPI_RAG_INDEX="$work/index.npz" XYMONAPI_RAG_SINCE=1699000000
 start_api
 export XYMONAPI_URL="http://127.0.0.1:$API_PORT"
-rag() { "$ROOT/rag/xymonapi-rag.sh" "$@" 2> "$work/rag.err"; }
+rag() { "$ROOT/plugins/xymonapi-rag/xymonapi-rag.sh" "$@" 2> "$work/rag.err"; }
 
 # Before there is an index: the API says so, and /health says there is none.
 assert_equal "404" "$(api_code '/search?q=anything')" "/search with no index"

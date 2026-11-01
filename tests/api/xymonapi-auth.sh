@@ -45,8 +45,8 @@ grep -q '^bob:\$2y\$' "$work/htpasswd" || fail "htpasswd did not write bob as bc
 "${MAKE:-make}" -C "$ROOT" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
 	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
 commit=0123456789abcdef0123456789abcdef01234567
-printf '%s\n' "$commit" > "$work/inst/ext/xymonapi/COMMIT"
-API_ROOT=$work/inst/ext/xymonapi
+printf '%s\n' "$commit" > "$work/inst/ext/xymon-plugins/COMMIT"
+API_ROOT=$work/inst/ext/xymon-plugins/xymonapi
 
 # The answers checked here need no xymond: /health says alive:false without
 # one, and the password is checked first, on every path but /client.
@@ -113,13 +113,13 @@ hard='pa ss"wo\rd*'
 htpasswd -bB "$work/htpasswd" carol "$hard" 2>/dev/null || fail "htpasswd could not add carol"
 curl -s "http://127.0.0.1:$API_PORT/xymon/api/v1/client" > "$work/carol.sh"
 lap=$work/lap
-mkdir -p "$work/stub" "$lap/src/.git" "$lap/prefix/libexec/xymonapi/venv/bin" "$lap/cfg/xymon-api"
+mkdir -p "$work/stub" "$lap/src/.git" "$lap/prefix/libexec/xymon-plugins/venv/bin" "$lap/cfg/xymon-api"
 printf '#!/bin/sh\nprintf "%%s\\n" "$@" >> "%s/git.args"\ncase " $* " in *" rev-list "*) echo 3 ;; esac\n' "$lap" > "$work/stub/git"
 printf '#!/bin/sh\nexit 0\n' > "$work/stub/make"
 printf '#!/bin/sh\nprintf "%%s\\n" "$@" >> "%s/claude.args"\n' "$lap" > "$work/stub/claude"
 printf '#!/bin/sh\nprintf "%%s\\n" "$@" >> "%s/codex.args"\n' "$lap" > "$work/stub/codex"
-printf '#!/bin/sh\nexit 0\n' > "$lap/prefix/libexec/xymonapi/venv/bin/python3"
-chmod 755 "$work/stub/git" "$work/stub/make" "$work/stub/claude" "$work/stub/codex" "$lap/prefix/libexec/xymonapi/venv/bin/python3"
+printf '#!/bin/sh\nexit 0\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
+chmod 755 "$work/stub/git" "$work/stub/make" "$work/stub/claude" "$work/stub/codex" "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
 # A password file an earlier version of the script kept: it must go.
 printf '%s\n' "$hard" > "$lap/cfg/xymon-api/xymon.password"
 rc=0
@@ -181,7 +181,7 @@ assert_contains "make is needed" "$out" "the setup script says make is missing"
 # A virtualenv a run before left half made -- its python3 there, without
 # mcp -- is made again, not taken as it is: the Python here makes a venv
 # whose pip records that it ran.
-printf '#!/bin/sh\nexit 1\n' > "$lap/prefix/libexec/xymonapi/venv/bin/python3"
+printf '#!/bin/sh\nexit 1\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
 cat > "$work/stub/python-venv" <<STUB
 #!/bin/sh
 if [ "\$1" = -m ]; then
@@ -206,19 +206,19 @@ assert_contains "pip" "$(cat "$lap/pip.log")" "a half-made venv is made again, a
 # $commit, then the same.
 "${MAKE:-make}" -C "$ROOT" install-client PREFIX="$work/client" >"$work/client.log" 2>&1 \
 	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
-assert_file_exists "$work/client/libexec/xymonapi/COMMIT"
-printf '%s\n' fedcba9876543210fedcba9876543210fedcba98 > "$work/client/libexec/xymonapi/COMMIT"
+assert_file_exists "$work/client/libexec/xymon-plugins/COMMIT"
+printf '%s\n' fedcba9876543210fedcba9876543210fedcba98 > "$work/client/libexec/xymon-plugins/COMMIT"
 mine=$(curl -s -u alice:secret -X POST -H 'Content-Type: application/json' -d '{"client":"mcptest"}' "http://127.0.0.1:$API_PORT/xymon/api/v1/tokens" \
 	| sed -n 's/.*"token": *"\(xat_[A-Za-z0-9_-]*\)".*/\1/p')
 [ -n "$mine" ] || fail "the API gave alice no token"
-XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymonapi" \
+XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymon-plugins" \
 	mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
 answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $(tail -n 5 "$work/mcp.err")"
 assert_contains 'runs commit 0123456789ab, this client fedcba987654' "$answer" "a client of another commit is told, with the answer"
 assert_contains "curl http://127.0.0.1:$API_PORT/xymon/api/v1/client > xymon-setup.sh && sh xymon-setup.sh" "$answer" "and the command that updates it"
 assert_contains 'this client fedcba987654' "$(cat "$work/mcp.err")" "and on stderr"
-printf '%s\n' "$commit" > "$work/client/libexec/xymonapi/COMMIT"
-XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymonapi" \
+printf '%s\n' "$commit" > "$work/client/libexec/xymon-plugins/COMMIT"
+XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymon-plugins" \
 	mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
 answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $(tail -n 5 "$work/mcp.err")"
 assert_not_contains 'warning' "$answer" "the same commit: no warning"
@@ -243,7 +243,7 @@ assert_equal "200" "$(code)" "XYMONAPI_PASSWD set empty: no password asked"
 stop_process "$API_PID"
 API_PID=""
 rc=0
-XYMONAPI_PASSWD="$work/no-such-file" "$ROOT/xymonapi.sh" > "$work/nofile.log" 2>&1 || rc=$?
+XYMONAPI_PASSWD="$work/no-such-file" "$ROOT/plugins/xymonapi/xymonapi.sh" > "$work/nofile.log" 2>&1 || rc=$?
 assert_equal "1" "$rc" "the API with a password file it cannot read"
 assert_contains "cannot read XYMONAPI_PASSWD" "$(cat "$work/nofile.log")" "and it says why"
 

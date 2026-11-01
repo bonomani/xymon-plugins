@@ -30,11 +30,11 @@ logging.basicConfig(stream=sys.stderr, level=logging.INFO,
 log = logging.getLogger("xymonapi")
 
 SPEC_PATH = Path(__file__).resolve().parent / "openapi.yaml"
-RAG_DIR = Path(__file__).resolve().parent / "rag"
+RAG_DIR = Path(__file__).resolve().parent.parent / "xymonapi-rag"
 
 
 def _rag():
-    """rag/xymonrag.py, imported when first needed: /search and the search
+    """xymonapi-rag/xymonrag.py, beside this plugin, imported when first needed: /search and the search
     part of /health use it, the other operations do not, and its modules
     (fastembed, numpy) are not required unless the search is used."""
     if str(RAG_DIR) not in sys.path:
@@ -110,7 +110,7 @@ def _search(request):
         rag = _rag()
     except ImportError as exc:
         return JSONResponse({"error": "not_found", "detail": "search is not set up on this "
-                             "server: the Python modules in rag/requirements.txt are missing "
+                             "server: the Python modules in xymonapi-rag/requirements.txt are missing "
                              f"({exc.name})"}, status_code=404)
     try:
         # remote=False: this is the server; with no index it says so rather

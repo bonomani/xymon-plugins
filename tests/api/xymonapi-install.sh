@@ -3,7 +3,8 @@
 #
 # tests/api/xymonapi-install.sh
 #
-# make install puts the API in $XYMONHOME/ext/xymonapi/, its manual page in
+# make install puts the API in $XYMONHOME/ext/xymon-plugins/xymonapi/, the
+# search and the MCP client beside it, its manual page in
 # man8/, and its task in $XYMONHOME/etc/tasks.d/xymonapi -- disabled, with
 # ENVFILE naming that server's xymonserver.cfg. An install over one where the
 # admin enabled the task leaves that file alone: putting DISABLED back would
@@ -37,12 +38,16 @@ assert_contains "XYMONHOME" "$(cat "$work/nohome.log")" "and it says what is mis
 	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
 
 for f in app.py xymon.py clientsetup.py tokens.py openapi.yaml requirements.txt xymonapi.sh; do
-	assert_file_exists "$home/ext/xymonapi/$f"
+	assert_file_exists "$home/ext/xymon-plugins/xymonapi/$f"
 done
-[ -x "$home/ext/xymonapi/xymonapi.sh" ] || fail "the launcher is not executable"
-# Installed from a git checkout, the commit is recorded for the /client script.
-assert_file_exists "$home/ext/xymonapi/COMMIT"
-assert_equal "$(git -C "$ROOT" rev-parse HEAD)" "$(cat "$home/ext/xymonapi/COMMIT")" "COMMIT holds this checkout's commit"
+for f in xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt xymonapi-mcp/client.py; do
+	assert_file_exists "$home/ext/xymon-plugins/$f"
+done
+[ -x "$home/ext/xymon-plugins/xymonapi/xymonapi.sh" ] || fail "the launcher is not executable"
+# Installed from a git checkout, the commit is recorded, once for all the
+# plugins, for the /client script.
+assert_file_exists "$home/ext/xymon-plugins/COMMIT"
+assert_equal "$(git -C "$ROOT" rev-parse HEAD)" "$(cat "$home/ext/xymon-plugins/COMMIT")" "COMMIT holds this checkout's commit"
 assert_file_exists "$work/man/man8/xymonapi.8"
 
 task=$home/etc/tasks.d/xymonapi
@@ -67,7 +72,7 @@ cmp -s "$work/enabled" "$task" \
 odd="$work/x y&z|w"
 "$make" -C "$ROOT" install XYMONHOME="$odd" MANDIR="$work/man 2" >"$work/odd.log" 2>&1 \
 	|| fail "make install into a directory with a space, & and | failed: $(tail -n 5 "$work/odd.log")"
-assert_file_exists "$odd/ext/xymonapi/xymonapi.sh"
+assert_file_exists "$odd/ext/xymon-plugins/xymonapi/xymonapi.sh"
 assert_file_exists "$work/man 2/man8/xymonapi.8"
 grep -qF "ENVFILE $odd/etc/xymonserver.cfg" "$odd/etc/tasks.d/xymonapi" \
 	|| fail "the task file does not name that directory as it is: $(grep ENVFILE "$odd/etc/tasks.d/xymonapi")"
@@ -87,23 +92,23 @@ assert_equal "# mine" "$(cat "$home/etc/xymonapi-apache.conf")" "an edited Apach
 prefix="$work/client prefix"
 "$make" -C "$ROOT" install-client PREFIX="$prefix" >"$work/client.log" 2>&1 \
 	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
-for f in mcp-server/server.py mcp-server/client.py mcp-server/xymonapi-mcp.sh mcp-server/requirements.txt \
-         rag/xymonrag.py rag/xymonapi-rag.sh rag/requirements.txt; do
-	assert_file_exists "$prefix/libexec/xymonapi/$f"
+for f in xymonapi-mcp/server.py xymonapi-mcp/client.py xymonapi-mcp/xymonapi-mcp.sh xymonapi-mcp/requirements.txt \
+         xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt COMMIT; do
+	assert_file_exists "$prefix/libexec/xymon-plugins/$f"
 done
 assert_file_exists "$prefix/share/man/man1/xymonapi-mcp.1"
 assert_file_exists "$prefix/share/man/man1/xymonapi-rag.1"
 [ -x "$prefix/bin/xymonapi-mcp" ] || fail "bin/xymonapi-mcp is not executable"
 [ -x "$prefix/bin/xymonapi-rag" ] || fail "bin/xymonapi-rag is not executable"
-grep -qF "\"$prefix/libexec/xymonapi/rag/xymonapi-rag.sh\"" "$prefix/bin/xymonapi-rag" \
+grep -qF "\"$prefix/libexec/xymon-plugins/xymonapi-rag/xymonapi-rag.sh\"" "$prefix/bin/xymonapi-rag" \
 	|| fail "bin/xymonapi-rag does not run the installed launcher, quoted: $(cat "$prefix/bin/xymonapi-rag")"
-[ -e "$prefix/libexec/xymonapi/app.py" ] && fail "install-client installed the API"
+[ -e "$prefix/libexec/xymon-plugins/xymonapi/app.py" ] && fail "install-client installed the API"
 # The installed xymonapi-rag runs: --help needs Python alone, and finds
-# client.py beside rag/ as in the repository.
+# client.py in xymonapi-mcp/ beside it, as in the repository.
 if command -v "${XYMONAPI_PYTHON:-python3}" >/dev/null 2>&1; then
 	XYMONAPI_PYTHON="${XYMONAPI_PYTHON:-python3}" "$prefix/bin/xymonapi-rag" --help > "$work/help.out" 2>&1 \
 		|| fail "the installed xymonapi-rag --help failed: $(cat "$work/help.out")"
 	assert_contains 'search' "$(cat "$work/help.out")" "and names its commands"
 fi
 
-pass "make install puts the API in ext/xymonapi/ with disabled tasks and the Apache snippet, keeps what the admin edited, takes odd directory names, and install-client lays out the client side"
+pass "make install puts the three plugins in ext/xymon-plugins/ with disabled tasks and the Apache snippet, keeps what the admin edited, takes odd directory names, and install-client lays out the client side"

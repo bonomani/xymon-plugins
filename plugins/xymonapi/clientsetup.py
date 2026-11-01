@@ -17,13 +17,13 @@ import re
 import shlex
 import time
 
-REPO = os.environ.get("XYMONAPI_REPO", "https://github.com/bonomani/xymon-api")
+REPO = os.environ.get("XYMONAPI_REPO", "https://github.com/bonomani/xymon-plugins")
 PUBLIC_URL = os.environ.get("XYMONAPI_PUBLIC_URL", "").rstrip("/")
-# The commit this API was installed from, written beside this file by make
-# install when it ran in a git checkout: /health gives it, to a caller with a
+# The commit this API was installed from, written in the directory above
+# this plugin by make install when it ran in a git checkout: /health gives it, to a caller with a
 # password or token, and the laptop then gets the same code, not whatever is
 # newest. Absent (a tarball), the script takes the newest.
-_COMMIT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "COMMIT")
+_COMMIT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "COMMIT")
 _HEX = re.compile(r"[0-9a-f]{7,64}")
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 
@@ -46,7 +46,7 @@ NAME={name_q}
 # Not $USER, which is this machine's login: the API's user is asked for.
 APIUSER=${{XYMONAPI_USER:-}}
 PREFIX=${{1:-${{PREFIX:-$HOME/.local}}}}
-SRC=${{XYMONAPI_SRC:-$HOME/src/xymon-api}}
+SRC=${{XYMONAPI_SRC:-$HOME/src/xymon-plugins}}
 TOKENFILE=${{XDG_CONFIG_HOME:-$HOME/.config}}/xymon-api/$NAME.token
 # A password an earlier version of this script kept: removed, the token
 # replaces it.
@@ -177,12 +177,12 @@ make -s -C "$SRC" install-client PREFIX="$PREFIX"
 # pip installs (PEP 668), and the launcher runs whatever XYMONAPI_PYTHON names.
 # One that a run before left half made -- a python3 without mcp, as when
 # the venv module is missing -- is made again.
-VENV=$PREFIX/libexec/xymonapi/venv
+VENV=$PREFIX/libexec/xymon-plugins/venv
 if ! "$VENV/bin/python3" -c 'import mcp' >/dev/null 2>&1; then
 	say "the Python module mcp, in $VENV"
 	rm -rf "$VENV"
 	"$PYTHON" -m venv "$VENV"
-	"$VENV/bin/pip" -q install -r "$SRC/mcp-server/requirements.txt"
+	"$VENV/bin/pip" -q install -r "$SRC/plugins/xymonapi-mcp/requirements.txt"
 fi
 
 say "does the API answer?"
@@ -263,7 +263,7 @@ def valid_name(name: str | None) -> str:
 
 
 def installed_commit() -> str:
-    """The commit in the COMMIT file beside this module, or ""."""
+    """The commit in the COMMIT file above this plugin, or ""."""
     try:
         with open(_COMMIT, encoding="ascii") as fd:
             ref = fd.readline().strip()
