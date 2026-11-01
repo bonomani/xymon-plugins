@@ -22,7 +22,8 @@ $XYMONHISTDIR is set, the changes are read from xymond's own files, as
 .I xymonapi(8)
 reads them and with the same $XYMONAPI_HIDE: no API, user or token is
 needed. Anywhere else they are read through the API, page by page, with the
-token or user below. It
+token or user below; an API older than the xymonapi version the PLUGIN file
+names is said on stderr, once, and nothing is updated. It
 cuts them into passages, one per manual-page
 section or item and one per change; and stores a vector for each in
 $XYMONAPI_RAG_INDEX. A passage the index holds already keeps its vector, and

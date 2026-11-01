@@ -230,7 +230,12 @@ def _history_source():
     needed to get back what this user could read anyway. Anywhere else, the
     API."""
     import client                        # xymonapi-mcp/client.py
-    return _LocalHistory(client) if os.environ.get("XYMONHISTDIR") else _ApiHistory(client)
+    if os.environ.get("XYMONHISTDIR"):
+        return _LocalHistory(client)
+    # An API older than client.py was written for: said once, on stderr,
+    # by client.py itself. Nothing is updated from here.
+    client.version_warning()
+    return _ApiHistory(client)
 
 
 def history_passages(since: str, known: dict | None = None) -> list[dict]:
@@ -420,6 +425,7 @@ def search(question: str, kind: str | None = None, k: int = 5, remote: bool = Tr
 
 def _search_remote(question: str, kind: str | None, k: int) -> list[dict]:
     import client                        # xymonapi-mcp/client.py
+    client.version_warning()             # an old API: said once, on stderr
     try:
         return client.api("/search", q=question, kind=kind, k=str(k))["items"]
     except client.APIError as e:
