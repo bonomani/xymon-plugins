@@ -219,7 +219,7 @@ paths:
         - { name: format, in: query, schema: { type: string, enum: [sh, env], default: sh }, description: "sh, a script to read then run; env, the two settings alone." }
       responses:
         "200":
-          description: The script, or the settings. It holds no user, password or commit.
+          description: The script, or the settings. It holds no user, password or version.
           content:
             text/x-shellscript: { schema: { type: string } }
             text/plain: { schema: { type: string } }

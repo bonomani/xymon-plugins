@@ -11,11 +11,11 @@
 # name that looks like an option is refused, not passed to htpasswd as one.
 # A password file the API cannot read stops it from starting. /client alone
 # is open: it writes a setup script with the address asked and no user or
-# commit; /health gives the commit, to a user. Run as a laptop runs it, the
+# version; /health gives the version, to a user. Run as a laptop runs it, the
 # script asks for the user and gets a password holding a space, a quote, a
 # backslash and a glob character to the API as it is, keeps the token it
 # gets for this machine's short hostname instead of the password, installs
-# the commit /health gives, and registers the MCP server with that token
+# the release /health gives, and registers the MCP server with that token
 # file.
 #
 # Skips where the API cannot run (tests/lib/xymonapi.sh). Needs the xymon
@@ -40,12 +40,12 @@ htpasswd -bB "$work/htpasswd" bob s3cret 2>/dev/null
 grep -q '^alice:\$apr1\$' "$work/htpasswd" || fail "htpasswd did not write alice in its \$apr1\$ format"
 grep -q '^bob:\$2y\$' "$work/htpasswd" || fail "htpasswd did not write bob as bcrypt"
 
-# The API as make install lays it out, with a commit recorded beside it, so
-# that /health has one to give and the script one to install.
+# The API as make install lays it out, with a release's VERSION beside it,
+# so that /health has one to give and the script one to install.
 "${MAKE:-make}" -C "$ROOT" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
 	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
-commit=0123456789abcdef0123456789abcdef01234567
-printf '%s\n' "$commit" > "$work/inst/ext/COMMIT"
+version=xymonapi/v9.9.9
+printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
 API_ROOT=$work/inst/ext/xymonapi
 
 # The answers checked here need no xymond: /health says alive:false without
@@ -76,16 +76,16 @@ done
 
 # /client: open, a password set or not, since its script holds nothing
 # secret -- the address the request came through, the proxy's when its
-# headers say so, and no user or commit. The commit is /health's, behind
+# headers say so, and no user or version. The version is /health's, behind
 # the password.
 assert_equal "200" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/client")" "/client without a user"
 script=$(curl -s "http://127.0.0.1:$API_PORT/xymon/api/v1/client")
 assert_contains "URL=http://127.0.0.1:$API_PORT" "$script" "/client writes the address the request came to"
 assert_contains "NAME=xymon" "$script" "and the default name"
 printf '%s\n' "$script" | grep -q '^USER=' && fail "/client wrote a USER= line"
-assert_not_contains "$commit" "$script" "and not the commit"
-assert_contains "\"commit\":\"$commit\"" "$(curl -s -u alice:secret "$url")" "/health gives the commit to a user"
-assert_not_contains "$commit" "$(curl -s "$url")" "and not to a stranger"
+assert_not_contains "$version" "$script" "and not the version"
+assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user"
+assert_not_contains "$version" "$(curl -s "$url")" "and not to a stranger"
 printf '%s\n' "$script" > "$work/setup.sh"
 sh -n "$work/setup.sh" || fail "/client's script does not parse: $(sh -n "$work/setup.sh" 2>&1)"
 assert_contains 'text/x-shellscript' "$(curl -s -D - -o /dev/null "http://127.0.0.1:$API_PORT/xymon/api/v1/client" | tr 'A-Z' 'a-z')" "served as a shell script"
@@ -128,8 +128,8 @@ out=$(cd "$lap" && printf 'carol\n%s\n' "$hard" | HOME="$lap" XDG_CONFIG_HOME="$
 	sh "$work/carol.sh" "$lap/prefix" 2>&1) || rc=$?
 [ "$rc" -eq 0 ] || fail "the setup script failed with $rc: $out"
 assert_not_contains 'refused the password' "$out" "the API took carol's password from the script's curl"
-assert_contains "$(printf -- '--detach\n%s' "$commit")" "$(cat "$lap/git.args")" "the script installs the commit /health gave"
-assert_contains "the API runs commit $commit, 3 commit(s) behind the newest" "$out" "and says how far the server is behind the repository's newest, as git counts it"
+assert_contains "$(printf -- '--detach\n%s' "$version")" "$(cat "$lap/git.args")" "the script installs the release /health gave"
+assert_contains "the API runs $version, 3 commit(s) behind the newest" "$out" "and says how far the server is behind the repository's newest, as git counts it"
 assert_contains 'the API answers' "$out" "and the script read the answer (no xymond here, so alive is false)"
 tok=$lap/cfg/xymon-api/xymon.token
 assert_file_exists "$tok"
@@ -200,29 +200,19 @@ out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src
 assert_file_exists "$lap/pip.log"
 assert_contains "pip" "$(cat "$lap/pip.log")" "a half-made venv is made again, and mcp installed in it"
 
-# A client of another commit than the API's: the MCP server says so with
-# each answer, and on stderr, and updates nothing. The client as make
-# install-client lays it out, with its COMMIT made another than the API's
-# $commit, then the same.
+# The MCP server, as make install-client lays it out, reads the API with a
+# token and gives its answer as it is.
 "${MAKE:-make}" -C "$ROOT" install-client PREFIX="$work/client" >"$work/client.log" 2>&1 \
 	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
-assert_file_exists "$work/client/libexec/xymon-plugins/COMMIT"
-printf '%s\n' fedcba9876543210fedcba9876543210fedcba98 > "$work/client/libexec/xymon-plugins/COMMIT"
+assert_file_exists "$work/client/libexec/xymon-plugins/xymonapi-mcp/VERSION"
 mine=$(curl -s -u alice:secret -X POST -H 'Content-Type: application/json' -d '{"client":"mcptest"}' "http://127.0.0.1:$API_PORT/xymon/api/v1/tokens" \
 	| sed -n 's/.*"token": *"\(xat_[A-Za-z0-9_-]*\)".*/\1/p')
 [ -n "$mine" ] || fail "the API gave alice no token"
 XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymon-plugins" \
 	mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
 answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $(tail -n 5 "$work/mcp.err")"
-assert_contains 'runs commit 0123456789ab, this client fedcba987654' "$answer" "a client of another commit is told, with the answer"
-assert_contains "curl http://127.0.0.1:$API_PORT/xymon/api/v1/client > xymon-setup.sh && sh xymon-setup.sh" "$answer" "and the command that updates it"
-assert_contains 'this client fedcba987654' "$(cat "$work/mcp.err")" "and on stderr"
-printf '%s\n' "$commit" > "$work/client/libexec/xymon-plugins/COMMIT"
-XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymon-plugins" \
-	mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
-answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $(tail -n 5 "$work/mcp.err")"
-assert_not_contains 'warning' "$answer" "the same commit: no warning"
-assert_contains 'alive' "$answer" "and the answer"
+assert_contains 'alive' "$answer" "the MCP server's health tool gives /health's answer"
+assert_not_contains 'warning' "$answer" "and nothing else"
 
 # Xymon's own password file is the default: with XYMONHOME set and
 # etc/xymonpasswd there, nothing else need be set, and the API asks for

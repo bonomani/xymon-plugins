@@ -19,12 +19,13 @@ import time
 
 REPO = os.environ.get("XYMONAPI_REPO", "https://github.com/bonomani/xymon-plugins")
 PUBLIC_URL = os.environ.get("XYMONAPI_PUBLIC_URL", "").rstrip("/")
-# The commit this API was installed from, written in the directory above
-# this plugin by make install when it ran in a git checkout: /health gives it, to a caller with a
-# password or token, and the laptop then gets the same code, not whatever is
-# newest. Absent (a tarball), the script takes the newest.
-_COMMIT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "COMMIT")
-_HEX = re.compile(r"[0-9a-f]{7,64}")
+# The version this API was installed from, written beside this file by make
+# install as build/plugin.mk says: the release tag, xymonapi/v0.1.0, when
+# installed from one, else the version alone. /health gives it, to a caller
+# with a password or token, and the laptop then gets the code of that tag,
+# not whatever is newest; a version that is no tag gets it the newest.
+_VERSION = os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")
+_VERSION_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
 
 SCRIPT = """#!/bin/sh
@@ -34,7 +35,7 @@ SCRIPT = """#!/bin/sh
 # Read it, then run it. It asks for your user and password once, when the
 # API asks for one, to get this machine a token of its own -- the password
 # is not kept -- installs under PREFIX (~/.local by default) the code of the
-# commit the API runs, checks the API answers, and registers the MCP server
+# release the API runs, checks the API answers, and registers the MCP server
 # with Claude Code and Codex under the name {name}, each when it is here.
 # XYMONAPI_USER, when set, is the user, and is not asked.
 #
@@ -140,9 +141,11 @@ if [ -e "$OLDPASS" ]; then
 	echo "removed $OLDPASS: the token replaces the password, which is no longer kept"
 fi
 
-# The commit the API was installed from, which /health gives once the token
-# lets this machine in: /client, open to anyone, does not say it.
-REF=$(printf '%s' "$answer" | sed -n 's/.*"commit": *"\\([0-9a-f]*\\)".*/\\1/p')
+# The version the API was installed from, which /health gives once the token
+# lets this machine in: /client, open to anyone, does not say it. From a
+# release it is the tag, xymonapi/v0.1.0; from any other commit the version
+# alone, 0.1.0, which names no code to fetch.
+REF=$(printf '%s' "$answer" | sed -n 's/.*"version": *"\\([A-Za-z0-9._/-]*\\)".*/\\1/p')
 
 say "the code, in $SRC"
 if [ -d "$SRC/.git" ]; then
@@ -150,10 +153,10 @@ if [ -d "$SRC/.git" ]; then
 else
 	git clone -q {repo_q} "$SRC"
 fi
-# The commit the API was installed from, so both sides run the same code;
-# without one, or one the repository no longer has, the newest. Detached, so
-# a branch checked out there is left as it is.
-if [ -n "$REF" ] && git -C "$SRC" rev-parse -q --verify "$REF^{{commit}}" >/dev/null; then
+# The release the API was installed from, so both sides run the same code;
+# from no release, or one the repository has no tag for, the newest.
+# Detached, so a branch checked out there is left as it is.
+if [ -n "$REF" ] && git -C "$SRC" rev-parse -q --verify "refs/tags/$REF" >/dev/null; then
 	git -C "$SRC" checkout -q --detach "$REF"
 	# Whether the server is behind the repository's newest: said here, where
 	# the repository was just fetched, so that the server never has to reach
@@ -162,10 +165,10 @@ if [ -n "$REF" ] && git -C "$SRC" rev-parse -q --verify "$REF^{{commit}}" >/dev/
 	behind=$(git -C "$SRC" rev-list --count "$REF..origin/HEAD" 2>/dev/null || true)
 	case $behind in
 		''|0) ;;
-		*) echo "the API runs commit $REF, $behind commit(s) behind the newest of {repo}: make install on the server, from an updated checkout, brings it up to date" ;;
+		*) echo "the API runs $REF, $behind commit(s) behind the newest of {repo}: make install on the server, from an updated checkout, brings it up to date" ;;
 	esac
 else
-	[ -n "$REF" ] && echo "{repo} has no commit $REF, the one the API was installed from; taking its newest code"
+	[ -n "$REF" ] && echo "the API runs xymonapi $REF, which is no release of {repo}; taking its newest code"
 	git -C "$SRC" remote set-head origin -a >/dev/null
 	git -C "$SRC" checkout -q --detach origin/HEAD
 fi
@@ -262,14 +265,14 @@ def valid_name(name: str | None) -> str:
     return name
 
 
-def installed_commit() -> str:
-    """The commit in the COMMIT file above this plugin, or ""."""
+def installed_version() -> str:
+    """The version in the VERSION file beside this plugin, or ""."""
     try:
-        with open(_COMMIT, encoding="ascii") as fd:
+        with open(_VERSION, encoding="ascii") as fd:
             ref = fd.readline().strip()
     except (OSError, UnicodeDecodeError):
         return ""
-    return ref if _HEX.fullmatch(ref) else ""
+    return ref if _VERSION_RE.fullmatch(ref) else ""
 
 
 def render(url: str, name: str, fmt: str) -> str:

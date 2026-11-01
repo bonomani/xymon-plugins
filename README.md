@@ -25,8 +25,9 @@ make -C plugins/xymonapi-mcp install-client             # the MCP server alone
 
 On the server the plugins land in `$XYMONHOME/ext/`, one
 directory each; elsewhere in `$PREFIX/libexec/xymon-plugins/`, with a command
-per plugin in `$PREFIX/bin`. The commit installed is written once, beside
-them, and `/health` gives it so that a laptop fetches the same code.
+per plugin in `$PREFIX/bin`. Each plugin's version is written beside its
+files, in `VERSION`, and `/health` gives the API's so that a laptop fetches
+the same release.
 
 The repository is also a Claude Code plugin marketplace, for `xymonapi-mcp`.
 In Claude Code:
@@ -46,8 +47,9 @@ installed, with `XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and
 without the marketplace, so use one or the other.
 
 Releases are tagged per plugin, `NAME/vX.Y.Z`, matching the `version` in its
-`PLUGIN` file; none yet. Between tags, `make install` records the commit, and
-the setup script and the MCP server say when the two sides differ.
+`PLUGIN` file; none yet. Installed from a tag, `VERSION` holds the tag and the
+setup script fetches that release; from any other commit it holds the version
+alone, and the script fetches the newest code.
 
 ## The Xymon API
 
@@ -106,7 +108,7 @@ It writes into the Xymon server directory, so it is normally run as root.
 | installed file | from |
 |---|---|
 | `$XYMONHOME/ext/xymonapi/`: `app.py`, `xymon.py`, `clientsetup.py`, `tokens.py`, `openapi.yaml`, `requirements.txt`, and `xymonapi.sh`, the launcher | `plugins/xymonapi/`, the files of the same name |
-| `$XYMONHOME/ext/COMMIT`, the commit installed, which `/health` gives | `git rev-parse HEAD` |
+| `$XYMONHOME/ext/xymonapi/VERSION`, the version installed, which `/health` gives | the release tag, `xymonapi/vX.Y.Z`, when the checkout is at one, else the `version` in `plugins/xymonapi/PLUGIN` |
 | `$XYMONHOME/etc/tasks.d/xymonapi`, the task, written `DISABLED` | `plugins/xymonapi/xymonapi.tasks.DIST`, with `@XYMONHOME@` replaced |
 | `$XYMONHOME/ext/xymonapi-rag/`, the search and its launcher, and `xymonapi-mcp/`, whose `client.py` a search with no index here asks the API with | `plugins/xymonapi-rag/`, `plugins/xymonapi-mcp/` |
 | `$XYMONHOME/etc/tasks.d/xymonapi-rag`, the daily index task, written `DISABLED` | `plugins/xymonapi-rag/xymonapi-rag.tasks.DIST` |
@@ -178,7 +180,7 @@ sh xymon-setup.sh
 
 `/client` asks for no password, even where every other path does: the
 script carries the API's address and nothing secret -- no user, no
-password, not even the commit the server runs. The address is
+password, not even the version the server runs. The address is
 `XYMONAPI_PUBLIC_URL` when the server sets it, else the one the request
 came through, from its `Host` header, which the script says in its first
 lines: set `XYMONAPI_PUBLIC_URL` on any server other machines reach, so
@@ -194,9 +196,10 @@ The script:
    to get **this machine a token of its own**, named by its short hostname,
    and keeps the token in `~/.config/xymon-api/xymon.token`, not the
    password;
-3. asks `/health`, with the token if there is one, for the commit the server was installed
-   from, clones this repository at that commit, so both sides run the same
-   code, and runs `make install-client`;
+3. asks `/health`, with the token if there is one, for the version the
+   server was installed from, clones this repository at that release, so
+   both sides run the same code, or at its newest when the server runs no
+   release, and runs `make install-client`;
 4. makes a virtualenv with the `mcp` module;
 5. checks `/health` answers;
 6. registers the MCP server with Claude Code and with Codex, each when it is
@@ -436,7 +439,7 @@ XYMON_SRC=/path/to/built/xymon tests/run.sh
 
 | test, under `tests/api/` | what it checks |
 |---|---|
-| `xymonapi-auth` | the htpasswd file, Xymon's own by default, lets in only its users; the MCP client sends no password, even one in its environment; `/client` is open and writes the address the request came through, and no user or commit; `/health` gives the commit to a user; the script asks for the user, gets a password with a space, a quote, a backslash and a glob character to the API as it is, keeps a token for this machine's short hostname instead, installs the commit `/health` gave, says how far it is behind the newest, and registers the MCP server with the token, in Claude Code and Codex; under `bash`, a Ctrl-C at its password prompt ends it with echo back on; a virtualenv a run before left half made is made again; without `make` it says so before starting; an MCP client installed from another commit than the API's says so with each answer |
+| `xymonapi-auth` | the htpasswd file, Xymon's own by default, lets in only its users; the MCP client sends no password, even one in its environment; `/client` is open and writes the address the request came through, and no user or version; `/health` gives the version to a user; the script asks for the user, gets a password with a space, a quote, a backslash and a glob character to the API as it is, keeps a token for this machine's short hostname instead, installs the release `/health` gave, says how far it is behind the newest, and registers the MCP server with the token, in Claude Code and Codex; under `bash`, a Ctrl-C at its password prompt ends it with echo back on; a virtualenv a run before left half made is made again; without `make` it says so before starting |
 | `xymonapi-tokens` | a token per user and machine opens the API, replaces the last, is revoked on its own, and deleted with its user's removal from the password file, cannot make, list or revoke tokens, is stored as its SHA-256 only, and lets the MCP client in |
 | `xymonapi-board` | `/states`, `/alarms`, `/entities` and `/health` against a real `xymond`; `/status` gives exactly the host and test asked for, its text decoded as `xymondboard` wrote it and without the command line, and says whether it is acknowledged or disabled; `XYMONAPI_HIDE` blanks secrets, and a bad expression stops the API |
 | `xymonapi-history` | `/events` and `/histlog` read what `xymond_history` wrote, its two-letter colours included, a long history a page at a time |

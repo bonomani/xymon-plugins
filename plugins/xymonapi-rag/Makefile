@@ -22,7 +22,7 @@ install:
 	cp -f $(FILES) "$(EXT)/"
 	chmod 644 "$(EXT)/xymonrag.py" "$(EXT)/requirements.txt"
 	chmod 755 "$(EXT)/xymonapi-rag.sh"
-	$(call commit,$(EXTROOT))
+	$(call version,$(EXT))
 	mkdir -p "$(MAN1)"
 	cp -f xymonapi-rag.1 "$(MAN1)/"
 	chmod 644 "$(MAN1)/xymonapi-rag.1"
@@ -35,7 +35,7 @@ install-client:
 	cp -f $(FILES) "$(CLIENT)/"
 	chmod 644 "$(CLIENT)/xymonrag.py" "$(CLIENT)/requirements.txt"
 	chmod 755 "$(CLIENT)/xymonapi-rag.sh"
-	$(call commit,$(CLIENTROOT))
+	$(call version,$(CLIENT))
 	$(call launcher,xymonapi-rag,xymonapi-rag/xymonapi-rag.sh)
 	cp -f xymonapi-rag.1 "$(CLIENTMAN1)/"
 	chmod 644 "$(CLIENTMAN1)/xymonapi-rag.1"

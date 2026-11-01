@@ -19,7 +19,7 @@ install:
 	cp -f $(FILES) "$(EXT)/"
 	chmod 644 "$(EXT)/app.py" "$(EXT)/xymon.py" "$(EXT)/clientsetup.py" "$(EXT)/tokens.py" "$(EXT)/openapi.yaml" "$(EXT)/requirements.txt"
 	chmod 755 "$(EXT)/xymonapi.sh"
-	$(call commit,$(EXTROOT))
+	$(call version,$(EXT))
 	mkdir -p "$(MAN8)"
 	cp -f xymonapi.8 "$(MAN8)/"
 	chmod 644 "$(MAN8)/xymonapi.8"

@@ -44,10 +44,13 @@ for f in xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requ
 	assert_file_exists "$home/ext/$f"
 done
 [ -x "$home/ext/xymonapi/xymonapi.sh" ] || fail "the launcher is not executable"
-# Installed from a git checkout, the commit is recorded, once for all the
-# plugins, for the /client script.
-assert_file_exists "$home/ext/COMMIT"
-assert_equal "$(git -C "$ROOT" rev-parse HEAD)" "$(cat "$home/ext/COMMIT")" "COMMIT holds this checkout's commit"
+# Each plugin records its version beside its files: its release tag when
+# the checkout is at one, else the version in its PLUGIN file.
+for p in xymonapi xymonapi-mcp xymonapi-rag; do
+	assert_file_exists "$home/ext/$p/VERSION"
+	want=$(git -C "$ROOT" describe --exact-match --tags --match "$p/v*" 2>/dev/null || sed -n 's/^version: *//p' "$ROOT/plugins/$p/PLUGIN")
+	assert_equal "$want" "$(cat "$home/ext/$p/VERSION")" "$p/VERSION holds its tag or its PLUGIN version"
+done
 assert_file_exists "$work/man/man8/xymonapi.8"
 
 task=$home/etc/tasks.d/xymonapi
@@ -93,7 +96,7 @@ prefix="$work/client prefix"
 "$make" -C "$ROOT" install-client PREFIX="$prefix" >"$work/client.log" 2>&1 \
 	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
 for f in xymonapi-mcp/server.py xymonapi-mcp/client.py xymonapi-mcp/xymonapi-mcp.sh xymonapi-mcp/requirements.txt \
-         xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt COMMIT; do
+         xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt xymonapi-mcp/VERSION xymonapi-rag/VERSION; do
 	assert_file_exists "$prefix/libexec/xymon-plugins/$f"
 done
 assert_file_exists "$prefix/share/man/man1/xymonapi-mcp.1"

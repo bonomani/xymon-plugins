@@ -75,12 +75,13 @@ the other operations need neither.
 .IP "\fB/client\fR [\fBname\fR=NAME] [\fBformat\fR=sh|env]"
 A setup script for the machine that asks -- a laptop -- with this API's
 address written in. It is the one path open without a user when
-XYMONAPI_PASSWD is set: it holds no user, password or commit. The script
+XYMONAPI_PASSWD is set: it holds no user, password or version. The script
 checks it reaches this API and trusts its certificate; asks for the user
 (XYMONAPI_USER when set) and the password once, to get the machine a token
 (see TOKENS), and keeps the token, not the password; reads from /health,
-with the token, the commit this API was installed from, and fetches the
-client code at that commit (the newest when /health gives none); runs make
+with the token, the version this API was installed from, and fetches the
+client code at that release (the newest when the version is no release, as
+between tags); runs make
 install-client; makes a virtualenv with the mcp module; checks /health
 answers; and registers the MCP server with Claude Code and with Codex, each
 when it is installed, under NAME (xymon by default; one name per Xymon

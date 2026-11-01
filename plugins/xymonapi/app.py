@@ -69,12 +69,12 @@ def _refused(exc: Exception) -> JSONResponse:
 # request and not the event loop -- /health keeps answering meanwhile.
 def _health(request):
     out: dict = {"alive": False, "search": _search_info()}
-    # The commit this API was installed from, for the /client script to
+    # The version this API was installed from, for the /client script to
     # install the same: here, behind the password, not in /client, which
     # anyone may fetch.
-    commit = clientsetup.installed_commit()
-    if commit:
-        out["commit"] = commit
+    version = clientsetup.installed_version()
+    if version:
+        out["version"] = version
     try:
         version = xymon.ping()
     except Exception as exc:                        # noqa: BLE001

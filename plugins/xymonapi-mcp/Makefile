@@ -21,14 +21,14 @@ install:
 	cp -f $(FILES) "$(EXT)/"
 	chmod 644 "$(EXT)/server.py" "$(EXT)/client.py" "$(EXT)/requirements.txt"
 	chmod 755 "$(EXT)/xymonapi-mcp.sh"
-	$(call commit,$(EXTROOT))
+	$(call version,$(EXT))
 
 install-client:
 	mkdir -p "$(CLIENT)" "$(BIN)" "$(CLIENTMAN1)"
 	cp -f $(FILES) "$(CLIENT)/"
 	chmod 644 "$(CLIENT)/server.py" "$(CLIENT)/client.py" "$(CLIENT)/requirements.txt"
 	chmod 755 "$(CLIENT)/xymonapi-mcp.sh"
-	$(call commit,$(CLIENTROOT))
+	$(call version,$(CLIENT))
 	$(call launcher,xymonapi-mcp,xymonapi-mcp/xymonapi-mcp.sh)
 	cp -f xymonapi-mcp.1 "$(CLIENTMAN1)/"
 	chmod 644 "$(CLIENTMAN1)/xymonapi-mcp.1"

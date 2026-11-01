@@ -8,8 +8,8 @@
 # On a Xymon server the plugins go under $XYMONHOME/ext/, one
 # directory each, and a plugin that needs another finds it beside itself;
 # on a machine with no Xymon they go under $PREFIX/libexec/xymon-plugins/
-# the same way, with a command per plugin in $PREFIX/bin. The commit the
-# checkout is at is written once, in the directory that holds them.
+# the same way, with a command per plugin in $PREFIX/bin. Each plugin records its own version beside its
+# files, in VERSION.
 #
 # XYMONHOME is the server directory, as xymonserver.cfg names it. Xymon's own
 # install links $XYMONHOME/ext and $XYMONHOME/etc to wherever those really
@@ -51,16 +51,15 @@ define conf
 	fi
 endef
 
-# commit DIR -- write the commit this checkout is at to DIR/COMMIT: the
-# server's, which /health gives so a laptop fetches the same code, and the
-# client's, which the MCP server compares with it; from a tarball, where
-# there is no git, any COMMIT a previous install left is removed.
-define commit
-	@if c=$$(git rev-parse HEAD 2>/dev/null); then \
-		printf '%s\n' "$$c" > "$(1)/COMMIT"; chmod 644 "$(1)/COMMIT"; \
-	else \
-		rm -f "$(1)/COMMIT"; \
-	fi
+# version DIR -- write this plugin's version to DIR/VERSION. Installed from
+# a release, the commit this plugin's tag PLUGIN/vX.Y.Z names, it is that
+# tag, which git checks out: the API's, which /health gives so a laptop
+# fetches the same code. From any other commit, or a tarball, it is the
+# version in the PLUGIN file, X.Y.Z, which names no commit.
+VERSION = $$(sed -n 's/^version: *//p' PLUGIN)
+define version
+	@v=$$(git describe --exact-match --tags --match '$(PLUGIN)/v*' 2>/dev/null) || v=$(VERSION); \
+	printf '%s\n' "$$v" > "$(1)/VERSION"; chmod 644 "$(1)/VERSION"
 endef
 
 # task DIST NAME -- write DIST as $(TASKDIR)/NAME, with @XYMONHOME@ replaced,
