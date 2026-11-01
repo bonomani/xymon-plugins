@@ -1,4 +1,55 @@
-# xymon-api
+# xymon-plugins
+
+Plugins for the [Xymon](https://github.com/xymon-monitoring/xymon) monitoring
+system, in one repository: each under [`plugins/`](plugins), with a
+`Makefile` that installs it alone and a `PLUGIN` file that says what it is,
+which side it runs on, and what it needs. Three today, the Xymon API and the
+two pieces that use it. This repository was `xymon-api` before the split,
+and carries its whole history.
+
+| plugin | side | what it does | needs | manual |
+|---|---|---|---|---|
+| [`xymonapi`](plugins/xymonapi) | server | a read-only HTTP and JSON interface to a Xymon server, run as one of its `xymonlaunch` tasks | Xymon's `main`, Python 3.10 | [`xymonapi.8`](plugins/xymonapi/xymonapi.8) |
+| [`xymonapi-mcp`](plugins/xymonapi-mcp) | client | an MCP server that gives an AI client -- Claude Code, Claude Desktop, Codex -- read-only tools over the API | `xymonapi`, over the network | [`xymonapi-mcp.1`](plugins/xymonapi-mcp/xymonapi-mcp.1) |
+| [`xymonapi-rag`](plugins/xymonapi-rag) | server and client | a search of Xymon's manual pages and history by meaning: the index task on the server, `search` and `ask` anywhere | `xymonapi-mcp` beside it; `xymonapi` beside it on the server, over the network elsewhere | [`xymonapi-rag.1`](plugins/xymonapi-rag/xymonapi-rag.1) |
+
+A plugin that needs another beside it installs it first, so each of these
+installs one plugin with what it needs:
+
+```sh
+make install XYMONHOME=/usr/lib/xymon/server            # every server-side plugin
+make -C plugins/xymonapi install XYMONHOME=...          # the API alone
+make install-client                                     # every client-side plugin, under ~/.local
+make -C plugins/xymonapi-mcp install-client             # the MCP server alone
+```
+
+On the server the plugins land in `$XYMONHOME/ext/xymon-plugins/`, one
+directory each; elsewhere in `$PREFIX/libexec/xymon-plugins/`, with a command
+per plugin in `$PREFIX/bin`. The commit installed is written once, beside
+them, and `/health` gives it so that a laptop fetches the same code.
+
+The repository is also a Claude Code plugin marketplace, for `xymonapi-mcp`.
+In Claude Code:
+
+```
+/plugin install xymonapi-mcp --marketplace bonomani/xymon-plugins
+```
+
+or, on an older Claude Code, `/plugin marketplace add bonomani/xymon-plugins`
+then `/plugin install xymonapi-mcp@xymon-plugins`. The plugin runs
+[`xymonapi-mcp.sh`](plugins/xymonapi-mcp/xymonapi-mcp.sh) from where it is
+installed, with `XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and
+`XYMONAPI_PYTHON` from your environment, defaults in
+[`.mcp.json`](plugins/xymonapi-mcp/.mcp.json). It needs Python 3.10 with the
+`mcp` module, and a token from the API when it asks for a password: the
+[setup script](#on-a-laptop) below gets both and registers the server
+without the marketplace, so use one or the other.
+
+Releases are tagged per plugin, `NAME/vX.Y.Z`, matching the `version` in its
+`PLUGIN` file; none yet. Between tags, `make install` records the commit, and
+the setup script and the MCP server say when the two sides differ.
+
+## The Xymon API
 
 A read-only HTTP and JSON interface to a [Xymon](https://github.com/xymon-monitoring/xymon)
 server: the status board, its alarms and hosts, the values in its RRD files,

@@ -1,0 +1,6 @@
+{
+  "name": "xymonapi-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for the Xymon API: read-only tools over a Xymon server's board, alarms, history and manual pages",
+  "author": { "name": "Bonomani" }
+}
