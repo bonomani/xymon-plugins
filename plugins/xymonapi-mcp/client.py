@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import ssl
+import sys
 import urllib.error
 import urllib.request
 from urllib.parse import urlencode, urlsplit
@@ -80,6 +82,40 @@ def open_url(req, timeout: float):
         _opener = urllib.request.build_opener(
             _NoRedirect, urllib.request.HTTPSHandler(context=_context()))
     return _opener.open(req, timeout=timeout)
+
+
+# The xymonapi version this client was written for, the floor in the PLUGIN
+# file beside this one; tests/api/xymonapi-auth.sh checks the two agree.
+# The API keeps its answers within a major version, so a newer one is fine.
+API_FLOOR = "0.1.0"
+_TRIPLE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+_warning: str | None = None
+
+
+def _triple(version: str) -> tuple[int, int, int] | None:
+    m = _TRIPLE.search(version)
+    return (int(m[1]), int(m[2]), int(m[3])) if m else None
+
+
+def version_warning() -> str:
+    """What to do when the API is older than this client was written for,
+    asked of /health once per process; "" when it is not, or does not say
+    its version (a server from before it did), or does not answer. Nothing
+    is updated from here: the server's admin does that."""
+    global _warning
+    if _warning is None:
+        _warning = ""
+        try:
+            theirs = api("/health").get("version", "")
+        except APIError:
+            return _warning
+        t = _triple(theirs)
+        if t and t < _triple(API_FLOOR):
+            _warning = (f"the API at {URL} is xymonapi {theirs}; this client needs {API_FLOOR} or later: "
+                        "make install on the server, from a newer checkout of xymon-plugins, brings it up to date")
+            # Once, on stderr, which an MCP client logs: stdout is the protocol.
+            print(f"xymonapi: {_warning}", file=sys.stderr)
+    return _warning
 
 
 # An answer of the API is a board or a list of events: never near this.

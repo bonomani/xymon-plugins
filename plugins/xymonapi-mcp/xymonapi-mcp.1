@@ -19,8 +19,10 @@ nothing else: the searches too are the API's. When either is missing it
 says so on stderr and exits with status 77. It writes nothing but protocol
 messages on stdout. \fBmake install-client\fR puts it under a PREFIX of
 yours, as the command xymonapi-mcp, with its version in VERSION beside it.
-Nothing is updated on its own: the setup script from the API's /client does
-that, when someone runs it.
+It is written for the xymonapi version its PLUGIN file names; when the
+API's /health gives an older one, every answer carries a "warning" field
+saying so, and stderr says it once. A newer API is taken as it is. Nothing
+is updated on its own, on either side.
 
 .SH TOOLS
 .IP "\fBhealth\fR"

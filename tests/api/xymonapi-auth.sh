@@ -201,10 +201,16 @@ assert_file_exists "$lap/pip.log"
 assert_contains "pip" "$(cat "$lap/pip.log")" "a half-made venv is made again, and mcp installed in it"
 
 # The MCP server, as make install-client lays it out, reads the API with a
-# token and gives its answer as it is.
+# token. An API older than the client was written for -- the floor in its
+# PLUGIN file, which client.py repeats -- is said with each answer and on
+# stderr; one at or past the floor is not.
 "${MAKE:-make}" -C "$ROOT" install-client PREFIX="$work/client" >"$work/client.log" 2>&1 \
 	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
 assert_file_exists "$work/client/libexec/xymon-plugins/xymonapi-mcp/VERSION"
+floor=$(sed -n 's/^requires: xymonapi >= \([0-9.]*\).*/\1/p' "$ROOT/plugins/xymonapi-mcp/PLUGIN")
+[ -n "$floor" ] || fail "xymonapi-mcp's PLUGIN names no xymonapi version it needs"
+assert_contains "API_FLOOR = \"$floor\"" "$(cat "$ROOT/plugins/xymonapi-mcp/client.py")" "client.py repeats the floor of its PLUGIN file"
+printf '%s\n' xymonapi/v0.0.1 > "$work/inst/ext/xymonapi/VERSION"
 mine=$(curl -s -u alice:secret -X POST -H 'Content-Type: application/json' -d '{"client":"mcptest"}' "http://127.0.0.1:$API_PORT/xymon/api/v1/tokens" \
 	| sed -n 's/.*"token": *"\(xat_[A-Za-z0-9_-]*\)".*/\1/p')
 [ -n "$mine" ] || fail "the API gave alice no token"
@@ -212,7 +218,13 @@ XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymon-plugins" \
 	mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
 answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $(tail -n 5 "$work/mcp.err")"
 assert_contains 'alive' "$answer" "the MCP server's health tool gives /health's answer"
-assert_not_contains 'warning' "$answer" "and nothing else"
+assert_contains "is xymonapi xymonapi/v0.0.1; this client needs $floor or later" "$answer" "and says the API is older than the client needs"
+assert_contains "this client needs $floor" "$(cat "$work/mcp.err")" "and on stderr"
+printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
+XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymon-plugins" \
+	mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
+answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $(tail -n 5 "$work/mcp.err")"
+assert_not_contains 'warning' "$answer" "an API past the floor: no warning"
 
 # Xymon's own password file is the default: with XYMONHOME set and
 # etc/xymonpasswd there, nothing else need be set, and the API asks for

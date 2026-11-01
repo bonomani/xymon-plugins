@@ -49,7 +49,9 @@ without the marketplace, so use one or the other.
 Releases are tagged per plugin, `NAME/vX.Y.Z`, matching the `version` in its
 `PLUGIN` file; none yet. Installed from a tag, `VERSION` holds the tag and the
 setup script fetches that release; from any other commit it holds the version
-alone, and the script fetches the newest code.
+alone, and the script fetches the newest code. A plugin that reads the API
+names in its `PLUGIN` file the `xymonapi` version it needs, and the MCP
+server says so with each answer when the API is older than that.
 
 ## The Xymon API
 
@@ -439,7 +441,7 @@ XYMON_SRC=/path/to/built/xymon tests/run.sh
 
 | test, under `tests/api/` | what it checks |
 |---|---|
-| `xymonapi-auth` | the htpasswd file, Xymon's own by default, lets in only its users; the MCP client sends no password, even one in its environment; `/client` is open and writes the address the request came through, and no user or version; `/health` gives the version to a user; the script asks for the user, gets a password with a space, a quote, a backslash and a glob character to the API as it is, keeps a token for this machine's short hostname instead, installs the release `/health` gave, says how far it is behind the newest, and registers the MCP server with the token, in Claude Code and Codex; under `bash`, a Ctrl-C at its password prompt ends it with echo back on; a virtualenv a run before left half made is made again; without `make` it says so before starting |
+| `xymonapi-auth` | the htpasswd file, Xymon's own by default, lets in only its users; the MCP client sends no password, even one in its environment; `/client` is open and writes the address the request came through, and no user or version; `/health` gives the version to a user; the script asks for the user, gets a password with a space, a quote, a backslash and a glob character to the API as it is, keeps a token for this machine's short hostname instead, installs the release `/health` gave, says how far it is behind the newest, and registers the MCP server with the token, in Claude Code and Codex; under `bash`, a Ctrl-C at its password prompt ends it with echo back on; a virtualenv a run before left half made is made again; without `make` it says so before starting; an API older than the MCP client needs is said with each answer, a newer one is not |
 | `xymonapi-tokens` | a token per user and machine opens the API, replaces the last, is revoked on its own, and deleted with its user's removal from the password file, cannot make, list or revoke tokens, is stored as its SHA-256 only, and lets the MCP client in |
 | `xymonapi-board` | `/states`, `/alarms`, `/entities` and `/health` against a real `xymond`; `/status` gives exactly the host and test asked for, its text decoded as `xymondboard` wrote it and without the command line, and says whether it is acknowledged or disabled; `XYMONAPI_HIDE` blanks secrets, and a bad expression stops the API |
 | `xymonapi-history` | `/events` and `/histlog` read what `xymond_history` wrote, its two-letter colours included, a long history a page at a time |

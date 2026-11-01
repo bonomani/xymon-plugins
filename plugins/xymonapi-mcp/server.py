@@ -36,6 +36,11 @@ def api(path: str, **params: str | None) -> dict:
         answer = client.api(path, **params)
     except client.APIError as e:
         raise ToolError(str(e)) from e
+    # An API older than this client was written for: said with every answer,
+    # so the model can tell the user; never updated from here.
+    warning = client.version_warning()
+    if warning:
+        answer = {**answer, "warning": warning}
     return answer
 
 
