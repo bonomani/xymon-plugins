@@ -9,5 +9,5 @@
 	ENVFILE @XYMONHOME@/etc/xymonserver.cfg
 	NEEDS xymonapi
 	INTERVAL 1d
-	CMD $XYMONHOME/ext/xymon-plugins/xymonapi-rag/xymonapi-rag.sh index
+	CMD $XYMONHOME/ext/xymonapi-rag/xymonapi-rag.sh index
 	LOGFILE $XYMONSERVERLOGS/xymonapi-rag.log

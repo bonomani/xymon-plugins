@@ -6,5 +6,5 @@
 	DISABLED
 	ENVFILE @XYMONHOME@/etc/xymonserver.cfg
 	NEEDS xymond
-	CMD $XYMONHOME/ext/xymon-plugins/xymonapi/xymonapi.sh
+	CMD $XYMONHOME/ext/xymonapi/xymonapi.sh
 	LOGFILE $XYMONSERVERLOGS/xymonapi.log

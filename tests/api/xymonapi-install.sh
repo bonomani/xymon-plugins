@@ -3,7 +3,7 @@
 #
 # tests/api/xymonapi-install.sh
 #
-# make install puts the API in $XYMONHOME/ext/xymon-plugins/xymonapi/, the
+# make install puts the API in $XYMONHOME/ext/xymonapi/, the
 # search and the MCP client beside it, its manual page in
 # man8/, and its task in $XYMONHOME/etc/tasks.d/xymonapi -- disabled, with
 # ENVFILE naming that server's xymonserver.cfg. An install over one where the
@@ -38,16 +38,16 @@ assert_contains "XYMONHOME" "$(cat "$work/nohome.log")" "and it says what is mis
 	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
 
 for f in app.py xymon.py clientsetup.py tokens.py openapi.yaml requirements.txt xymonapi.sh; do
-	assert_file_exists "$home/ext/xymon-plugins/xymonapi/$f"
+	assert_file_exists "$home/ext/xymonapi/$f"
 done
 for f in xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt xymonapi-mcp/client.py; do
-	assert_file_exists "$home/ext/xymon-plugins/$f"
+	assert_file_exists "$home/ext/$f"
 done
-[ -x "$home/ext/xymon-plugins/xymonapi/xymonapi.sh" ] || fail "the launcher is not executable"
+[ -x "$home/ext/xymonapi/xymonapi.sh" ] || fail "the launcher is not executable"
 # Installed from a git checkout, the commit is recorded, once for all the
 # plugins, for the /client script.
-assert_file_exists "$home/ext/xymon-plugins/COMMIT"
-assert_equal "$(git -C "$ROOT" rev-parse HEAD)" "$(cat "$home/ext/xymon-plugins/COMMIT")" "COMMIT holds this checkout's commit"
+assert_file_exists "$home/ext/COMMIT"
+assert_equal "$(git -C "$ROOT" rev-parse HEAD)" "$(cat "$home/ext/COMMIT")" "COMMIT holds this checkout's commit"
 assert_file_exists "$work/man/man8/xymonapi.8"
 
 task=$home/etc/tasks.d/xymonapi
@@ -72,7 +72,7 @@ cmp -s "$work/enabled" "$task" \
 odd="$work/x y&z|w"
 "$make" -C "$ROOT" install XYMONHOME="$odd" MANDIR="$work/man 2" >"$work/odd.log" 2>&1 \
 	|| fail "make install into a directory with a space, & and | failed: $(tail -n 5 "$work/odd.log")"
-assert_file_exists "$odd/ext/xymon-plugins/xymonapi/xymonapi.sh"
+assert_file_exists "$odd/ext/xymonapi/xymonapi.sh"
 assert_file_exists "$work/man 2/man8/xymonapi.8"
 grep -qF "ENVFILE $odd/etc/xymonserver.cfg" "$odd/etc/tasks.d/xymonapi" \
 	|| fail "the task file does not name that directory as it is: $(grep ENVFILE "$odd/etc/tasks.d/xymonapi")"
@@ -111,4 +111,4 @@ if command -v "${XYMONAPI_PYTHON:-python3}" >/dev/null 2>&1; then
 	assert_contains 'search' "$(cat "$work/help.out")" "and names its commands"
 fi
 
-pass "make install puts the three plugins in ext/xymon-plugins/ with disabled tasks and the Apache snippet, keeps what the admin edited, takes odd directory names, and install-client lays out the client side"
+pass "make install puts the three plugins in ext/ with disabled tasks and the Apache snippet, keeps what the admin edited, takes odd directory names, and install-client lays out the client side"

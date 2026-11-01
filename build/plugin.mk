@@ -5,7 +5,7 @@
 #
 #   include ../../build/plugin.mk
 #
-# On a Xymon server the plugins go under $XYMONHOME/ext/xymon-plugins/, one
+# On a Xymon server the plugins go under $XYMONHOME/ext/, one
 # directory each, and a plugin that needs another finds it beside itself;
 # on a machine with no Xymon they go under $PREFIX/libexec/xymon-plugins/
 # the same way, with a command per plugin in $PREFIX/bin. The commit the
@@ -23,7 +23,7 @@
 
 MANDIR = /usr/share/man
 PREFIX = $(HOME)/.local
-EXTROOT = $(DESTDIR)$(XYMONHOME)/ext/xymon-plugins
+EXTROOT = $(DESTDIR)$(XYMONHOME)/ext
 EXT = $(EXTROOT)/$(PLUGIN)
 ETC = $(DESTDIR)$(XYMONHOME)/etc
 TASKDIR = $(ETC)/tasks.d

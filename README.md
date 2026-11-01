@@ -23,7 +23,7 @@ make install-client                                     # every client-side plug
 make -C plugins/xymonapi-mcp install-client             # the MCP server alone
 ```
 
-On the server the plugins land in `$XYMONHOME/ext/xymon-plugins/`, one
+On the server the plugins land in `$XYMONHOME/ext/`, one
 directory each; elsewhere in `$PREFIX/libexec/xymon-plugins/`, with a command
 per plugin in `$PREFIX/bin`. The commit installed is written once, beside
 them, and `/health` gives it so that a laptop fetches the same code.
@@ -105,10 +105,10 @@ It writes into the Xymon server directory, so it is normally run as root.
 
 | installed file | from |
 |---|---|
-| `$XYMONHOME/ext/xymon-plugins/xymonapi/`: `app.py`, `xymon.py`, `clientsetup.py`, `tokens.py`, `openapi.yaml`, `requirements.txt`, and `xymonapi.sh`, the launcher | `plugins/xymonapi/`, the files of the same name |
-| `$XYMONHOME/ext/xymon-plugins/COMMIT`, the commit installed, which `/health` gives | `git rev-parse HEAD` |
+| `$XYMONHOME/ext/xymonapi/`: `app.py`, `xymon.py`, `clientsetup.py`, `tokens.py`, `openapi.yaml`, `requirements.txt`, and `xymonapi.sh`, the launcher | `plugins/xymonapi/`, the files of the same name |
+| `$XYMONHOME/ext/COMMIT`, the commit installed, which `/health` gives | `git rev-parse HEAD` |
 | `$XYMONHOME/etc/tasks.d/xymonapi`, the task, written `DISABLED` | `plugins/xymonapi/xymonapi.tasks.DIST`, with `@XYMONHOME@` replaced |
-| `$XYMONHOME/ext/xymon-plugins/xymonapi-rag/`, the search and its launcher, and `xymonapi-mcp/`, whose `client.py` a search with no index here asks the API with | `plugins/xymonapi-rag/`, `plugins/xymonapi-mcp/` |
+| `$XYMONHOME/ext/xymonapi-rag/`, the search and its launcher, and `xymonapi-mcp/`, whose `client.py` a search with no index here asks the API with | `plugins/xymonapi-rag/`, `plugins/xymonapi-mcp/` |
 | `$XYMONHOME/etc/tasks.d/xymonapi-rag`, the daily index task, written `DISABLED` | `plugins/xymonapi-rag/xymonapi-rag.tasks.DIST` |
 | `$XYMONHOME/etc/xymonapi-{apache,nginx,lighttpd}.conf`, the web server snippets, written once | `plugins/xymonapi/`, the files of the same name |
 | `$MANDIR/man8/xymonapi.8`, `$MANDIR/man1/xymonapi-rag.1` | the pages of the same name |

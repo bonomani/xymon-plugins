@@ -45,8 +45,8 @@ grep -q '^bob:\$2y\$' "$work/htpasswd" || fail "htpasswd did not write bob as bc
 "${MAKE:-make}" -C "$ROOT" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
 	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
 commit=0123456789abcdef0123456789abcdef01234567
-printf '%s\n' "$commit" > "$work/inst/ext/xymon-plugins/COMMIT"
-API_ROOT=$work/inst/ext/xymon-plugins/xymonapi
+printf '%s\n' "$commit" > "$work/inst/ext/COMMIT"
+API_ROOT=$work/inst/ext/xymonapi
 
 # The answers checked here need no xymond: /health says alive:false without
 # one, and the password is checked first, on every path but /client.

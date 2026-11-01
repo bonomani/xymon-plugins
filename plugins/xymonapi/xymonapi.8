@@ -2,7 +2,7 @@
 .SH NAME
 xymonapi \- read-only HTTP and JSON interface to the Xymon server
 .SH SYNOPSIS
-.B "$XYMONHOME/ext/xymon-plugins/xymonapi/xymonapi.sh"
+.B "$XYMONHOME/ext/xymonapi/xymonapi.sh"
 
 .SH DESCRIPTION
 xymonapi answers HTTP requests with what the Xymon server knows: the status
@@ -223,7 +223,7 @@ for the system's python3: the python3 of a virtualenv that holds them, for
 instance. The default is python3, found on PATH.
 
 .SH FILES
-.IP "\fB$XYMONHOME/ext/xymon-plugins/xymonapi/\fR"
+.IP "\fB$XYMONHOME/ext/xymonapi/\fR"
 The program: xymonapi.sh, the launcher the task runs; app.py and xymon.py,
 the server; openapi.yaml, the description served at /openapi.json; and
 requirements.txt, the Python modules it needs.
