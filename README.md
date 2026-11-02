@@ -23,11 +23,11 @@ make install-client                                     # every client-side plug
 make -C plugins/xymonapi-mcp install-client             # the MCP server alone
 ```
 
-On the server the plugins land in `$XYMONHOME/ext/`, one
-directory each; elsewhere in `$PREFIX/libexec/xymon-plugins/`, with a command
-per plugin in `$PREFIX/bin`. Each plugin's version is written beside its
-files, in `VERSION`, and `/health` gives the API's so that a laptop fetches
-the same release.
+On the server the plugins land in `$XYMONHOME/ext/`, one directory each;
+elsewhere in `$PREFIX/libexec/xymon-plugins/`, with a command per plugin in
+`$PREFIX/bin`. Each plugin's version is written beside its files, in
+`VERSION`, and `/health` gives the API's so that a laptop fetches the same
+release.
 
 The repository is also a Claude Code plugin marketplace, for `xymonapi-mcp`.
 In Claude Code:
@@ -36,11 +36,11 @@ In Claude Code:
 /plugin install xymonapi-mcp --marketplace bonomani/xymon-plugins
 ```
 
-or, on an older Claude Code, `/plugin marketplace add bonomani/xymon-plugins`
-then `/plugin install xymonapi-mcp@xymon-plugins`. The plugin runs
-[`xymonapi-mcp.sh`](plugins/xymonapi-mcp/xymonapi-mcp.sh) from where it is
-installed, with `XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and
-`XYMONAPI_PYTHON` from your environment, defaults in
+or, on an older Claude Code, `/plugin marketplace add
+bonomani/xymon-plugins` then `/plugin install xymonapi-mcp@xymon-plugins`.
+The plugin runs [`xymonapi-mcp.sh`](plugins/xymonapi-mcp/xymonapi-mcp.sh)
+from where it is installed, with `XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`,
+`XYMONAPI_CA` and `XYMONAPI_PYTHON` from your environment, defaults in
 [`.mcp.json`](plugins/xymonapi-mcp/.mcp.json). It needs Python 3.10 with the
 `mcp` module, and a token from the API when it asks for a password: the
 [setup script](#on-a-laptop) below gets both and registers the server
@@ -82,10 +82,10 @@ setting, and how to enable it, for an admin.
 of errors, and the numbered rules every implementation keeps, each checked
 by the tests that cite it.
 
-Two more pieces run where you are, not on the server: an
-[MCP server](#mcp-server) that gives an AI client -- Claude, Codex and
-others -- the same operations as tools, and a [search](#search) command
-line. A laptop needs only those, installed with `make install-client`.
+Two more pieces run where you are, not on the server: an [MCP
+server](#mcp-server) that gives an AI client -- Claude, Codex and others --
+the same operations as tools, and a [search](#search) command line. A laptop
+needs only those, installed with `make install-client`.
 
 ## Requirements
 
@@ -271,23 +271,23 @@ machine, use HTTPS, one of:
   (`xymon-tls(7)`, from Xymon pull requests #617–#623, not yet merged), the
   API finds xymond's certificate and key in `etc/tls/` and speaks HTTPS on
   1986 by itself; or name any certificate and key in `XYMONAPI_TLS_CERT` and
-  `_KEY`. Open the port
-  (`XYMONAPI_LISTEN="0.0.0.0:1986"`), then `XYMONAPI_URL=https://server:1986`
-  on the laptop, with `XYMONAPI_CA` naming that certificate when it is
-  self-signed. No web server in the path.
+  `_KEY`. Open the port (`XYMONAPI_LISTEN="0.0.0.0:1986"`), then
+  `XYMONAPI_URL=https://server:1986` on the laptop, with `XYMONAPI_CA`
+  naming that certificate when it is self-signed. No web server in the path.
 - **The web server in front of it.** `make install` writes
   `etc/xymonapi-apache.conf`, `-nginx.conf` and `-lighttpd.conf`, each
   passing `/xymon/api/` to the API. Include the one for your server where
   its Xymon configuration is, in the HTTPS part. Then
   `XYMONAPI_URL=https://xymon.example.ch`, one hostname for pages and API.
-- **An SSH tunnel**, for one person: `ssh -L 1986:127.0.0.1:1986 xymon-server`,
-  then `XYMONAPI_URL=http://127.0.0.1:1986` as if local. Encrypted,
-  nothing to set up.
+- **An SSH tunnel**, for one person:
+  `ssh -L 1986:127.0.0.1:1986 xymon-server`, then
+  `XYMONAPI_URL=http://127.0.0.1:1986` as if local. Encrypted, nothing to
+  set up.
 
 Plain HTTP across a network (`XYMONAPI_LISTEN="0.0.0.0:1986"` with no
-certificate) carries the password and the status texts readable, as port
-1984 does: keep it to a network where the Xymon pages themselves are plain
-and trusted.
+certificate) carries the password, the tokens and the status texts readable,
+as port 1984 does: keep it to a network where the Xymon pages themselves are
+plain and trusted.
 
 Whichever you choose, keep the secrets out of the texts: the API is
 read-only and shows what the web pages show, and a process list can carry
