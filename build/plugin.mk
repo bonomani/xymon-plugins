@@ -62,6 +62,17 @@ define version
 	printf '%s\n' "$$v" > "$(1)/VERSION"; chmod 644 "$(1)/VERSION"
 endef
 
+# fresh DIR -- DIR, emptied: an install replaces a plugin's directory as a
+# whole, so that a file a newer version no longer ships does not stay behind
+# to be imported. It holds only what the plugin ships and its VERSION: the
+# admin's settings, task files, snippets and data live elsewhere. PLUGIN must
+# be one directory name, so that DIR is never ext/ or libexec/ itself.
+define fresh
+	@case "$(PLUGIN)" in ""|*/*|.|..) echo "PLUGIN must name one plugin directory" >&2; exit 1 ;; esac
+	rm -rf "$(1)"
+	mkdir -p "$(1)"
+endef
+
 # task DIST NAME -- write DIST as $(TASKDIR)/NAME, with @XYMONHOME@ replaced,
 # unless NAME is there already: the one an admin enabled is not put back to
 # DISABLED by the next install. The replacement is escaped for sed first: a

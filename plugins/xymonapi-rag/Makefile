@@ -19,7 +19,7 @@ install:
 	$(need_home)
 	$(MAKE) -C ../xymonapi install
 	$(MAKE) -C ../xymonapi-mcp install
-	mkdir -p "$(EXT)"
+	$(call fresh,$(EXT))
 	cp -f $(FILES) "$(EXT)/"
 	chmod 644 "$(EXT)/xymonrag.py" "$(EXT)/requirements.txt"
 	chmod 755 "$(EXT)/xymonapi-rag.sh"
@@ -32,7 +32,8 @@ install:
 
 install-client:
 	$(MAKE) -C ../xymonapi-mcp install-client
-	mkdir -p "$(CLIENT)" "$(BIN)" "$(CLIENTMAN1)"
+	$(call fresh,$(CLIENT))
+	mkdir -p "$(BIN)" "$(CLIENTMAN1)"
 	cp -f $(FILES) "$(CLIENT)/"
 	chmod 644 "$(CLIENT)/xymonrag.py" "$(CLIENT)/requirements.txt"
 	chmod 755 "$(CLIENT)/xymonapi-rag.sh"

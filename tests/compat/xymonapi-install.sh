@@ -3,17 +3,19 @@
 #
 # tests/compat/xymonapi-install.sh
 #
-# make install puts the API in $XYMONHOME/ext/xymonapi/, the
-# search and the MCP client beside it, its manual page in
-# man8/, and its task in $XYMONHOME/etc/tasks.d/xymonapi -- disabled, with
-# ENVFILE naming that server's xymonserver.cfg. An install over one where the
-# admin enabled the task leaves that file alone: putting DISABLED back would
-# stop the API at the next upgrade, with nothing to say why. Without
-# XYMONHOME it installs nothing and says so. The Apache snippet goes to
-# $XYMONHOME/etc, kept too once there. make install-client puts the MCP
-# server and the search commands under PREFIX, with two commands in bin
-# that run them from there. A plugin installed alone brings the plugins it
-# needs beside it: xymonapi-rag on the server, the API and its client.
+# make install puts the API in $XYMONHOME/ext/xymonapi/, the search and the
+# MCP client beside it, its manual page in man8/, and its task in
+# $XYMONHOME/etc/tasks.d/xymonapi -- disabled, with ENVFILE naming that
+# server's xymonserver.cfg. An install over one where the admin enabled the
+# task leaves that file alone: putting DISABLED back would stop the API at
+# the next upgrade, with nothing to say why. Without XYMONHOME it installs
+# nothing and says so. The Apache snippet goes to $XYMONHOME/etc, kept too
+# once there. make install-client puts the MCP server and the search commands
+# under PREFIX, with two commands in bin that run them from there. Installing
+# again replaces each plugin's directory, so a file no longer shipped is
+# gone, and says to restart the API; the client's virtualenv beside the
+# plugins is kept. A plugin installed alone brings the plugins it needs
+# beside it: xymonapi-rag on the server, the API and its client.
 #
 # Installed into a scratch directory. No Python is needed: the API is copied,
 # not run. Uses the test helpers of the Xymon tree in XYMON_SRC.
@@ -63,6 +65,17 @@ grep -q '@XYMONHOME@' "$task" && fail "@XYMONHOME@ was left unreplaced in $task"
 mode=$(ls -l "$task" | cut -c1-10)
 assert_equal "-rw-r--r--" "$mode" "the task file's mode under umask 077"
 
+# An update replaces each plugin's directory: a file the new version no
+# longer ships does not stay behind, and the install says to restart the API.
+echo 'stale' > "$home/ext/xymonapi/gone.py"
+echo 'stale' > "$home/ext/xymonapi-mcp/gone.py"
+"$make" -C "$ROOT" install XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
+	|| fail "installing over an install failed: $(tail -n 5 "$work/update.log")"
+[ -e "$home/ext/xymonapi/gone.py" ] && fail "a file no longer shipped stayed in ext/xymonapi after an update"
+[ -e "$home/ext/xymonapi-mcp/gone.py" ] && fail "a file no longer shipped stayed in ext/xymonapi-mcp after an update"
+assert_file_exists "$home/ext/xymonapi/app.py"
+assert_contains "pkill -f '$home/ext/xymonapi/'" "$(cat "$work/update.log")" "the install says how to restart the API"
+
 # The admin enables the API, and the next install must not undo it.
 grep -v '^[[:space:]]*DISABLED$' "$task" > "$work/enabled"
 cp "$work/enabled" "$task"
@@ -106,6 +119,14 @@ done
 prefix="$work/client prefix"
 "$make" -C "$ROOT" install-client PREFIX="$prefix" >"$work/client.log" 2>&1 \
 	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
+# An update replaces the plugin's directory there too, and leaves the
+# virtualenv the setup script made beside the plugins alone.
+mkdir -p "$prefix/libexec/xymon-plugins/venv" && : > "$prefix/libexec/xymon-plugins/venv/kept"
+: > "$prefix/libexec/xymon-plugins/xymonapi-rag/gone.py"
+"$make" -C "$ROOT" install-client PREFIX="$prefix" >"$work/client2.log" 2>&1 \
+	|| fail "make install-client a second time failed: $(tail -n 5 "$work/client2.log")"
+[ -e "$prefix/libexec/xymon-plugins/xymonapi-rag/gone.py" ] && fail "a file no longer shipped stayed in the client's xymonapi-rag"
+assert_file_exists "$prefix/libexec/xymon-plugins/venv/kept"
 for f in xymonapi-mcp/server.py xymonapi-mcp/client.py xymonapi-mcp/xymonapi-mcp.sh xymonapi-mcp/requirements.txt \
          xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt xymonapi-mcp/VERSION xymonapi-rag/VERSION; do
 	assert_file_exists "$prefix/libexec/xymon-plugins/$f"

@@ -81,6 +81,18 @@ To see whether the server runs the newest code, in the checkout
 git fetch -q && git log --oneline HEAD..origin/main
 ```
 
+## Updating
+
+```sh
+git pull && make install XYMONHOME=...      # in the checkout, as before
+pkill -f "$XYMONHOME/ext/xymonapi/"          # the running API keeps the old code until then
+```
+
+The install replaces the plugin's directory and keeps the task file you
+enabled, the web server snippets and your settings; xymonlaunch starts the
+new code once the old process is gone. Then run the setup script again on
+each laptop, to bring its client to the same version.
+
 ## Reaching it from another machine
 
 Xymon is what you look at when the rest is down, so the API depends on

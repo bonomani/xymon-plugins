@@ -36,8 +36,10 @@ make -C plugins/NAME install XYMONHOME=...       # one plugin, and what it needs
 
 On a Xymon server a plugin lands in `$XYMONHOME/ext/NAME/`; elsewhere in
 `$PREFIX/libexec/xymon-plugins/NAME/`, with its command in `$PREFIX/bin`.
-Each writes its version beside its files, in `VERSION`. What to do next is
-in the plugin's README.
+Each writes its version beside its files, in `VERSION`. Installing again
+updates: each plugin's directory is replaced as a whole, while the settings,
+task files and data that live elsewhere are kept. What to do next is in the
+plugin's README.
 
 ## Versions
 

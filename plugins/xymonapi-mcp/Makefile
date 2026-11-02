@@ -17,14 +17,15 @@ all:
 
 install:
 	$(need_home)
-	mkdir -p "$(EXT)"
+	$(call fresh,$(EXT))
 	cp -f $(FILES) "$(EXT)/"
 	chmod 644 "$(EXT)/server.py" "$(EXT)/client.py" "$(EXT)/requirements.txt"
 	chmod 755 "$(EXT)/xymonapi-mcp.sh"
 	$(call version,$(EXT))
 
 install-client:
-	mkdir -p "$(CLIENT)" "$(BIN)" "$(CLIENTMAN1)"
+	$(call fresh,$(CLIENT))
+	mkdir -p "$(BIN)" "$(CLIENTMAN1)"
 	cp -f $(FILES) "$(CLIENT)/"
 	chmod 644 "$(CLIENT)/server.py" "$(CLIENT)/client.py" "$(CLIENT)/requirements.txt"
 	chmod 755 "$(CLIENT)/xymonapi-mcp.sh"
