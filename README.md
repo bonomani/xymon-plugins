@@ -1,80 +1,49 @@
 # xymon-plugins
 
 Plugins for the [Xymon](https://github.com/xymon-monitoring/xymon)
-monitoring system: a read-only HTTP and JSON API to a Xymon server, and two
-pieces that use it -- tools for AI clients such as Claude and Codex, and a
-search of Xymon's manual pages and history. This repository was `xymon-api`
-before the split, and carries its whole history.
+monitoring system, one per directory under [`plugins/`](plugins). This
+repository was `xymon-api` before it held several, and carries its whole
+history.
 
-| plugin | runs on | what it does |
-|---|---|---|
-| [`xymonapi`](plugins/xymonapi) | the Xymon server | the API: status board, alarms, hosts, RRD values, graphs, history |
-| [`xymonapi-mcp`](plugins/xymonapi-mcp) | your machine | gives an AI client read-only tools over the API |
-| [`xymonapi-rag`](plugins/xymonapi-rag) | both | finds the manual-page and history passages a question is about |
+## The plugins
 
-## Quick start
+| plugin | side | what it is | needs |
+|---|---|---|---|
+| [`xymonapi`](plugins/xymonapi/README.md) | server | a read-only HTTP and JSON interface to a Xymon server, as one of its xymonlaunch tasks | xymon >= 4.3.31 (main), python >= 3.10 |
+| [`xymonapi-mcp`](plugins/xymonapi-mcp/README.md) | client | an MCP server that gives an AI client read-only tools over the Xymon API | xymonapi >= 0.1.0, over the network; python >= 3.10 |
+| [`xymonapi-rag`](plugins/xymonapi-rag/README.md) | server, client | a search of Xymon's manual pages and history by meaning; the index task on the server, search and ask anywhere | xymonapi-mcp beside it; xymonapi >= 0.1.0; python >= 3.10 |
 
-On the Xymon server, as root:
+Each row summarises the plugin's `PLUGIN` file. Its README says how to
+install and use it, its manual page every behaviour and setting.
 
-```sh
-make install XYMONHOME=/usr/lib/xymon/server
-```
+## What a plugin is
 
-The API is installed disabled: remove `DISABLED` from
-`$XYMONHOME/etc/tasks.d/xymonapi`, then check it answers:
+A directory under `plugins/` holding:
 
-```sh
-curl http://127.0.0.1:1986/xymon/api/v1/health
-```
+- `PLUGIN`: its name, version, side, summary, what it needs, and its manual
+  page;
+- `Makefile`: installs it alone, and first any plugin it needs;
+- `README.md`: installing and using it;
+- its manual page, and its code.
 
-A `401` means it runs and asks for a user: add `-u` with one of Xymon's
-users.
-
-On your laptop, once the API is reachable from it:
+## Installing
 
 ```sh
-curl https://xymon.example.ch/xymon/api/v1/client > xymon-setup.sh
-sh xymon-setup.sh
+make install XYMONHOME=/usr/lib/xymon/server     # every server-side plugin
+make install-client                              # every client-side plugin, under ~/.local
+make -C plugins/NAME install XYMONHOME=...       # one plugin, and what it needs
 ```
 
-The script installs the client side, gets this machine a token with your
-password, and registers the tools with Claude Code and Codex. Then ask your
-AI client: "which hosts are red?"
-
-Reaching the server over HTTPS, a self-signed certificate, the search index:
-see [`plugins/xymonapi`](plugins/xymonapi/README.md) and
-[`plugins/xymonapi-rag`](plugins/xymonapi-rag/README.md).
-
-## Requirements
-
-- A Xymon server built from Xymon's current `main`: the plugins' settings go
-  in `xymonserver.d/`, which no Xymon release reads yet.
-- Python 3.10 or later, on the server and on the laptop.
-
-## Security, in short
-
-The API only reads, and changes nothing in Xymon. It asks for the users of
-Xymon's own password file; a laptop keeps a token of its own, never the
-password, and a removed user's tokens stop working. From another machine, use
-HTTPS or an SSH tunnel. `XYMONAPI_HIDE` blanks the secrets status texts may
-hold, in every answer and in the search index. An online AI client sends what
-the tools return to its provider; a local model keeps it on your network.
+On a Xymon server a plugin lands in `$XYMONHOME/ext/NAME/`; elsewhere in
+`$PREFIX/libexec/xymon-plugins/NAME/`, with its command in `$PREFIX/bin`.
+Each writes its version beside its files, in `VERSION`. What to do next is
+in the plugin's README.
 
 ## Versions
 
 Each plugin has its own version, in its `PLUGIN` file, and its releases are
-tagged `NAME/vX.Y.Z`; none yet. A laptop installs the version the server
-runs, and is told when the server's API is older than it needs. How a
-release is made is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## Where to read more
-
-| for | read |
-|---|---|
-| installing and using a plugin | its README: [`xymonapi`](plugins/xymonapi/README.md), [`xymonapi-mcp`](plugins/xymonapi-mcp/README.md), [`xymonapi-rag`](plugins/xymonapi-rag/README.md) |
-| every behaviour and setting | its manual page: [`xymonapi.8`](plugins/xymonapi/xymonapi.8), [`xymonapi-mcp.1`](plugins/xymonapi-mcp/xymonapi-mcp.1), [`xymonapi-rag.1`](plugins/xymonapi-rag/xymonapi-rag.1) |
-| the API's exact answers, for a client or another implementation | the contract, [`openapi.yaml`](plugins/xymonapi/openapi.yaml) |
-| changing this code | [`CONTRIBUTING.md`](CONTRIBUTING.md), and [`AGENTS.md`](AGENTS.md) for coding agents |
+tagged `NAME/vX.Y.Z`; none yet. How a release is made is in
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Tests
 
@@ -90,7 +59,10 @@ and what it needs; one that cannot run here skips, and says why. CI runs
 them all with nothing missing:
 [`.github/workflows/test.yml`](.github/workflows/test.yml).
 
-## Licence
+## Contributing and licence
 
-GNU General Public License version 2 or, at your option, any later version
-(`GPL-2.0-or-later`); the text of version 2 is in [`LICENSE`](LICENSE).
+[`CONTRIBUTING.md`](CONTRIBUTING.md) says how to change this code, and
+[`AGENTS.md`](AGENTS.md) what a coding agent adds to it. Everything here is
+under the GNU General Public License version 2 or, at your option, any later
+version (`GPL-2.0-or-later`); the text of version 2 is in
+[`LICENSE`](LICENSE).

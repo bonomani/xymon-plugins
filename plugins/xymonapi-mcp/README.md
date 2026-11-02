@@ -13,7 +13,8 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
 The simplest way is the setup script the API gives (see
 [On a laptop](../xymonapi/README.md#on-a-laptop)): it installs this plugin,
-gets a token, and registers it with Claude Code and Codex. By hand:
+gets a token, and registers it with Claude Code and Codex; then ask your AI
+client "which hosts are red?". By hand:
 
 ```sh
 make install-client                # under ~/.local; PREFIX=... for elsewhere
