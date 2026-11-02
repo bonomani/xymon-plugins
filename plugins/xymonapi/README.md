@@ -1,9 +1,9 @@
 # xymonapi
 
-A read-only HTTP and JSON interface to a Xymon server: the status board, its
-alarms and hosts, the values in its RRD files, the graphs drawn from them,
-and the history of colour changes with the status text saved at each. It
-changes nothing in Xymon. It runs on the server as one of
+The Xymon API gives, over HTTP and as JSON, the status board, its alarms
+and hosts, the values in its RRD files, the graphs drawn from them, and the
+history of colour changes with the status text saved at each. It only
+reads, and changes nothing in Xymon. It runs on the server as one of
 Xymon's `xymonlaunch` tasks, with Xymon's own settings.
 
 Its operations, under `/xymon/api/v1`, all GET but for `/tokens`:

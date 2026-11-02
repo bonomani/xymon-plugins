@@ -1,8 +1,7 @@
 # xymonapi-rag
 
-A search of Xymon's manual pages and its history by meaning: it finds the
-passages a question is about, by what they mean rather than the words they
-share. The index lives on the Xymon server, where the pages and the history
+It finds the passages of Xymon's manual pages and history that a question
+is about, by what they mean rather than the words they share. The index lives on the Xymon server, where the pages and the history
 are; the [API](../xymonapi/README.md) serves it at `/search`, and the
 [MCP server](../xymonapi-mcp/README.md)'s `search_docs` and `search_history`
 ask it there. Every command and setting is in
@@ -16,8 +15,8 @@ ask it there. Every command and setting is in
   task must then be enabled, as its README says, for the search to be
   served.
 - **On a laptop:** `xymonapi-mcp` beside it, which `make install-client`
-  here installs first, and a running `xymonapi` on the server, reached over
-  the network: install and enable it there first.
+  here installs first, and the running API that one needs (see its
+  [Needs](../xymonapi-mcp/README.md#needs)).
 - Python 3.10, and on the server the modules in
   [`requirements.txt`](requirements.txt).
 

@@ -26,6 +26,27 @@ A directory under `plugins/` holding:
 - `README.md`: installing and using it;
 - its manual page, and its code.
 
+## Getting the code
+
+Any of these gives the same tree:
+
+```sh
+git clone https://github.com/bonomani/xymon-plugins              # update later with git pull
+curl -L https://github.com/bonomani/xymon-plugins/archive/refs/heads/main.tar.gz | tar xz   # no git
+```
+
+or the [zip](https://github.com/bonomani/xymon-plugins/archive/refs/heads/main.zip)
+of the same. A clone is the better choice: without git, `VERSION` holds the
+plugin's version alone, never a release tag, and a checkout cannot be asked
+how far behind it is. Once releases exist, each is a tag, `NAME/vX.Y.Z`, to
+clone (`git clone --branch NAME/vX.Y.Z ...`) or download as an archive from
+the repository's Releases page.
+
+Two plugins need no download by hand: on a laptop, the API's setup script
+fetches what it needs (see [`xymonapi`](plugins/xymonapi/README.md)), and
+Claude Code installs `xymonapi-mcp` from this repository as a plugin of its
+own (see [`xymonapi-mcp`](plugins/xymonapi-mcp/README.md)).
+
 ## Installing
 
 ```sh
