@@ -18,6 +18,7 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, Response
 
 import clientsetup
@@ -287,6 +288,16 @@ def build_app() -> FastAPI:
     spec = yaml.safe_load(SPEC_PATH.read_text())
     base = spec["servers"][0]["url"].rstrip("/")
     app = FastAPI(title=spec["info"]["title"], version=spec["info"]["version"])
+
+    # A path that is none of ours, or a method a path does not take, is
+    # answered by the framework with {"detail": ...}: put in the spec's form,
+    # an error of its closed list (openapi.yaml, C1 and C2).
+    @app.exception_handler(HTTPException)
+    async def _framework_error(request, exc):
+        error = {400: "bad_request", 401: "unauthorized", 404: "not_found",
+                 405: "method_not_allowed"}.get(exc.status_code, "bad_request")
+        return JSONResponse({"error": error, "detail": str(exc.detail)},
+                            status_code=exc.status_code, headers=exc.headers)
 
     try:
         n = xymon.load_hide()

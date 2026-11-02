@@ -31,7 +31,11 @@ is the file openapi.yaml beside the program.
 
 .SH OPERATIONS
 Every path is under /xymon/api/v1. Only GET is accepted, but for POST and
-DELETE on /tokens, and any other path answers 404.
+DELETE on /tokens: another method answers 405, and any other path 404. A
+failure is answered with JSON, {"error": E, "detail": D}, where E is one of
+bad_request (400), unauthorized (401), not_found (404),
+method_not_allowed (405) and upstream (502), and D says why. Those, and
+each path's answers, are openapi.yaml's, installed beside the API.
 .IP "\fB/health\fR"
 Whether xymond answers a ping: {"alive":true,"server_version":"xymond ..."}
 when it does, and {"alive":false} when the ping fails -- xymond is down, or

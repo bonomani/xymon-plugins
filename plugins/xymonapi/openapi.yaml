@@ -2,10 +2,24 @@ openapi: 3.0.3
 info:
   title: Xymon API
   version: 1.0.0
-  description: >
+  description: |
     A read-only HTTP and JSON view of a Xymon server: the status board, its
     alarms and its hosts. A verdict is never a colour; the colour is how the
     web pages show it. See xymonapi(8).
+
+    Rules every implementation keeps, beyond what the paths below say:
+
+    C1. Every answer that is not a success is JSON, {"error": E, "detail": D},
+        E one of Error's closed list, with its status: bad_request 400,
+        unauthorized 401, not_found 404, method_not_allowed 405, upstream 502.
+        D, when present, says why, for a person.
+    C2. A path this document does not list answers not_found; a method a
+        listed path does not take answers method_not_allowed.
+    C3. With XYMONAPI_PASSWD set, every path but /client answers unauthorized
+        without a user and password from that file or a valid client token,
+        before anything else is checked; a token is refused on /tokens.
+    C4. /client answers without a user, XYMONAPI_PASSWD set or not, and holds
+        no user, password or commit.
   license:
     name: GPL-2.0-or-later
 
@@ -449,8 +463,8 @@ components:
       type: object
       required: [error]
       properties:
-        error:  { type: string }
-        detail: { type: string }
+        error:  { type: string, enum: [bad_request, unauthorized, not_found, method_not_allowed, upstream], description: "The kind of failure, with its status (C1)." }
+        detail: { type: string, description: "Why, for a person; free text, not to be matched." }
 
   responses:
     Unauthorized:
@@ -464,4 +478,7 @@ components:
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     Upstream:
       description: xymond did not answer.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    MethodNotAllowed:
+      description: A method the path does not take (C2); the Allow header lists those it does.
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
