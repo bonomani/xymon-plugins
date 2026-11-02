@@ -6,12 +6,10 @@
 # With a certificate and key -- xymond's own, $XYMONHOME/etc/tls/xymond.pem
 # and .key as xymon-tls(7) places them, or the files XYMONAPI_TLS_CERT and
 # XYMONAPI_TLS_KEY name -- the API speaks HTTPS on its port, and plain HTTP
-# gets no answer. /client then writes an https:// address, and its script
-# says where to put a certificate it does not trust before asking for a
-# password. A key that others
+# gets no answer. /client then writes an https:// address. A key that others
 # can read, or a certificate without its key, stops the API from starting.
-# The MCP client trusts the certificate XYMONAPI_CA names, and says what to
-# do when it is given none for a certificate the system does not trust.
+# The MCP client against it is xymonapi-mcp-access's; the setup script
+# against it, tests/compat/xymonapi-setup.sh's.
 #
 # Skips where the API cannot run (tests/lib/xymonapi.sh) or openssl is not
 # installed. Needs the xymon client of the Xymon tree in XYMON_SRC and curl.
@@ -47,38 +45,6 @@ assert_equal "000" "$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "http:
 assert_contains "URL=https://127.0.0.1:$API_PORT" "$(api_get /client)" "/client writes an https:// address"
 assert_contains "CAFILE=" "$(api_get /client)" "and knows where a certificate to trust would go"
 
-# The setup script, with no certificate to trust: it says what to do --
-# copy the certificate to CAFILE -- and stops, asking nothing. Its first
-# request is to /health, and only a 401 there makes it ask for a user and
-# password, so a certificate it does not trust is said first; this API asks
-# for no password, and the test pins the message. git and make are stubs,
-# and the virtualenv is there, so nothing is fetched or built.
-lap=$work/lap
-mkdir -p "$work/stub" "$lap/src/.git" "$lap/prefix/libexec/xymon-plugins/venv/bin" "$lap/cfg"
-printf '#!/bin/sh\nexit 0\n' > "$work/stub/git"
-cp "$work/stub/git" "$work/stub/make"
-cp "$work/stub/git" "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
-chmod 755 "$work/stub/git" "$work/stub/make" "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
-api_get /client > "$work/setup.sh"
-rc=0
-out=$(cd "$lap" && printf 'secret\n' | HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src" PATH="$work/stub:$PATH" \
-	sh "$work/setup.sh" "$lap/prefix" 2>&1) || rc=$?
-[ "$rc" -ne 0 ] || fail "the setup script went on with a certificate it does not trust: $out"
-assert_contains "copy the server's certificate" "$out" "the setup script says what to do with an unknown certificate"
-assert_not_contains "password" "$out" "before it asks for a password"
-assert_not_contains "user:" "$out" "or a user"
-
-# The MCP client: refused without the CA, let in with it.
-mcp "https://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
-answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $(tail -n 5 "$work/mcp.err")"
-assert_contains 'certificate this machine does not trust' "$answer" "the MCP client refuses a certificate it does not know"
-assert_contains 'XYMONAPI_CA' "$answer" "and names the setting"
-XYMONAPI_CA="$work/home/etc/tls/xymond.pem" \
-	mcp "https://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
-answer=$(grep '"id":3' "$work/mcp.out")
-assert_contains 'alive' "$answer" "with XYMONAPI_CA it is let in"
-assert_not_contains '"isError":true' "$answer" "and not refused"
-stop_process "$API_PID"; API_PID=""
 
 # Files named explicitly, elsewhere.
 cp "$work/home/etc/tls/xymond.pem" "$work/other.pem"; cp "$work/home/etc/tls/xymond.key" "$work/other.key"
@@ -104,4 +70,4 @@ XYMONHOME="$work/home" "$ROOT/plugins/xymonapi/xymonapi.sh" > "$work/half.log" 2
 assert_equal "1" "$rc" "xymond's certificate present but not its key"
 assert_contains 'xymond.key' "$(cat "$work/half.log")" "and it names the file"
 
-pass "with xymond's certificate, or named files, the API speaks HTTPS, /client says so, the MCP client trusts XYMONAPI_CA, and a bad key refuses to start"
+pass "with xymond's certificate, or named files, the API speaks HTTPS, /client says so, and a bad key refuses to start"

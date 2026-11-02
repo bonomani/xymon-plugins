@@ -13,12 +13,12 @@
 # has every token refused and deleted, so that put back, or a new user of the
 # name, they need new ones; a password file that cannot be read refuses a
 # token without deleting it. With
-# no XYMONAPI_PASSWD there are no users and no tokens. The MCP client sends the token from
-# XYMONAPI_TOKEN_FILE.
+# no XYMONAPI_PASSWD there are no users and no tokens. The MCP client
+# sending a token is xymonapi-mcp-access's.
 #
 # Skips where the API cannot run (tests/lib/xymonapi.sh). Needs the xymon
 # client of the Xymon tree in XYMON_SRC (for a free port), Apache's htpasswd
-# and curl; the last check also needs the mcp module.
+# and curl.
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
@@ -114,18 +114,6 @@ htpasswd -bB "$work/htpasswd" bob s3cret 2>/dev/null || fail "htpasswd could not
 assert_equal "401" "$(code "$t3" "$api/health")" "bob put back: his old token stays revoked"
 t3=$(issue bob:s3cret laptop)
 assert_equal "200" "$(code "$t3" "$api/health")" "and a new one works"
-
-# The MCP client, with the token in XYMONAPI_TOKEN_FILE.
-printf '%s\n' "$t3" > "$work/bob.token"
-rc=0
-export XYMONAPI_TOKEN_FILE="$work/bob.token"
-mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || rc=$?
-unset XYMONAPI_TOKEN_FILE
-if [ "$rc" -eq 77 ]; then
-	skip "$(cat "$work/mcp.err")"
-fi
-answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer from the MCP server: $(tail -n 5 "$work/mcp.err")"
-assert_not_contains '"isError":true' "$answer" "the MCP client is let in with the token file"
 
 # No password, no users: no tokens either.
 stop_process "$API_PID"
