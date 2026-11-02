@@ -31,6 +31,7 @@ import gzip
 import json
 import os
 import re
+import socket
 import sys
 import tempfile
 import threading
@@ -502,7 +503,9 @@ def ask(question: str, k: int = 5) -> str:
                              f"{LLM_MAX_TOKENS} tokens (XYMONAPI_RAG_LLM_MAX_TOKENS); use a model "
                              f"that does not think, or let it have more tokens")
         return text
-    except TimeoutError as e:
+    # socket.timeout: what a timed-out read raises under Python 3.9, where it
+    # is not yet TimeoutError, which 3.10 made it an alias of.
+    except (TimeoutError, socket.timeout) as e:
         raise SystemExit(f"xymonapi-rag: the language model at {LLM_URL} gave no answer in "
                          f"{LLM_TIMEOUT:g} seconds (XYMONAPI_RAG_LLM_TIMEOUT)") from e
     except urllib.error.HTTPError as e:

@@ -1,2 +1,2 @@
-fastembed>=0.9
+fastembed>=0.7
 numpy>=1.26

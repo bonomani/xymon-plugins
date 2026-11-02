@@ -130,7 +130,7 @@ The spec's `info.version` stays `1.0.0` until the API is first published.
   plugins.
 - A new module dependency goes in that plugin's `requirements.txt`, and only
   when a few lines of the standard library will not do.
-- Python 3.10 is the floor; nothing newer is assumed.
+- Python 3.9 is the floor; nothing newer is assumed.
 - Keep `ruff check` quiet on the lines you change. Older warnings in a file
   you touch are a note for another change, not this one.
 

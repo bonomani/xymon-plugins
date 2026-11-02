@@ -7,10 +7,10 @@
 # xymonapi-mcp register URL [NAME] instead registers it with Claude Code and
 # Codex, after xymonapi-connect(1), beside it, has connected this machine to
 # the API at URL.
-# It needs Python 3.10 or later and nothing else: the standard library speaks
+# It needs Python 3.9 or later and nothing else: the standard library speaks
 # the protocol.
 #
-# As xymonapi.sh does, exit 77 when it cannot run here -- no Python 3.10 --
+# As xymonapi.sh does, exit 77 when it cannot run here -- no Python 3.9 --
 # and say why on stderr, which the client logs: stdout carries the protocol
 # and nothing else.
 
@@ -18,11 +18,11 @@ PYTHON=${XYMONAPI_PYTHON:-python3}
 here=`dirname "$0"`
 
 command -v "$PYTHON" >/dev/null 2>&1 || {
-	echo "xymonapi-mcp: $PYTHON not found; it needs Python 3.10 or later" >&2
+	echo "xymonapi-mcp: $PYTHON not found; it needs Python 3.9 or later" >&2
 	exit 77
 }
-"$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 10))' || {
-	echo "xymonapi-mcp: `$PYTHON -V 2>&1` is too old; it needs Python 3.10 or later" >&2
+"$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 9))' || {
+	echo "xymonapi-mcp: `$PYTHON -V 2>&1` is too old; it needs Python 3.9 or later" >&2
 	exit 77
 }
 

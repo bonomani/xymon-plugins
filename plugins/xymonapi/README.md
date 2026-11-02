@@ -29,7 +29,7 @@ numbered rules every implementation keeps.
 - A Xymon server built from Xymon's current `main`: the API's settings go in
   `xymonserver.d/`, which no release reads yet; on 4.3.30 a file there is
   ignored, and with it the password the API should ask for.
-- Python 3.10 or later, with the modules in
+- Python 3.9 or later, with the modules in
   [`requirements.txt`](requirements.txt).
 - `rrdtool`, for `/series`; a web server running Xymon's CGI programs at
   `XYMONSERVERCGIURL`, for `/graphs`; Apache's `htpasswd`, when a password
@@ -147,7 +147,7 @@ come out as `[hidden]`, in every text and in the search index.
 ## Setting up another machine
 
 A machine that reads the API -- a laptop, say -- needs its client and a
-token of its own, and for that `make`, `curl` and Python 3.10 or later,
+token of its own, and for that `make`, `curl` and Python 3.9 or later,
 nothing else. Get the code from this server, at its versions, or from a
 clone of this repository:
 

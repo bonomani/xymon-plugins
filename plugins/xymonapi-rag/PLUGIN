@@ -4,5 +4,5 @@ name: xymonapi-rag
 version: 0.1.0
 side: server, client
 summary: a search of Xymon's manual pages and history by meaning; the index task on the server, search and ask anywhere
-requires: xymonapi >= 0.1.0 (its client beside it; the API beside it on the server, over the network elsewhere), python >= 3.10
+requires: xymonapi >= 0.1.0 (its client beside it; the API beside it on the server, over the network elsewhere), python >= 3.9
 manual: xymonapi-rag.1

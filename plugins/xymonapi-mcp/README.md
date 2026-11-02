@@ -14,7 +14,7 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
   reached over the network: install and enable it there first. On another
   machine, this plugin does not install it; it installs `xymonapi`'s client
   alone beside it.
-- Python 3.10 or later, and nothing else: it speaks the protocol with the
+- Python 3.9 or later, and nothing else: it speaks the protocol with the
   standard library.
 
 ## Installing
@@ -106,7 +106,7 @@ as a list, and `environment` for `env`.
   [users](../xymonapi/README.md#users), alone, mode 600; it is the only
   credential sent. Leave it out when the API asks for no password.
 - Add `XYMONAPI_CA` when the server's certificate is its own, and
-  `XYMONAPI_PYTHON` when the `python3` on `PATH` is older than 3.10.
+  `XYMONAPI_PYTHON` when the `python3` on `PATH` is older than 3.9.
 - For two Xymon servers, register twice, as `xymon-prod` and `xymon-lab`,
   each with its own URL and token file.
 

@@ -21,7 +21,7 @@ It needs a Xymon built from its current main branch: its settings go in
 xymonserver.d/, which no release of Xymon reads yet. On 4.3.30 a file there
 is ignored, password included, and xymonapi then answers anyone.
 
-Unlike the rest of Xymon, xymonapi needs Python 3.10 or later, with the
+Unlike the rest of Xymon, xymonapi needs Python 3.9 or later, with the
 modules fastapi, uvicorn and yaml (requirements.txt beside it lists them),
 importable by the user Xymon runs as. When one is missing it logs which, and
 exits with status 77.

@@ -4,7 +4,7 @@
 # Start the Xymon API: xymonapi(8).
 #
 # Xymon itself needs no Python, so this is the one place that finds out
-# whether the API can run here. Exit 77 says it cannot -- no Python 3.10, or a
+# whether the API can run here. Exit 77 says it cannot -- no Python 3.9, or a
 # module missing -- as distinct from 1, a configuration error; the tests skip
 # on 77, as they skip on a missing compiler.
 
@@ -13,11 +13,11 @@ PYTHON=${XYMONAPI_PYTHON:-python3}
 here=`dirname "$0"`
 
 command -v "$PYTHON" >/dev/null 2>&1 || {
-	echo "xymonapi: $PYTHON not found; the API needs Python 3.10 or later" >&2
+	echo "xymonapi: $PYTHON not found; the API needs Python 3.9 or later" >&2
 	exit 77
 }
-"$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 10))' || {
-	echo "xymonapi: `$PYTHON -V 2>&1` is too old; the API needs Python 3.10 or later" >&2
+"$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 9))' || {
+	echo "xymonapi: `$PYTHON -V 2>&1` is too old; the API needs Python 3.9 or later" >&2
 	exit 77
 }
 # The module checks run from this script's directory: from the caller's, a

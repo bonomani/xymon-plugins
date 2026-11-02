@@ -55,14 +55,14 @@ The certificate, or the CA, to trust for an https:// URL. The default is
 certificate there, over a channel already trusted. Verification is never
 turned off.
 .IP "\fBXYMONAPI_PYTHON\fR"
-The Python to run with, when the python3 found on PATH is older than 3.10.
+The Python to run with, when the python3 found on PATH is older than 3.9.
 .IP "\fBXDG_CONFIG_HOME\fR"
 Where xymon-api/ is, ~/.config by default.
 
 .SH "EXIT STATUS"
 0 when this machine is connected; 1 when the API cannot be reached, its
 certificate is not trusted, or it refused the password; 2 for a wrong
-argument; 130 when interrupted; 77 without Python 3.10.
+argument; 130 when interrupted; 77 without Python 3.9.
 
 .SH "SEE ALSO"
 xymonapi(8)

@@ -16,7 +16,7 @@
 # The API is started through xymonapi.sh, the launcher xymonlaunch runs:
 # the checkout's plugins/xymonapi, or an installed one when API_ROOT names
 # its directory.
-# It exits 77 when this machine lacks what the API needs (Python 3.10 and its
+# It exits 77 when this machine lacks what the API needs (Python 3.9 and its
 # modules), and start_api then skips the test.
 
 if [ -z "${XYMON_SRC:-}" ] || [ ! -f "$XYMON_SRC/tests/lib/assert.sh" ]; then
