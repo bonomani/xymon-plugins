@@ -10,12 +10,14 @@ Started by xymonapi.sh, which checks Python and the modules first.
 from __future__ import annotations
 
 import contextvars
+import io
 import logging
 import os
 import re
 import secrets
 import shutil
 import sys
+import tarfile
 from pathlib import Path
 
 import yaml
@@ -24,7 +26,6 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, Response
 
-import clientsetup
 import tokens
 import xymon
 
@@ -87,10 +88,9 @@ def _refused(exc: Exception) -> JSONResponse:
 # request and not the event loop -- /health keeps answering meanwhile.
 def _health(request):
     out: dict = {"alive": False, "search": _search_info()}
-    # The version this API was installed from, for the /client script to
-    # install the same: here, behind the password, not in /client, which
-    # anyone may fetch.
-    version = clientsetup.installed_version()
+    # The version this API was installed from, which a client compares with
+    # its own: here, behind the password.
+    version = installed_version()
     if version:
         out["version"] = version
     try:
@@ -215,24 +215,45 @@ def _histlog(request):
     return JSONResponse(log)
 
 
-def _client(request):
-    """A setup script for the machine that asked, with the API's own address,
-    so a laptop is set up with no name retyped. Open to anyone: it holds
-    nothing secret, and the script asks for the user and password itself."""
-    q = request.query_params
-    fmt = q.get("format", "sh")
-    if fmt not in ("sh", "env"):
-        return JSONResponse({"error": "bad_request", "detail": "format must be sh or env"},
-                            status_code=400)
+HERE = Path(__file__).resolve().parent
+_VERSION_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")
+# What each plugin's make install stages for other machines to install
+# from: its directory, as in the repository, beside build/ and the top
+# Makefile. Not under this plugin's own directory, which an install empties.
+DIST = HERE.parent / "xymon-plugins-client"
+
+
+def installed_version() -> str:
+    """The version in the VERSION file beside this plugin, or ""."""
     try:
-        name = clientsetup.valid_name(q.get("name"))
-    except ValueError as exc:
-        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
-    url = clientsetup.public_url(request.headers, str(request.url))
-    text = clientsetup.render(url, name, fmt)
-    media = "text/x-shellscript" if fmt == "sh" else "text/plain"
-    return Response(content=text, media_type=f"{media}; charset=utf-8",
-                    headers={"Content-Disposition": f'inline; filename="{name}-setup.{fmt}"'})
+        ref = (HERE / "VERSION").read_text(encoding="ascii").strip()
+    except (OSError, UnicodeDecodeError):
+        return ""
+    return ref if _VERSION_RE.fullmatch(ref) else ""
+
+
+def _client(request):
+    """The code of the plugins installed here, as staged for other machines,
+    in a .tar.gz rooted at xymon-plugins/: what a machine runs make
+    install-client in, at this server's versions. Open to anyone, as the
+    repository is: it holds no setting and nothing secret. Which plugins it
+    holds is whatever is staged; this API names none."""
+    plugins = DIST / "plugins"
+    if not plugins.is_dir() or not any(plugins.iterdir()):
+        return JSONResponse({"error": "not_found",
+                             "detail": "no plugin's code is staged on this server: make install "
+                                       "there stages it"}, status_code=404)
+
+    def neutral(info: tarfile.TarInfo) -> tarfile.TarInfo:
+        info.uid = info.gid = 0
+        info.uname = info.gname = ""
+        return info
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        tar.add(DIST, arcname="xymon-plugins", filter=neutral)
+    return Response(content=buf.getvalue(), media_type="application/gzip",
+                    headers={"Content-Disposition": 'attachment; filename="xymon-plugins.tar.gz"'})
 
 
 def _no_users() -> JSONResponse | None:
@@ -336,15 +357,15 @@ def build_app() -> FastAPI:
 
         # Every path, not only the API's: FastAPI also serves /openapi.json
         # and its /docs pages, and with a password set nothing is answered
-        # to a stranger but /client.
+        # to a stranger but /client, the plugins' code.
         def refuse(detail: str) -> JSONResponse:
             return JSONResponse({"error": "unauthorized", "detail": detail}, status_code=401,
                                 headers={"WWW-Authenticate": 'Basic realm="xymon"'})
 
         @app.middleware("http")
         async def _auth(request, call_next):
-            # /client alone is open: its script asks for the password itself,
-            # and a password here would be asked a second time for nothing.
+            # /client alone is open: the code it gives is the repository's,
+            # and a machine fetches it before it has a token to send.
             if request.url.path == base + "/client":
                 return await call_next(request)
             header = request.headers.get("authorization") or ""

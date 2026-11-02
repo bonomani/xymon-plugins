@@ -12,7 +12,7 @@ setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
   index at `/search` and whose client it uses. `make install` here installs
   it first; the API's task must then be enabled, as its README says, for
   the search to be served.
-- **On a laptop:** `xymonapi`'s client beside it, which
+- **On another machine:** `xymonapi`'s client beside it, which
   `make install-client` here installs first, and a running API, reached
   over the network, as `XYMONAPI_URL` says.
 - Python 3.10 or later, and on the server the modules in
@@ -45,9 +45,12 @@ xymonapi-rag search "what does purple mean"
 xymonapi-rag ask "has /boot filled up before, and where?"
 ```
 
-`make install-client` installs it on a laptop, as the setup script does,
+On another machine, `make install-client` here -- from a clone, or from the
+code the server's `/client` gives, as [`xymonapi`'s
+README](../xymonapi/README.md#from-another-machine) shows -- installs it
 under `$PREFIX/libexec/xymon-plugins/` with the command `xymonapi-rag` in
-`$PREFIX/bin` (`~/.local` by default).
+`$PREFIX/bin` (`~/.local` by default). `xymonapi-connect URL`, installed
+with it, gets that machine its token and prints the settings to export.
 `search` uses the server's index when there is none here. `ask` hands the
 passages to a language model speaking the OpenAI-compatible API -- a local
 Ollama by default, LM Studio with two settings. Pick the model with care: a

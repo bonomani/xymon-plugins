@@ -19,18 +19,30 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
 ## Installing
 
-The simplest way is the setup script the API gives (see
-[On a laptop](../xymonapi/README.md#on-a-laptop)): it installs this plugin,
-gets a token, and registers it with Claude Code and Codex; then ask your AI
-client "which hosts are red?". By hand:
+Get the code from the Xymon server, at its versions, or from a clone of
+this repository, then install and register:
 
 ```sh
+curl --cacert ~/.config/xymon-api/xymon-ca.pem \
+  https://xymon.example.ch/xymon/api/v1/client | tar xz
+# or: git clone --branch stable https://github.com/bonomani/xymon-plugins
+cd xymon-plugins/plugins/xymonapi-mcp
 make install-client                # under ~/.local; PREFIX=... for elsewhere
+xymonapi-mcp register https://xymon.example.ch
 ```
 
-puts the command `xymonapi-mcp` in `$PREFIX/bin` and the code under
-`$PREFIX/libexec/xymon-plugins/xymonapi-mcp`, after `xymonapi`'s client in
-`$PREFIX/libexec/xymon-plugins/xymonapi`.
+Then ask your AI client "which hosts are red?". The server's `/client`
+holds this plugin when `make install` here ran on the server, which stages
+it there and runs nothing of it; the certificate to copy first, when the
+server's is its own, is as [`xymonapi`'s
+README](../xymonapi/README.md#from-another-machine) says.
+
+`make install-client` puts the command `xymonapi-mcp` in `$PREFIX/bin` and
+the code under `$PREFIX/libexec/xymon-plugins/xymonapi-mcp`, after
+`xymonapi`'s client and `xymonapi-connect`. `register` connects this machine
+to the API with `xymonapi-connect` -- your password once, for a token of its
+own -- then registers the server with Claude Code and Codex as `xymon`;
+`register URL xymon-lab` names a second server.
 
 Claude Code can also install it as a plugin, from this repository's
 marketplace at its branch `stable`, the code every test passed:
@@ -43,10 +55,11 @@ marketplace at its branch `stable`, the code every test passed:
 The plugin carries its copy of `xymonapi`'s client. It then takes
 `XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and `XYMONAPI_PYTHON`
 from your environment, defaults in [`.mcp.json`](.mcp.json), and still needs
-a token: use the setup script or the marketplace, not both.
+a token, which `xymonapi-connect` gets: use `register` or the marketplace,
+not both.
 
 `make uninstall-client` removes it, keeps `xymonapi`'s client, and says what
-the setup script did besides, to undo by hand: the registrations in Claude
+`register` did besides, to undo by hand: the registrations in Claude
 Code and Codex, and this machine's token, to revoke on the server and delete
 here.
 

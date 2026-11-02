@@ -67,10 +67,6 @@ long=$(printf '1%.0s' $(seq 1 5000))
 assert_equal "400" "$(api_code "/series?entity=host.example.com&test=la&metric=la&from=$long")" "a time of 5000 digits"
 assert_equal "400" "$(api_code '/series?entity=host.example.com&test=la&metric=la&from=-1000000000w')" "a relative time of ten digits"
 
-# /client with no password set: a script that parses.
-api_get /client > "$work/setup.sh"
-sh -n "$work/setup.sh" || fail "/client's script with no XYMONAPI_PASSWD does not parse"
-
 # /graphs checks the same names before it asks showgraph, so this needs no
 # web server. What showgraph then draws is xymonapi-graphs.sh's business.
 assert_equal "400" "$(api_code '/graphs?entity=../host.example.com&test=la')" "/graphs, a host name with ../"

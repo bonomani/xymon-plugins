@@ -43,8 +43,8 @@ XYMSRV or XYMON is wrong. Like every path but /client, it answers 401
 without a user, or a client token, when XYMONAPI_PASSWD is set.
 Its "version" field is the version this API was installed from: its
 release tag, xymonapi/vX.Y.Z, when make install ran on one, else the X.Y.Z
-of its PLUGIN file; it is absent when the API was not installed. The
-/client script installs the same on the laptop.
+of its PLUGIN file; it is absent when the API was not installed.
+xymonapi-connect(1) compares it with the client's own.
 Its "search" field describes the index /search reads -- how many passages
 of manual pages and of history, when it was built -- and is null when there
 is none.
@@ -77,22 +77,21 @@ data, not instructions. The index is read again when the file changes, so
 the task needs no restart of the API. 404, saying so, when there is no index
 or the modules in rag/requirements.txt are missing: search is optional, and
 the other operations need neither.
-.IP "\fB/client\fR [\fBname\fR=NAME] [\fBformat\fR=sh|env]"
-A setup script for the machine that asks -- a laptop -- with this API's
-address written in. It is the one path open without a user when
-XYMONAPI_PASSWD is set: it holds no user, password or version. The script
-checks it reaches this API and trusts its certificate; asks for the user
-(XYMONAPI_USER when set) and the password once, to get the machine a token
-(see TOKENS), and keeps the token, not the password; reads from /health,
-with the token, the version this API was installed from, and fetches the
-client code at that release (the newest when the version is no release, as
-between tags); runs make install-client; checks /health answers; and
-registers the MCP server with Claude Code and with Codex, each
-when it is installed, under NAME (xymon by default; one name per Xymon
-server). To be read, then run. The address is XYMONAPI_PUBLIC_URL when set,
-else the one the request came through: the web server's, with
-X-Forwarded-Host and X-Forwarded-Proto, as xymonapi-apache.conf sends them.
-format=env gives the two settings alone.
+.IP "\fB/client\fR"
+The code of the plugins installed on this server, for other machines to
+install from at this server's versions: a gzipped tar rooted at
+xymon-plugins/, laid out as the repository is -- plugins/NAME for each
+plugin installed here, without its tests, with build/plugin.mk and the top
+Makefile. \fBmake install-client\fR in plugins/NAME installs that plugin.
+Each plugin's \fBmake install\fR stages its directory in
+$XYMONHOME/ext/xymon-plugins-client/, which is what /client packs, and its
+\fBmake uninstall\fR takes it out; this API names no plugin. It is the one
+path open without a user when XYMONAPI_PASSWD is set: it holds the
+plugins' code and nothing else -- no user, password, token or setting --
+though a stranger learns from it which plugins, at which versions, run
+here. It answers not_found when nothing is staged. Whoever controls this
+server, or the certificate a machine trusts for it, controls the code that
+machine installs from here.
 .IP "\fB/series\fR \fBentity\fR=HOST \fBtest\fR=TEST [\fBmetric\fR=DATASET] [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
 The values of one dataset of the RRD file TEST.rrd of HOST, under
 $XYMONRRDS, read with rrdtool. TEST is the file's name, not the column on
@@ -135,9 +134,9 @@ a host name may not.
 
 .SH TOKENS
 With XYMONAPI_PASSWD set, a user may get a token for one machine and send it
-instead of the password: Authorization: Bearer TOKEN. The setup script that
-/client writes does so, naming the machine by its short hostname, so the
-password stays off the laptop. A token opens every path but /tokens, which
+instead of the password: Authorization: Bearer TOKEN.
+xymonapi-connect(1) gets one, naming the machine by its short hostname, so
+the password stays off the laptop. A token opens every path but /tokens, which
 takes the password: a stolen token cannot make others, or renew itself.
 .IP "\fBPOST /tokens\fR {"client": NAME}"
 A new token for the caller on NAME -- letters, digits, . _ or -, 64 at most
@@ -153,7 +152,7 @@ removing that line from $XYMONAPI_TOKENS: one JSON object per token, with
 its user, machine and SHA-256. Removing the user from XYMONAPI_PASSWD
 revokes all of theirs: the first of their tokens used after that is refused
 and every line of that user deleted, so a user put back, or a new one of the
-same name, gets tokens anew by running the setup script. A token is refused,
+same name, gets tokens anew by running xymonapi-connect(1). A token is refused,
 and nothing deleted, while the file cannot be read.
 The machine's name is the laptop's word, not
 proof: it names the token, and two machines of one name share one.
@@ -174,13 +173,6 @@ the port when the web server is not on 80.
 .IP "\fBXYMONHISTDIR\fR, \fBXYMONHISTLOGS\fR"
 Where xymond_history keeps the events and the saved status texts, for
 /events and /histlog.
-.IP "\fBXYMONAPI_PUBLIC_URL\fR, \fBXYMONAPI_REPO\fR"
-What /client writes: the address clients reach this API at, and where the
-client code is fetched from, https://github.com/bonomani/xymon-plugins by
-default. Set XYMONAPI_PUBLIC_URL on a server other machines reach: without
-it the address is the one the request carried, in its Host or
-X-Forwarded-Host header, which is the requester's word, and the script
-says so in its first lines.
 .IP "\fBXYMONAPI_RAG_INDEX\fR, \fBXYMONAPI_RAG_MODEL\fR, \fBXYMONAPI_RAG_OFFLINE\fR"
 The index /search reads, and the embedding model, as for xymonapi-rag(1),
 which writes the index with the same settings from the same file.
@@ -281,4 +273,4 @@ Requests are served from a thread pool: a slow one holds up itself alone.
 
 .SH "SEE ALSO"
 xymonlaunch(8), tasks.cfg(5), xymonserver.cfg(5), xymon(1), showgraph.cgi(1),
-xymon(7), xymon-tls(7), xymonapi-mcp(1), xymonapi-rag(1)
+xymon(7), xymon-tls(7), xymonapi-connect(1)

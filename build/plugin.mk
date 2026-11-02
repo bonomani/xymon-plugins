@@ -33,6 +33,10 @@ CLIENTROOT = $(DESTDIR)$(PREFIX)/libexec/xymon-plugins
 CLIENT = $(CLIENTROOT)/$(PLUGIN)
 BIN = $(DESTDIR)$(PREFIX)/bin
 CLIENTMAN1 = $(DESTDIR)$(PREFIX)/share/man/man1
+# What other machines install from, which the API serves at /client: each
+# plugin installed on the server stages its directory here, as in the
+# repository, beside build/ and the top Makefile.
+DIST = $(EXTROOT)/xymon-plugins-client
 
 # need_home -- the first line of a server-side install: without XYMONHOME
 # nothing is installed, and the usage says what is missing.
@@ -91,6 +95,21 @@ define needed_by
 			echo "$(PLUGIN) is needed by $$p, installed in $(1): uninstall $$p first" >&2; exit 1; \
 		fi; \
 	done
+endef
+
+# dist -- stage this plugin's directory under $(DIST)/plugins, as it is in
+# the repository but for its tests, with build/plugin.mk, the top Makefile
+# and LICENSE beside: a machine unpacking it runs make install-client there,
+# at the server's versions. Links are copied as links, as in the repository.
+define dist
+	@case "$(PLUGIN)" in ""|*/*|.|..) echo "PLUGIN must name one plugin directory" >&2; exit 1 ;; esac
+	rm -rf "$(DIST)/plugins/$(PLUGIN)"
+	mkdir -p "$(DIST)/plugins" "$(DIST)/build"
+	cp -R . "$(DIST)/plugins/$(PLUGIN)"
+	rm -rf "$(DIST)/plugins/$(PLUGIN)/tests"
+	find "$(DIST)/plugins/$(PLUGIN)" -name __pycache__ -prune -exec rm -rf {} +
+	cp -f ../../build/plugin.mk "$(DIST)/build/"
+	cp -f ../../Makefile ../../LICENSE "$(DIST)/"
 endef
 
 # gone DIR -- remove this plugin's directory, as fresh empties it.

@@ -10,9 +10,10 @@
 # path is covered, /openapi.json and FastAPI's /docs included. A user
 # name that looks like an option is refused, not passed to htpasswd as one.
 # A password file the API cannot read stops it from starting. /client alone
-# is open: it writes a setup script with the address asked and no user or
-# version; /health gives the version, to a user, and only fields the spec
-# lists. Running that script is tests/compat/xymonapi-setup.sh's.
+# is open: it gives the code of the plugins staged here, an archive rooted
+# at xymon-plugins/, with no password or tokens file in it; /health gives
+# the version, to a user, and only fields the spec lists. Installing from
+# that archive is xymonapi-client.sh's.
 #
 # Skips where the API cannot run (tests/lib/xymonapi.sh). Needs the xymon
 # client of the Xymon tree in XYMON_SRC (for a free port), Apache's htpasswd
@@ -70,16 +71,15 @@ for path in /openapi.json /docs; do
 	assert_equal "200" "$(curl -s -o /dev/null -w '%{http_code}' -u alice:secret "http://127.0.0.1:$API_PORT$path")" "$path with a user"
 done
 
-# /client: open, a password set or not, since its script holds nothing
-# secret -- the address the request came through, the proxy's when its
-# headers say so, and no user or version. The version is /health's, behind
-# the password.
+# /client: open, a password set or not, since what it gives is the plugins'
+# code, as the repository has it: no user, password, token or setting.
 assert_equal "200" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/client")" "[C4] /client without a user"
-script=$(curl -s "http://127.0.0.1:$API_PORT/xymon/api/v1/client")
-assert_contains "URL=http://127.0.0.1:$API_PORT" "$script" "/client writes the address the request came to"
-assert_contains "NAME=xymon" "$script" "and the default name"
-printf '%s\n' "$script" | grep -q '^USER=' && fail "[C4] /client wrote a USER= line"
-assert_not_contains "$version" "$script" "[C4] and not the version"
+curl -s -o "$work/client.tgz" "http://127.0.0.1:$API_PORT/xymon/api/v1/client"
+mkdir -p "$work/unpacked"
+tar -xzf "$work/client.tgz" -C "$work/unpacked" || fail "/client's answer is not a gzipped tar"
+assert_equal "xymon-plugins" "$(ls "$work/unpacked")" "rooted at xymon-plugins/"
+grep -rqF "$(cut -d: -f2 "$work/htpasswd" | head -n 1)" "$work/unpacked" && fail "[C4] /client gave the password file's contents"
+find "$work/unpacked" -type f -name tokens | grep -q . && fail "[C4] /client gave a tokens file"
 assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user"
 assert_not_contains "$version" "$(curl -s "$url")" "and not to a stranger"
 # Every field /health gives is one the spec lists for it: a field renamed in
@@ -88,19 +88,6 @@ spec_fields=$(sed -n '/^    Health:/,/^    [A-Z]/p' "$ROOT/plugins/xymonapi/open
 for f in $(curl -s -u alice:secret "$url" | "${XYMONAPI_PYTHON:-python3}" -c 'import json, sys; print(" ".join(json.load(sys.stdin)))'); do
 	printf '%s\n' "$spec_fields" | grep -qx "$f" || fail "/health gives \"$f\", which openapi.yaml's Health does not list ($(echo $spec_fields))"
 done
-printf '%s\n' "$script" > "$work/setup.sh"
-sh -n "$work/setup.sh" || fail "/client's script does not parse: $(sh -n "$work/setup.sh" 2>&1)"
-assert_contains 'text/x-shellscript' "$(curl -s -D - -o /dev/null "http://127.0.0.1:$API_PORT/xymon/api/v1/client" | tr 'A-Z' 'a-z')" "served as a shell script"
-proxied=$(curl -s -H 'X-Forwarded-Host: xymon.example.ch' -H 'X-Forwarded-Proto: https' "http://127.0.0.1:$API_PORT/xymon/api/v1/client?name=xymon-lab")
-assert_contains "URL=https://xymon.example.ch" "$proxied" "behind a proxy, the proxy's address and scheme"
-assert_contains "NAME=xymon-lab" "$proxied" "and the name asked for"
-assert_contains 'xymon-api/$NAME.password' "$proxied" "which names the password file too"
-assert_equal "400" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/client?name=bad%20name")" "a name with a space"
-assert_equal "400" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/client?format=exe")" "a format that is neither"
-env=$(curl -s "http://127.0.0.1:$API_PORT/xymon/api/v1/client?format=env")
-assert_contains "XYMONAPI_URL=http://127.0.0.1:$API_PORT" "$env" "format=env gives the settings"
-assert_contains 'XYMONAPI_TOKEN_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/xymon-api/xymon.token' "$env" "with the token file where the script keeps it"
-assert_not_contains "git clone" "$env" "and no script"
 
 # Xymon's own password file is the default: with XYMONHOME set and
 # etc/xymonpasswd there, nothing else need be set, and the API asks for

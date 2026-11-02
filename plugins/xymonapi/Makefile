@@ -5,13 +5,13 @@
 #   make install XYMONHOME=/usr/lib/xymon/server   the API, on the server
 #   make install-client [PREFIX=$HOME/.local]      its client alone, elsewhere
 #
-# It needs nothing else to run; xymonapi-rag beside it is what /search
-# serves, when that plugin is installed too.
+# It needs nothing else to run. make install also stages this directory for
+# other machines, which /client serves with every plugin staged there.
 
 PLUGIN = xymonapi
 include ../../build/plugin.mk
 
-FILES = app.py xymon.py xymonapi_client.py clientsetup.py tokens.py openapi.yaml requirements.txt xymonapi.sh
+FILES = app.py xymon.py xymonapi_client.py tokens.py openapi.yaml requirements.txt xymonapi.sh
 
 all:
 
@@ -19,9 +19,10 @@ install:
 	$(need_home)
 	$(call fresh,$(EXT))
 	cp -f $(FILES) "$(EXT)/"
-	chmod 644 "$(EXT)/app.py" "$(EXT)/xymon.py" "$(EXT)/xymonapi_client.py" "$(EXT)/clientsetup.py" "$(EXT)/tokens.py" "$(EXT)/openapi.yaml" "$(EXT)/requirements.txt"
+	chmod 644 "$(EXT)/app.py" "$(EXT)/xymon.py" "$(EXT)/xymonapi_client.py" "$(EXT)/tokens.py" "$(EXT)/openapi.yaml" "$(EXT)/requirements.txt"
 	chmod 755 "$(EXT)/xymonapi.sh"
 	$(call version,$(EXT))
+	$(dist)
 	mkdir -p "$(MAN8)"
 	cp -f xymonapi.8 "$(MAN8)/"
 	chmod 644 "$(MAN8)/xymonapi.8"
@@ -51,8 +52,10 @@ install-client:
 # include a snippet, and the tokens file is data.
 uninstall:
 	$(need_home)
-	$(call needed_by,$(EXTROOT),xymonapi-mcp xymonapi-rag)
+	$(call needed_by,$(EXTROOT),xymonapi-rag)
+	$(call needed_by,$(DIST)/plugins,xymonapi-mcp xymonapi-rag)
 	$(call gone,$(EXT))
+	$(call gone,$(DIST)/plugins/$(PLUGIN))
 	rm -f "$(MAN8)/xymonapi.8" "$(TASKDIR)/xymonapi"
 	@echo "Uninstalled xymonapi. Kept, for you to remove: $(ETC)/xymonapi-{apache,nginx,lighttpd}.conf --"
 	@echo "  take its Include out of the web server first -- and the tokens file, \$$XYMONAPI_TOKENS"

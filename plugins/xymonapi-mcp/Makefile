@@ -2,7 +2,8 @@
 # The MCP server for the Xymon API, xymonapi-mcp(1).
 #
 #   make install-client [PREFIX=$HOME/.local]   where the AI client runs
-#   make install XYMONHOME=...                  on the Xymon server
+#   make install XYMONHOME=...                  on the Xymon server, staged
+#                                               for other machines, not run
 #
 # It reads the API through xymonapi's client, beside it, which either target
 # installs first; the API itself runs on the server. xymonapi_client.py here
@@ -15,14 +16,14 @@ FILES = server.py xymonapi-mcp.sh
 
 all:
 
+# Nothing of it runs on the server: it is staged there, for the machines that
+# install from the server's /client. The directory an older install put in
+# ext/ goes.
 install:
 	$(need_home)
 	$(MAKE) -C ../xymonapi install
-	$(call fresh,$(EXT))
-	cp -f $(FILES) "$(EXT)/"
-	chmod 644 "$(EXT)/server.py"
-	chmod 755 "$(EXT)/xymonapi-mcp.sh"
-	$(call version,$(EXT))
+	$(call gone,$(EXT))
+	$(dist)
 
 install-client:
 	$(MAKE) -C ../xymonapi install-client
@@ -39,6 +40,7 @@ install-client:
 uninstall:
 	$(need_home)
 	$(call gone,$(EXT))
+	$(call gone,$(DIST)/plugins/$(PLUGIN))
 	@echo "Uninstalled xymonapi-mcp. Kept: xymonapi."
 
 # register also registered the server with the AI clients, and kept a token:

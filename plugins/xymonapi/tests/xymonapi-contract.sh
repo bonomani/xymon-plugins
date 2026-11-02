@@ -83,6 +83,9 @@ XYMONAPI_PASSWD="$work/htpasswd" XYMONAPI_TOKENS="$work/tokens" start_api
 answer '[C3]' GET "$v1/alarms" 401 unauthorized
 answer '[C3]' GET "$v1/no-such-path" 401 unauthorized
 answer '[C3]' GET "$v1/alarms" 502 upstream -u alice:secret
-assert_equal "200" "$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT$v1/client")" "[C4] /client answers without a user"
+# /client answers without a user: here, run from the repository with
+# nothing staged, that nothing is staged, not that a user is missing.
+answer '[C4]' GET "$v1/client" 404 not_found
+assert_contains "make install there stages it" "$(curl -s "http://127.0.0.1:$API_PORT$v1/client")" "and what to do about it"
 
 pass "every failure is an error openapi.yaml lists, with its status, every answer an X-Request-Id, and /client needs no user"

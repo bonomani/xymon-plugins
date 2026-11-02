@@ -6,10 +6,9 @@
 # With a certificate and key -- xymond's own, $XYMONHOME/etc/tls/xymond.pem
 # and .key as xymon-tls(7) places them, or the files XYMONAPI_TLS_CERT and
 # XYMONAPI_TLS_KEY name -- the API speaks HTTPS on its port, and plain HTTP
-# gets no answer. /client then writes an https:// address. A key that others
-# can read, or a certificate without its key, stops the API from starting.
-# The MCP client against it is xymonapi-mcp-access's; the setup script
-# against it, tests/compat/xymonapi-setup.sh's.
+# gets no answer. A key that others can read, or a certificate without its
+# key, stops the API from starting. The MCP client against it is
+# xymonapi-mcp-access's; xymonapi-connect against it, xymonapi-connect's.
 #
 # Skips where the API cannot run (tests/lib/xymonapi.sh) or openssl is not
 # installed. Needs the xymon client of the Xymon tree in XYMON_SRC and curl.
@@ -42,8 +41,6 @@ export XYMONHOME="$work/home" XYMONAPI_TLS_CERT="$work/home/etc/tls/xymond.pem"
 start_api
 assert_contains '"alive"' "$(api_get /health)" "the API answers over HTTPS with xymond's certificate"
 assert_equal "000" "$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/health" || true)" "and not over plain HTTP"
-assert_contains "URL=https://127.0.0.1:$API_PORT" "$(api_get /client)" "/client writes an https:// address"
-assert_contains "CAFILE=" "$(api_get /client)" "and knows where a certificate to trust would go"
 
 
 # Files named explicitly, elsewhere.
@@ -70,4 +67,4 @@ XYMONHOME="$work/home" "$ROOT/plugins/xymonapi/xymonapi.sh" > "$work/half.log" 2
 assert_equal "1" "$rc" "xymond's certificate present but not its key"
 assert_contains 'xymond.key' "$(cat "$work/half.log")" "and it names the file"
 
-pass "with xymond's certificate, or named files, the API speaks HTTPS, /client says so, and a bad key refuses to start"
+pass "with xymond's certificate, or named files, the API speaks HTTPS, and a bad key refuses to start"

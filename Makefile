@@ -10,9 +10,10 @@
 #
 # A plugin that needs another installs it first, so the lists name only the
 # ends: xymonapi-mcp and xymonapi-rag bring xymonapi with them, its client
-# on a laptop, the API on the server. The MCP server is a laptop's.
+# on a laptop, the API on the server. The MCP server runs on a laptop; the
+# server only stages it, for laptops to install from its /client.
 
-SERVER = xymonapi-rag
+SERVER = xymonapi-mcp xymonapi-rag
 CLIENT = xymonapi-mcp xymonapi-rag
 
 all:
@@ -25,7 +26,7 @@ install-client:
 	@for p in $(CLIENT); do $(MAKE) -C "plugins/$$p" install-client || exit 1; done
 
 # Every plugin of a side, those that need another first; and on a laptop the
-# virtualenv the setup script made beside them.
+# virtualenv an earlier setup made beside them.
 uninstall:
 	@test -n "$(XYMONHOME)" || { echo "usage: make uninstall XYMONHOME=<the Xymon server directory>" >&2; exit 1; }
 	@for p in xymonapi-rag xymonapi-mcp xymonapi; do $(MAKE) -C "plugins/$$p" uninstall || exit 1; done

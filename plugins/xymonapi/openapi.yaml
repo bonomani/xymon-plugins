@@ -21,7 +21,8 @@ info:
         without a user and password from that file or a valid client token,
         before anything else is checked; a token is refused on /tokens.
     C4. /client answers without a user, XYMONAPI_PASSWD set or not, and holds
-        no user, password or version.
+        the code of the plugins staged on this server and nothing else: no
+        user, password, token or setting.
     C5. Every answer carries an X-Request-Id header: the one the request sent,
         when it is 1 to 64 letters, digits, dots, underscores or hyphens, and
         one the API makes otherwise. The API's log lines about that request
@@ -231,19 +232,15 @@ paths:
 
   /client:
     get:
-      summary: A setup script for the machine that asks, with this API's address filled in. Open to anyone, a password set or not.
-      operationId: clientSetup
+      summary: The code of the plugins installed on this server, staged for other machines to install from, at this server's versions. Open to anyone, a password set or not.
+      operationId: clientCode
       security: [ {} ]
-      parameters:
-        - { name: name,   in: query, schema: { type: string, default: xymon }, description: "The name the MCP server is registered under in Claude Code and Codex; one per Xymon server." }
-        - { name: format, in: query, schema: { type: string, enum: [sh, env], default: sh }, description: "sh, a script to read then run; env, the two settings alone." }
       responses:
         "200":
-          description: The script, or the settings. It holds no user, password or version.
+          description: "A gzipped tar rooted at xymon-plugins/, laid out as the repository is: plugins/NAME for each plugin staged here, without its tests, with build/plugin.mk and the top Makefile. make install-client in plugins/NAME installs that plugin."
           content:
-            text/x-shellscript: { schema: { type: string } }
-            text/plain: { schema: { type: string } }
-        "400": { $ref: "#/components/responses/BadRequest" }
+            application/gzip: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /tokens:
     get:
@@ -339,7 +336,7 @@ components:
       properties:
         alive: { type: boolean }
         server_version: { type: string, description: "xymond's answer to a ping, e.g. \"xymond 4.3.30\"." }
-        version: { type: string, description: "The version this API was installed from: its release tag, xymonapi/vX.Y.Z, when make install ran on one, else the X.Y.Z of its PLUGIN file; absent when it was not installed. The /client script installs the same on the laptop." }
+        version: { type: string, description: "The version this API was installed from: its release tag, xymonapi/vX.Y.Z, when make install ran on one, else the X.Y.Z of its PLUGIN file; absent when it was not installed. xymonapi-connect compares it with the client's own." }
         search:
           type: object
           nullable: true

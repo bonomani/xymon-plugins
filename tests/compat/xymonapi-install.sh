@@ -44,7 +44,7 @@ assert_contains "XYMONHOME" "$(cat "$work/nohome.log")" "and it says what is mis
 ( umask 077 && "$make" -C "$ROOT" install XYMONHOME="$home" MANDIR="$work/man" ) >"$work/install.log" 2>&1 \
 	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
 
-for f in app.py xymon.py xymonapi_client.py clientsetup.py tokens.py openapi.yaml requirements.txt xymonapi.sh; do
+for f in app.py xymon.py xymonapi_client.py tokens.py openapi.yaml requirements.txt xymonapi.sh; do
 	assert_file_exists "$home/ext/xymonapi/$f"
 done
 for f in xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt; do
@@ -124,7 +124,7 @@ prefix="$work/client prefix"
 "$make" -C "$ROOT" install-client PREFIX="$prefix" >"$work/client.log" 2>&1 \
 	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
 # An update replaces the plugin's directory there too, and leaves the
-# virtualenv the setup script made beside the plugins alone.
+# virtualenv an earlier setup made beside the plugins alone.
 mkdir -p "$prefix/libexec/xymon-plugins/venv" && : > "$prefix/libexec/xymon-plugins/venv/kept"
 : > "$prefix/libexec/xymon-plugins/xymonapi-rag/gone.py"
 "$make" -C "$ROOT" install-client PREFIX="$prefix" >"$work/client2.log" 2>&1 \
@@ -155,7 +155,7 @@ fi
 # Uninstalling: a plugin another installed one needs is refused, naming it;
 # the whole side removes each plugin's files, manual page and task, keeps
 # the web server snippets and the data, and says so. On a laptop it also
-# says what the setup script did besides.
+# says what register did besides.
 for p in xymonapi; do
 	rc=0
 	"$make" -C "$ROOT/plugins/$p" uninstall XYMONHOME="$home" MANDIR="$work/man" >"$work/un-$p.log" 2>&1 || rc=$?
@@ -184,6 +184,6 @@ assert_contains "needed by xymonapi-mcp" "$(cat "$work/unc-api.log")" "and says 
 for f in bin/xymonapi-mcp bin/xymonapi-rag share/man/man1/xymonapi-mcp.1 share/man/man1/xymonapi-rag.1; do
 	[ -e "$prefix/$f" ] && fail "make uninstall-client left $f"
 done
-assert_contains "claude mcp remove" "$(cat "$work/unclient.log")" "uninstall-client says what the setup script did besides"
+assert_contains "claude mcp remove" "$(cat "$work/unclient.log")" "uninstall-client says what register did besides"
 
 pass "make install puts the server plugins in ext/ with disabled tasks and the Apache snippet, keeps what the admin edited, takes odd directory names, replaces each plugin's directory on update; install-client lays out the client side; uninstall removes them, refusing one another needs"

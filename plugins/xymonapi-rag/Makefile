@@ -23,6 +23,7 @@ install:
 	chmod 644 "$(EXT)/xymonrag.py" "$(EXT)/requirements.txt"
 	chmod 755 "$(EXT)/xymonapi-rag.sh"
 	$(call version,$(EXT))
+	$(dist)
 	mkdir -p "$(MAN1)"
 	cp -f xymonapi-rag.1 "$(MAN1)/"
 	chmod 644 "$(MAN1)/xymonapi-rag.1"
@@ -45,6 +46,7 @@ install-client:
 uninstall:
 	$(need_home)
 	$(call gone,$(EXT))
+	$(call gone,$(DIST)/plugins/$(PLUGIN))
 	rm -f "$(MAN1)/xymonapi-rag.1" "$(TASKDIR)/xymonapi-rag"
 	@echo "Uninstalled xymonapi-rag. Kept: its index, \$$XYMONAPI_RAG_INDEX, and xymonapi."
 
