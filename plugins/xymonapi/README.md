@@ -71,6 +71,9 @@ Then remove `DISABLED` from the task, and check, with the default address:
 curl http://127.0.0.1:1986/xymon/api/v1/health
 ```
 
+A `401` means it runs and asks for a user: add `-u` with one of Xymon's
+users.
+
 Where it listens and how to require a password are in `xymonapi.8`, as is
 every setting. To see whether the server runs the newest code, in the
 checkout `make install` ran from:
@@ -106,15 +109,6 @@ come out as `[hidden]`, in every text and in the search index.
 
 ## On a laptop
 
-Check from the laptop first that the API answers there, with your user:
-
-```sh
-curl -u me https://xymon.example.ch/xymon/api/v1/health
-```
-
-Its `search` field also says whether the server has a search index, how big
-and how old.
-
 A laptop needs `git`, `make`, `curl`, and Python 3.10 or later with its
 `venv` module, which Debian and Ubuntu package apart, as `python3-venv`; on a
 Mac, `git` and `make` come with the Xcode command-line tools. Ask the API for
@@ -134,6 +128,15 @@ mkdir -p ~/.config/xymon-api
 scp xymon.example.ch:/etc/xymon/tls/xymond.pem ~/.config/xymon-api/xymon-ca.pem
 curl --cacert ~/.config/xymon-api/xymon-ca.pem \
   https://xymon.example.ch/xymon/api/v1/client > xymon-setup.sh
+```
+
+Before running it, you can check the API answers from the laptop, with your
+user -- and `--cacert` as above when the certificate is the server's own.
+Its `search` field also says whether the server has a search index, how big
+and how old:
+
+```sh
+curl -u me https://xymon.example.ch/xymon/api/v1/health
 ```
 
 `/client` asks for no password: the script holds the API's address and

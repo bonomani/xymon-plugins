@@ -30,6 +30,9 @@ The API is installed disabled: remove `DISABLED` from
 curl http://127.0.0.1:1986/xymon/api/v1/health
 ```
 
+A `401` means it runs and asks for a user: add `-u` with one of Xymon's
+users.
+
 On your laptop, once the API is reachable from it:
 
 ```sh
