@@ -86,6 +86,12 @@ printf '%s\n' "$script" | grep -q '^USER=' && fail "/client wrote a USER= line"
 assert_not_contains "$version" "$script" "and not the version"
 assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user"
 assert_not_contains "$version" "$(curl -s "$url")" "and not to a stranger"
+# Every field /health gives is one the spec lists for it: a field renamed in
+# the code and not in openapi.yaml is a contract the API does not keep.
+spec_fields=$(sed -n '/^    Health:/,/^    [A-Z]/p' "$ROOT/plugins/xymonapi/openapi.yaml" | sed -n 's/^        \([a-z_]*\):.*/\1/p')
+for f in $(curl -s -u alice:secret "$url" | "${XYMONAPI_PYTHON:-python3}" -c 'import json, sys; print(" ".join(json.load(sys.stdin)))'); do
+	printf '%s\n' "$spec_fields" | grep -qx "$f" || fail "/health gives \"$f\", which openapi.yaml's Health does not list ($(echo $spec_fields))"
+done
 printf '%s\n' "$script" > "$work/setup.sh"
 sh -n "$work/setup.sh" || fail "/client's script does not parse: $(sh -n "$work/setup.sh" 2>&1)"
 assert_contains 'text/x-shellscript' "$(curl -s -D - -o /dev/null "http://127.0.0.1:$API_PORT/xymon/api/v1/client" | tr 'A-Z' 'a-z')" "served as a shell script"

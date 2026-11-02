@@ -41,9 +41,10 @@ Whether xymond answers a ping: {"alive":true,"server_version":"xymond ..."}
 when it does, and {"alive":false} when the ping fails -- xymond is down, or
 XYMSRV or XYMON is wrong. Like every path but /client, it answers 401
 without a user, or a client token, when XYMONAPI_PASSWD is set.
-Its "commit" field is the git commit this API was installed from, when
-make install ran in a checkout, and is absent otherwise: the /client script
-installs the same on the laptop.
+Its "version" field is the version this API was installed from: its
+release tag, xymonapi/vX.Y.Z, when make install ran on one, else the X.Y.Z
+of its PLUGIN file; it is absent when the API was not installed. The
+/client script installs the same on the laptop.
 Its "search" field describes the index /search reads -- how many passages
 of manual pages and of history, when it was built -- and is null when there
 is none.
