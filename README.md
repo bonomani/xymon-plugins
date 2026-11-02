@@ -59,7 +59,7 @@ The launchers run with the Python `XYMONAPI_PYTHON` names, else with the
 virtualenv beside the installed plugins when there is one, else with the
 `python3` on PATH, asking first when a person is at the terminal. `make venv`
 (on the server) or `make venv-client` makes that virtualenv, with the modules
-of the plugins installed there.
+of the plugins installed there; a plugin installed afterwards adds its own.
 
 ## Versions
 

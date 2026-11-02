@@ -9,7 +9,8 @@
 # terminal is there to ask. The same order in xymonapi-mcp, xymonapi-rag and
 # xymonapi-connect, which exec the Python they chose on their own module.
 # make venv-client makes the virtualenv with PYTHON, and leaves one that is
-# there alone.
+# there alone; a plugin installed beside an existing one puts its modules in
+# it, by pip.
 #
 # The confirmation a launcher asks on a terminal before falling back to PATH
 # is not run here: the test has no terminal, and that branch is read.
@@ -97,4 +98,13 @@ rm -rf "$lib/venv"
 	|| fail "make install-client failed: $(tail -n 5 "$work/install2.log")"
 assert_contains "No virtualenv at $lib/venv: make venv" "$(cat "$work/install2.log")" "installing a plugin that needs modules says how to make the virtualenv"
 
-pass "a launcher runs with XYMONAPI_PYTHON, else the virtualenv beside the plugins, else the python3 on PATH and says so; make venv-client makes that virtualenv and keeps one that is there"
+# With a virtualenv there, the install puts the plugin's modules in it: pip
+# of that virtualenv's python3, here the recording fake, on requirements.txt.
+fake "$lib/venv/bin" venv
+: > "$work/python.log"
+"$make" -C "$ROOT/plugins/xymonapi-rag" install-client PREFIX="$prefix" >"$work/install3.log" 2>&1 \
+	|| fail "make install-client failed: $(tail -n 5 "$work/install3.log")"
+assert_contains "venv -m pip install -q -r requirements.txt" "$(cat "$work/python.log")" "installing a plugin beside a virtualenv puts its modules in it"
+assert_contains "installing the modules of requirements.txt in $lib/venv" "$(cat "$work/install3.log")" "and says so"
+
+pass "a launcher runs with XYMONAPI_PYTHON, else the virtualenv beside the plugins, else the python3 on PATH and says so; make venv-client makes that virtualenv, keeps one that is there, and a plugin installed beside it adds its modules"

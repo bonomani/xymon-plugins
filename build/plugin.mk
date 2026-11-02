@@ -84,10 +84,17 @@ define venv
 	@echo "The plugins in $(1) run with $(1)/venv/bin/python3 (`"$(1)/venv/bin/python3" -V`)."
 endef
 
-# venv_hint DIR -- said after installing a plugin that needs modules, when
-# no virtualenv is there for them yet.
-define venv_hint
-	@[ -x "$(1)/venv/bin/python3" ] || echo "No virtualenv at $(1)/venv: make venv (venv-client elsewhere) [PYTHON=python3.x] makes one with the modules this plugin needs; without it, the python3 on PATH must have them."
+# venv_add DIR -- the last step of installing a plugin that needs modules:
+# into the virtualenv at DIR/venv, when there is one, the modules of this
+# plugin's requirements.txt, so that it runs as installed, alone or after
+# the others; when there is none yet, how to make one.
+define venv_add
+	@if [ -x "$(1)/venv/bin/python3" ]; then \
+		echo "installing the modules of requirements.txt in $(1)/venv"; \
+		"$(1)/venv/bin/python3" -m pip install -q -r requirements.txt || exit 1; \
+	else \
+		echo "No virtualenv at $(1)/venv: make venv (venv-client elsewhere) [PYTHON=python3.x] makes one with the modules this plugin needs; without it, the python3 on PATH must have them."; \
+	fi
 endef
 
 # Included at the top of each plugin's Makefile, before its all: so that

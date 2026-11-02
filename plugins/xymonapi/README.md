@@ -65,8 +65,9 @@ from that stage should check how its tool installs a directory over a link.
 The Python modules are not installed with it. `make venv XYMONHOME=...`
 (`PYTHON=python3.x` for one other than `python3`) makes a virtualenv beside
 the plugins, `$XYMONHOME/ext/venv`, with the modules of every plugin
-installed there, and the launchers run with it unless `XYMONAPI_PYTHON` names
-another Python. Without one they fall back to the `python3` on PATH, which
+installed there, a plugin installed later adds its own, and the launchers run
+with it unless `XYMONAPI_PYTHON` names another Python. Without one they fall
+back to the `python3` on PATH, which
 must then have the modules, importable by the user Xymon runs as: from your
 distribution's packages, for instance. `pip install --user` run as root puts
 them where that user does not look.

@@ -29,7 +29,7 @@ install:
 	chmod 644 "$(MAN1)/xymonapi-rag.1"
 	mkdir -p "$(TASKDIR)"
 	$(call task,xymonapi-rag.tasks.DIST,xymonapi-rag)
-	$(call venv_hint,$(EXTROOT))
+	$(call venv_add,$(EXTROOT))
 
 install-client:
 	$(MAKE) -C ../xymonapi install-client
@@ -42,7 +42,7 @@ install-client:
 	$(call launcher,xymonapi-rag,xymonapi-rag/xymonapi-rag.sh)
 	cp -f xymonapi-rag.1 "$(CLIENTMAN1)/"
 	chmod 644 "$(CLIENTMAN1)/xymonapi-rag.1"
-	$(call venv_hint,$(CLIENTROOT))
+	$(call venv_add,$(CLIENTROOT))
 
 # An isolated Python for the plugins installed here, with their modules.
 venv:

@@ -28,7 +28,8 @@ what the server's `/client` serves. To enable it:
 
 1. install the modules in [`requirements.txt`](requirements.txt): `make venv
    XYMONHOME=...` here puts them in a virtualenv beside the plugins, which
-   the launchers prefer to the `python3` on PATH;
+   the launchers prefer to the `python3` on PATH; where that virtualenv is
+   there already, `make install` has put them in it;
 2. put `XYMONAPI_RAG_DOCS` -- a directory with Xymon's manual pages;
    `/usr/share/man` will do -- in a file under `xymonserver.d/`;
 3. remove `DISABLED` from the task.
