@@ -35,12 +35,12 @@ without it, checked by reverting what makes it true.
 ## What differs here
 
 - **No `Changes`, no `RELEASENOTES`.** What an admin upgrading needs to know
-  goes in the commit message, and in the manual page when it changes how the
-  plugin behaves.
+  goes in the notes of the plugin's release (see [Releasing](#releasing)),
+  and in the manual page when it changes how the plugin behaves.
 - **Manual pages have no HTML copy.** Each plugin's page -- `xymonapi.8`,
   `xymonapi-mcp.1`, `xymonapi-rag.1` -- is the only copy: edit it, nothing
-  is generated. Do not bump the version or date in its `.TH` line; that
-  happens at a release.
+  is generated. Its `.TH` line's date changes only in a release commit (see
+  [Releasing](#releasing)).
 - **No branch protection.** Changes may be pushed to `main` directly; a pull
   request is welcome, and is the way when you want a second reader.
 - **Python, not C.** See [Python](#python) below; Xymon's C section does not
@@ -72,9 +72,26 @@ it belongs to, and the other installs that one: `xymonapi-rag` uses
 A plugin's version is the `version:` line of its `PLUGIN` file, `X.Y.Z`. A
 release is a tag of that plugin, `NAME/vX.Y.Z`, matching it. `make install`
 writes the version beside the installed files, in `VERSION`, and `/health`
-gives the API's. A plugin that reads the API names in its `PLUGIN` file the
-lowest `xymonapi` version it needs; `xymonapi-mcp`'s `client.py` repeats it,
-and a test checks the two agree, so change both together.
+gives the API's. The plugins that read the API -- `xymonapi-mcp`, and
+`xymonapi-rag` through its `client.py` -- name in their `PLUGIN` files the
+lowest `xymonapi` version they need; `client.py` repeats it as `API_FLOOR`,
+and `xymonapi-auth` checks that the three agree, so change them together.
+
+### Releasing
+
+A release of one plugin is one commit and one tag:
+
+1. in the plugin's `PLUGIN` file, the new `version:`;
+2. in its manual page's `.TH` line, the date of the release;
+3. when it needs a newer API than before, the floor in the `PLUGIN` files
+   that name it and in `client.py`, together (see [Versions](#versions));
+4. the commit, titled `NAME: release X.Y.Z`, then the tag `NAME/vX.Y.Z` on
+   it, pushed;
+5. a GitHub release on that tag, whose notes say what changed for an admin,
+   and what an upgrade needs them to do, if anything.
+
+Nothing else changes these: a version, a `.TH` date and a tag move only
+together, in a release.
 
 ### The contract
 
