@@ -54,4 +54,4 @@ uninstall-client:
 	rm -f "$(BIN)/xymonapi-rag" "$(CLIENTMAN1)/xymonapi-rag.1"
 	@echo "Uninstalled xymonapi-rag. Kept: xymonapi-mcp, and any index here, \$$XYMONAPI_RAG_INDEX."
 
-.PHONY: all install install-client uninstall uninstall-client
+.PHONY: all install install-client uninstall uninstall-client test

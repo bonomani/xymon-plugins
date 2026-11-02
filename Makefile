@@ -6,6 +6,7 @@
 #   make install XYMONHOME=/usr/lib/xymon/server   on the Xymon server
 #   make install-client [PREFIX=$HOME/.local]      where no Xymon is
 #   make uninstall XYMONHOME=..., make uninstall-client [PREFIX=...]
+#   make test                                      every test, with XYMON_SRC set
 #
 # A plugin that needs another installs it first, so the lists name only the
 # ends: xymonapi-rag brings xymonapi-mcp with it on either side, and on the
@@ -34,4 +35,8 @@ uninstall-client:
 	rm -rf "$(DESTDIR)$(or $(PREFIX),$(HOME)/.local)/libexec/xymon-plugins/venv"
 	-rmdir "$(DESTDIR)$(or $(PREFIX),$(HOME)/.local)/libexec/xymon-plugins" 2>/dev/null
 
-.PHONY: all install install-client uninstall uninstall-client
+# Every plugin's tests, then those of how they fit together.
+test:
+	tests/run.sh
+
+.PHONY: all install install-client uninstall uninstall-client test

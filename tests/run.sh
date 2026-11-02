@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/run.sh -- run every test: each plugin's, under plugins/<name>/tests/,
-# then those of how the plugins fit together, under tests/compat/, against
-# the built Xymon source tree named by XYMON_SRC.
+# tests/run.sh -- run the tests in each DIR, by default every one: each
+# plugin's, under plugins/<name>/tests/, then those of how the plugins fit
+# together, under tests/compat/, against the built Xymon source tree named
+# by XYMON_SRC. A plugin's make test runs its own directory.
 #
-#   XYMON_SRC=/path/to/xymon tests/run.sh
+#   XYMON_SRC=/path/to/xymon tests/run.sh [DIR...]
 #
 # A test passes with 0, skips with 77 -- something it needs is not installed,
 # and it says what -- and fails with anything else. The run fails if any test
@@ -13,8 +14,9 @@
 # sure every test really ran.
 
 cd "$(dirname "$0")/.." || exit 2
+[ "$#" -gt 0 ] || set -- plugins/*/tests tests/compat
 pass=0 skip=0 fail=0
-for t in plugins/*/tests/*.sh tests/compat/*.sh; do
+for t in $(for d in "$@"; do ls "$d"/*.sh; done); do
 	echo "----- $t -----"
 	rc=0
 	bash "$t" || rc=$?

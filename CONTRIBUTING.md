@@ -132,7 +132,8 @@ The tests run against a server build of Xymon's current `main`, named by
 `XYMON_SRC`, and use its test helpers:
 
 ```sh
-XYMON_SRC=/path/to/built/xymon tests/run.sh
+XYMON_SRC=/path/to/built/xymon make test     # at the top: every test
+make test                                    # in plugins/<name>/: its own
 ```
 
 A test belongs to the plugin it checks, under `plugins/<name>/tests/`, and

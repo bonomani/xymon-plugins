@@ -44,4 +44,4 @@ uninstall:
 	@echo "  take its Include out of the web server first -- and the tokens file, \$$XYMONAPI_TOKENS"
 	@echo "  (\$$XYMONVAR/xymonapi/tokens by default)."
 
-.PHONY: all install uninstall
+.PHONY: all install uninstall test

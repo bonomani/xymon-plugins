@@ -62,6 +62,15 @@ define version
 	printf '%s\n' "$$v" > "$(1)/VERSION"; chmod 644 "$(1)/VERSION"
 endef
 
+# Included at the top of each plugin's Makefile, before its all: so that
+# the test target below is not taken for the default.
+.DEFAULT_GOAL := all
+
+# test -- this plugin's tests, run from the repository's top, against the
+# built Xymon tree XYMON_SRC names. They start the plugins this one needs.
+test:
+	cd ../.. && tests/run.sh "plugins/$(PLUGIN)/tests"
+
 # fresh DIR -- DIR, emptied: an install replaces a plugin's directory as a
 # whole, so that a file a newer version no longer ships does not stay behind
 # to be imported. It holds only what the plugin ships and its VERSION: the

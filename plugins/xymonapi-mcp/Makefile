@@ -51,4 +51,4 @@ uninstall-client:
 	@echo "  revoke this machine's token: curl -X DELETE -u USER https://SERVER/xymon/api/v1/tokens/\$$(hostname -s)"
 	@echo "  rm ~/.config/xymon-api/xymon.token"
 
-.PHONY: all install install-client uninstall uninstall-client
+.PHONY: all install install-client uninstall uninstall-client test

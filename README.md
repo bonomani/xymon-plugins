@@ -71,7 +71,8 @@ They run against a server build of Xymon's current `main`, whose test
 helpers they use:
 
 ```sh
-XYMON_SRC=/path/to/built/xymon tests/run.sh
+XYMON_SRC=/path/to/built/xymon make test               # every test
+cd plugins/NAME && XYMON_SRC=... make test             # one plugin's
 ```
 
 Each plugin's tests are under its `tests/`, and those of how the plugins fit
