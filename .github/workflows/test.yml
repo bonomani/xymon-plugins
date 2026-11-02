@@ -64,3 +64,29 @@ jobs:
           XYMONAPI_PYTHON: ${{ runner.temp }}/venv/bin/python3
           XYMONAPI_NO_SKIP: "1"
         run: plugins-repo/tests/run.sh
+
+  # The API's contract changes only with its version: build/contract-check.sh
+  # compares it with stable's, oasdiff saying which changes break clients.
+  # oasdiff is fetched pinned, and checked against its published checksum.
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      OASDIFF_VERSION: "1.35.0"
+      OASDIFF_SHA256: a8023002fcb2eaa7f5758148a9303cb63d33b939886df312268bc0fc7b939140
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Fetch oasdiff
+        run: |
+          f=oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz
+          curl -sSfL -o "$RUNNER_TEMP/$f" "https://github.com/oasdiff/oasdiff/releases/download/v$OASDIFF_VERSION/$f"
+          echo "$OASDIFF_SHA256  $RUNNER_TEMP/$f" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP" oasdiff
+
+      - name: The contract and its version
+        run: |
+          git fetch -q origin stable || true
+          OASDIFF="$RUNNER_TEMP/oasdiff" build/contract-check.sh origin/stable | tee -a "$GITHUB_STEP_SUMMARY"
