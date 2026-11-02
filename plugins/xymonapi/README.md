@@ -109,9 +109,9 @@ HEAD..origin/stable`.
 make uninstall XYMONHOME=...
 ```
 
-Run here, it removes the API alone, and is refused while `xymonapi-rag`,
-which needs it, is installed; at the repository's top, every server-side
-plugin. It removes the code, the manual page and the task. It keeps the web
+Run here, it removes the API alone, and is refused, naming the plugin,
+while another installed one needs it; at the repository's top, every
+server-side plugin. It removes the code, the manual page and the task. It keeps the web
 server snippets -- take the `Include` out of your web server's configuration
 before deleting them -- and the tokens file, `$XYMONAPI_TOKENS`.
 

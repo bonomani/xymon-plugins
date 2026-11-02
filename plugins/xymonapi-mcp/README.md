@@ -4,8 +4,8 @@ An MCP server: it gives an AI client that speaks the Model Context Protocol
 -- Claude Code, Claude Desktop, Codex, opencode and others -- read-only tools
 over the [Xymon API](../xymonapi/README.md): `health`, `states`, `alarms`,
 `entities`, `status`, `series`, and two searches, `search_docs` and
-`search_history`, which ask the API's `/search`
-([`xymonapi-rag`](../xymonapi-rag/README.md)). It runs where the client runs.
+`search_history`, which ask the API's `/search`. It runs where the client
+runs.
 Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
 ## Needs
@@ -16,8 +16,7 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 - Python 3.10 with the module in [`requirements.txt`](requirements.txt),
   `mcp`; the setup script makes a virtualenv with it.
 
-Its install brings no other plugin. On the server, `xymonapi-rag` installs
-it beside itself, for the `client.py` it reads the API with.
+Its install brings no other plugin.
 
 ## Installing
 
@@ -47,9 +46,9 @@ or, on an older Claude Code,
 environment, defaults in [`.mcp.json`](.mcp.json), and still needs Python
 with `mcp`, and a token: use the setup script or the marketplace, not both.
 
-`make uninstall-client` removes it, and is refused while `xymonapi-rag`,
-which reads the API through it, is installed; it then says what the setup
-script did besides, to undo by hand: the registrations in Claude Code and
+`make uninstall-client` removes it, and is refused, naming the plugin, while
+another installed one needs it; it then says what the setup script did
+besides, to undo by hand: the registrations in Claude Code and
 Codex, and this machine's token, to revoke on the server and delete here.
 
 ## Registering it by hand

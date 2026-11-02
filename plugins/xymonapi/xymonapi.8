@@ -212,8 +212,8 @@ $XYMONHOME/etc/tls/xymond.pem and xymond.key as
 sets them up, so a server with TLS for the Xymon protocol has it for the
 API too, one certificate for both. Without the files the API speaks plain
 HTTP. A certificate without its key, or a key that others can read, stops
-it from starting. Clients that do not trust the certificate name it, or
-the CA that signed it, in XYMONAPI_CA (xymonapi-mcp(1)).
+it from starting. Clients that do not trust the certificate must be given
+it, or the CA that signed it.
 .IP "\fBXYMONAPI_HIDE\fR"
 A file of regular expressions, one per line, # for a comment. Whatever
 they match is replaced by [hidden] in every text the API returns: a

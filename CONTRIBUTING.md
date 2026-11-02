@@ -67,7 +67,9 @@ Each plugin is a directory under `plugins/` with a `Makefile` that installs
 it alone and a `PLUGIN` file. A plugin that needs another names it there and
 installs it first. Code shared by two plugins lives in one of them, the one
 it belongs to, and the other installs that one: `xymonapi-rag` uses
-`xymonapi-mcp`'s `client.py`.
+`xymonapi-mcp`'s `client.py`. A plugin's README and manual page name the
+plugins it uses, never those that use it: a new plugin built on another
+changes nothing of that one.
 
 ### Versions
 
