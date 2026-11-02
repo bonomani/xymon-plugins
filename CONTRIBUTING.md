@@ -52,7 +52,8 @@ without it, checked by reverting what makes it true.
 
   | surface | who reads it | what it carries |
   |---|---|---|
-  | `README.md` | whoever installs or builds, with the repository open | what each plugin is, how to install it, settings, tests |
+  | `README.md` | whoever arrives at the repository | what the plugins are, a quick start, where to read more |
+  | a plugin's `README.md` | whoever installs, packages or uses that plugin, with the repository open | how to install it and use it |
   | a plugin's manual page | an admin, or a laptop user, with the plugin installed | its behaviour and every setting |
   | `plugins/xymonapi/openapi.yaml` | whoever writes a client or another implementation of the API | the contract: each path's answers, the closed list of errors, the numbered rules |
   | a plugin's `PLUGIN` file | the build, and whoever packages it | its name, side, version, and what it needs |
