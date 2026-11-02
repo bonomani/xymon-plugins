@@ -42,10 +42,7 @@ how far behind it is. Once releases exist, each is a tag, `NAME/vX.Y.Z`, to
 clone (`git clone --branch NAME/vX.Y.Z ...`) or download as an archive from
 the repository's Releases page.
 
-Two plugins need no download by hand: on a laptop, the API's setup script
-fetches what it needs (see [`xymonapi`](plugins/xymonapi/README.md)), and
-Claude Code installs `xymonapi-mcp` from this repository as a plugin of its
-own (see [`xymonapi-mcp`](plugins/xymonapi-mcp/README.md)).
+A plugin's README says when it can be had without this download.
 
 ## Installing
 
@@ -55,7 +52,8 @@ server) or `make install-client` (elsewhere) installs first any plugin it
 needs, so one command is enough:
 
 ```sh
-cd plugins/xymonapi-mcp && make install-client
+cd plugins/NAME && make install XYMONHOME=/usr/lib/xymon/server   # on the server
+cd plugins/NAME && make install-client                           # elsewhere
 ```
 
 Run again, it updates the plugin; `make uninstall` or `make uninstall-client`
@@ -78,8 +76,8 @@ XYMON_SRC=/path/to/built/xymon tests/run.sh
 
 Each plugin's tests are under its `tests/`, and those of how the plugins fit
 together under [`tests/compat/`](tests/compat). Each says at its top what it
-checks and what it needs; one that cannot run here skips, and says why. CI runs
-them all with nothing missing:
+checks and what it needs; one that cannot run here skips, and says why. CI
+runs them all with nothing missing:
 [`.github/workflows/test.yml`](.github/workflows/test.yml).
 
 ## Contributing and licence
