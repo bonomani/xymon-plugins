@@ -183,13 +183,24 @@ make -s -C "$SRC" install-client PREFIX="$PREFIX"
 
 # A virtualenv of its own for the mcp module: a system Python takes no
 # pip installs (PEP 668), and the launcher runs whatever XYMONAPI_PYTHON names.
-# One that a run before left half made -- a python3 without mcp, as when
-# the venv module is missing -- is made again.
+# One that a run before left half made -- a python3 without mcp -- is made
+# again. Where the venv module has no ensurepip -- Debian and Ubuntu package
+# it apart, as python3-venv -- the virtualenv is made without pip, and pip
+# fetched from PyPA, the source the install below trusts already; to a file
+# first, so that a failed download is not a script read as empty.
 VENV=$PREFIX/libexec/xymon-plugins/venv
 if ! "$VENV/bin/python3" -c 'import mcp' >/dev/null 2>&1; then
 	say "the Python module mcp, in $VENV"
 	rm -rf "$VENV"
-	"$PYTHON" -m venv "$VENV"
+	if ! "$PYTHON" -m venv "$VENV" 2>/dev/null; then
+		echo "this Python's venv cannot install pip (no python3-venv?): making it without, and fetching pip"
+		rm -rf "$VENV"
+		{{ "$PYTHON" -m venv --without-pip "$VENV" &&
+			curl -sSfL --max-time 60 -o "$VENV/get-pip.py" https://bootstrap.pypa.io/get-pip.py &&
+			"$VENV/bin/python3" "$VENV/get-pip.py" -q; }} ||
+			die "no virtualenv could be made with $PYTHON: install python3-venv (Debian, Ubuntu), or name another Python in XYMONAPI_PYTHON"
+		rm -f "$VENV/get-pip.py"
+	fi
 	"$VENV/bin/pip" -q install -r "$SRC/plugins/xymonapi-mcp/requirements.txt"
 fi
 

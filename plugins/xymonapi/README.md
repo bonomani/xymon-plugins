@@ -144,9 +144,10 @@ come out as `[hidden]`, in every text and in the search index.
 
 ## On a laptop
 
-A laptop needs `git`, `make`, `curl`, and Python 3.10 or later with its
-`venv` module, which Debian and Ubuntu package apart, as `python3-venv`; on a
-Mac, `git` and `make` come with the Xcode command-line tools. Ask the API for
+A laptop needs `git`, `make`, `curl`, and Python 3.10 or later; on a Mac,
+`git` and `make` come with the Xcode command-line tools. Where Python's
+`venv` cannot install pip -- Debian and Ubuntu without `python3-venv` -- the
+script fetches pip from `bootstrap.pypa.io`. Ask the API for
 its setup script, read it, run it:
 
 ```sh

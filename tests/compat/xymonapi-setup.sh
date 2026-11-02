@@ -145,6 +145,58 @@ out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src
 [ "$rc" -eq 0 ] || fail "the setup script failed with $rc over a half-made venv: $out"
 assert_file_exists "$lap/pip.log"
 assert_contains "pip" "$(cat "$lap/pip.log")" "a half-made venv is made again, and mcp installed in it"
+
+# A Python whose venv has no ensurepip, as Debian's without python3-venv:
+# the venv is made without pip, and pip comes from get-pip.py, which curl --
+# here a stand-in for that one URL alone -- fetches. A Python that cannot
+# make one even so stops the script, saying what to install.
+real_curl=$(command -v curl)
+mkdir -p "$work/getpip"
+cat > "$work/getpip/curl" <<STUB
+#!/bin/sh
+case " \$* " in
+*bootstrap.pypa.io/get-pip.py*)
+	while [ "\$1" != -o ]; do shift; done
+	echo '# get-pip' > "\$2"; echo fetched >> "$lap/getpip.log"; exit 0 ;;
+esac
+exec "$real_curl" "\$@"
+STUB
+cat > "$work/stub/python-nopip" <<STUB
+#!/bin/sh
+[ "\$1 \$2" = "-m venv" ] || exit 0
+[ "\$3" = --without-pip ] || { echo "ensurepip is not available" >&2; mkdir -p "\$3/bin"; exit 1; }
+mkdir -p "\$4/bin"
+cat > "\$4/bin/python3" <<'PY'
+#!/bin/sh
+case \$1 in
+*/get-pip.py) d=\$(dirname "\$1"); printf '#!/bin/sh\\necho pip >> "$lap/pip.log"\\n' > "\$d/bin/pip"; chmod 755 "\$d/bin/pip" ;;
+esac
+exit 0
+PY
+chmod 755 "\$4/bin/python3"
+STUB
+printf '#!/bin/sh\n[ "$1 $2" = "-m venv" ] && exit 1\nexit 0\n' > "$work/stub/python-novenv"
+chmod 755 "$work/getpip/curl" "$work/stub/python-nopip" "$work/stub/python-novenv"
+printf '#!/bin/sh\nexit 1\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
+: > "$lap/pip.log"
+rc=0
+out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src" PATH="$work/getpip:$work/stub:$PATH" \
+	XYMONAPI_PYTHON="$work/stub/python-nopip" sh "$work/carol.sh" "$lap/prefix" 2>&1 < /dev/null) || rc=$?
+[ "$rc" -eq 0 ] || fail "the setup script failed with $rc where venv has no ensurepip: $out"
+assert_contains "fetched" "$(cat "$lap/getpip.log" 2>/dev/null)" "without ensurepip, the script fetches get-pip.py"
+assert_contains "pip" "$(cat "$lap/pip.log")" "and pip, from it, installs mcp"
+assert_contains "making it without, and fetching pip" "$out" "and says so"
+[ -e "$lap/prefix/libexec/xymon-plugins/venv/get-pip.py" ] && fail "get-pip.py was left in the venv"
+printf '#!/bin/sh\nexit 1\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
+rc=0
+out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src" PATH="$work/getpip:$work/stub:$PATH" \
+	XYMONAPI_PYTHON="$work/stub/python-novenv" sh "$work/carol.sh" "$lap/prefix" 2>&1 < /dev/null) || rc=$?
+[ "$rc" -ne 0 ] || fail "the setup script went on with no virtualenv: $out"
+assert_contains "install python3-venv" "$out" "a Python that makes no virtualenv: the script says what to install"
+assert_contains "XYMONAPI_PYTHON" "$out" "or which setting names another Python"
+mkdir -p "$lap/prefix/libexec/xymon-plugins/venv/bin"
+printf '#!/bin/sh\nexit 0\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
+chmod 755 "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
 # An API that runs no release: the script takes the stable branch, the
 # newest code every test passed. The token kept above lets it in unasked.
 printf '0.1.0\n' > "$work/inst/ext/xymonapi/VERSION"
