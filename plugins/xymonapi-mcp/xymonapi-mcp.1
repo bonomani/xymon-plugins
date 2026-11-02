@@ -2,7 +2,9 @@
 .SH NAME
 xymonapi-mcp \- MCP server for the Xymon API
 .SH SYNOPSIS
-.B "xymonapi-mcp/xymonapi-mcp.sh"
+.B "xymonapi-mcp"
+.br
+.B "xymonapi-mcp register URL [NAME]"
 
 .SH DESCRIPTION
 xymonapi-mcp gives an AI client that speaks the Model Context Protocol --
@@ -23,6 +25,20 @@ It is written for the xymonapi version its PLUGIN file names; when the
 API's /health gives an older one, every answer carries a "warning" field
 saying so, and stderr says it once. A newer API is taken as it is. Nothing
 is updated on its own, on either side.
+
+.SH REGISTERING
+\fBxymonapi-mcp register URL [NAME]\fR connects this machine to the API at
+URL with
+.I xymonapi-connect(1),
+installed beside it -- a password asked once when there is no working token
+-- then registers the server with Claude Code and with Codex under NAME,
+xymon by default: this launcher as the command, with XYMONAPI_URL,
+XYMONAPI_TOKEN_FILE when there is a token, XYMONAPI_CA when a certificate is
+used, and XYMONAPI_PYTHON when it is set. A registration of that name is
+replaced. For a client that is not installed, it prints the command to run
+later. It also removes the virtualenv an earlier setup made beside the
+plugins, which this server no longer needs. It exits 1, registering
+nothing, when the connection fails.
 
 .SH TOOLS
 .IP "\fBhealth\fR"
@@ -70,8 +86,8 @@ Where xymonapi(8) is. The default is http://127.0.0.1:1986.
 .IP "\fBXYMONAPI_TOKEN_FILE\fR, \fBXYMONAPI_TOKEN\fR"
 A client token, from the first line of the file XYMONAPI_TOKEN_FILE names,
 or XYMONAPI_TOKEN itself: this machine's own credential (xymonapi(8),
-TOKENS), and the only one sent; no password is kept on this machine. The
-setup script /client writes keeps one and names its file here.
+TOKENS), and the only one sent; no password is kept on this machine.
+xymonapi-connect(1) keeps one, and register names its file here.
 .IP "\fBXYMONAPI_CA\fR"
 For an https:// XYMONAPI_URL whose certificate this machine does not trust
 already: the server's certificate, or the CA that signed it, PEM. Xymond's
@@ -81,4 +97,4 @@ Verification is never turned off: the token rides on this connection.
 The Python to run with, when the python3 found on PATH is older than 3.10.
 
 .SH "SEE ALSO"
-xymonapi(8)
+xymonapi(8), xymonapi-connect(1)

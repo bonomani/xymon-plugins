@@ -41,12 +41,12 @@ uninstall:
 	$(call gone,$(EXT))
 	@echo "Uninstalled xymonapi-mcp. Kept: xymonapi."
 
-# The setup script also registered the server with the AI clients and kept a
-# token: said, not done, since they are this user's and the server's.
+# register also registered the server with the AI clients, and kept a token:
+# said, not done, since they are this user's and the server's.
 uninstall-client:
 	$(call gone,$(CLIENT))
 	rm -f "$(BIN)/xymonapi-mcp" "$(CLIENTMAN1)/xymonapi-mcp.1"
-	@echo "Uninstalled xymonapi-mcp. What the setup script did besides, to undo by hand:"
+	@echo "Uninstalled xymonapi-mcp. What register did besides, to undo by hand:"
 	@echo "  claude mcp remove --scope user xymon; codex mcp remove xymon"
 	@echo "  revoke this machine's token: curl -X DELETE -u USER https://SERVER/xymon/api/v1/tokens/\$$(hostname -s)"
 	@echo "  rm ~/.config/xymon-api/xymon.token"

@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# plugins/xymonapi-mcp/tests/xymonapi-mcp-register.sh
+#
+# xymonapi-mcp register, as make install-client lays it out, connects this
+# machine to the API through xymonapi-connect -- a password asked once, a
+# token kept -- and registers the MCP server with Claude Code and Codex: the
+# installed launcher as the command, with the API's address and the token
+# file; XYMONAPI_PYTHON only when it is set; the certificate only when one
+# is used. It removes the virtualenv an earlier setup made, and where a
+# client is not installed, prints the command to run later.
+#
+# claude and codex are stubs that record their arguments. Skips where the API
+# cannot run (tests/lib/xymonapi.sh). Needs the xymon client of the Xymon
+# tree in XYMON_SRC (for a free port), and Apache's htpasswd.
+
+set -euo pipefail
+# shellcheck source=tests/lib/xymonapi.sh
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
+
+ROOT=$(find_root)
+
+require_bin XYMONCLIENT "$XYMON_SRC/common/xymon"
+command -v htpasswd >/dev/null 2>&1 || skip "Apache's htpasswd is not installed"
+
+work=$(mktempdir)
+register_cleanup 'stop_process "$API_PID"'
+
+"${MAKE:-make}" -C "$ROOT/plugins/xymonapi-mcp" install-client PREFIX="$work/client" >"$work/client.log" 2>&1 \
+	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
+mcp_bin=$work/client/bin/xymonapi-mcp
+launcher=$work/client/libexec/xymon-plugins/xymonapi-mcp/xymonapi-mcp.sh
+
+htpasswd -cbB "$work/htpasswd" carol secret 2>/dev/null
+export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONAPI_PASSWD="$work/htpasswd" \
+	XYMONAPI_TOKENS="$work/tokens/tokens"
+start_api
+url=http://127.0.0.1:$API_PORT
+
+mkdir -p "$work/stub"
+for c in claude codex; do
+	printf '#!/bin/sh\nprintf "%%s\\n" "$@" >> "%s/%s.args"\n' "$work" "$c" > "$work/stub/$c"
+	chmod 755 "$work/stub/$c"
+done
+py=$(command -v "${XYMONAPI_PYTHON:-python3}")
+# A PATH with the stubs and the system's tools, and no real claude or codex.
+path="$work/stub:/usr/bin:/bin"
+
+# An earlier setup's virtualenv, beside the plugins.
+mkdir -p "$work/client/libexec/xymon-plugins/venv/bin"
+printf 'carol\nsecret\n' > "$work/in"
+rc=0
+out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="" \
+	"$mcp_bin" register "$url" < "$work/in" 2>&1) || rc=$?
+[ "$rc" -eq 0 ] || fail "register failed with $rc: $out"
+tok=$work/cfg/xymon-api/xymon.token
+assert_match '^xat_' "$(cat "$tok")" "register connects this machine: a token is kept"
+for c in claude codex; do
+	args=$(cat "$work/$c.args")
+	assert_contains "XYMONAPI_URL=$url" "$args" "$c is given the API's address"
+	assert_contains "XYMONAPI_TOKEN_FILE=$tok" "$args" "and the token file"
+	assert_contains "$launcher" "$args" "and the installed launcher as the command"
+	assert_not_contains "XYMONAPI_PYTHON" "$args" "and no XYMONAPI_PYTHON, unset"
+	assert_not_contains "XYMONAPI_CA" "$args" "and no certificate, over http"
+	assert_not_contains "secret" "$args" "and never the password"
+done
+assert_contains "--scope" "$(cat "$work/claude.args")" "Claude Code at user scope"
+[ -e "$work/client/libexec/xymon-plugins/venv" ] && fail "the old virtualenv was left"
+assert_contains "removed $work/client/libexec/xymon-plugins/venv" "$out" "the old virtualenv is removed, and said so"
+
+# Again, with XYMONAPI_PYTHON set: passed on. The token works: nothing asked.
+: > "$work/claude.args"; : > "$work/codex.args"
+rc=0
+out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="$py" \
+	"$mcp_bin" register "$url" < /dev/null 2>&1) || rc=$?
+[ "$rc" -eq 0 ] || fail "a second register failed with $rc: $out"
+assert_contains "XYMONAPI_PYTHON=$py" "$(cat "$work/claude.args")" "XYMONAPI_PYTHON set: Claude Code is given it"
+assert_contains "XYMONAPI_PYTHON=$py" "$(cat "$work/codex.args")" "and Codex"
+assert_not_contains "password for" "$out" "a working token: nothing asked"
+
+# Codex not installed: the command to run later is printed.
+rm "$work/stub/codex"; : > "$work/claude.args"
+rc=0
+out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="" \
+	"$mcp_bin" register "$url" < /dev/null 2>&1) || rc=$?
+[ "$rc" -eq 0 ] || fail "register without codex failed with $rc: $out"
+assert_contains "codex is not here; to register xymon with it later:" "$out" "a client not installed is said"
+assert_contains "codex mcp add xymon --env XYMONAPI_URL=$url" "$out" "with the command to run"
+assert_contains "XYMONAPI_URL=$url" "$(cat "$work/claude.args")" "and the other is registered"
+
+# A refused password: nothing registered.
+: > "$work/claude.args"
+printf 'carol\nwrong\n' > "$work/in"
+rc=0
+out=$(XDG_CONFIG_HOME="$work/cfg2" HOME="$work" PATH="$path" XYMONAPI_PYTHON="" \
+	"$mcp_bin" register "$url" < "$work/in" 2>&1) || rc=$?
+assert_equal "1" "$rc" "register fails when the API refuses the password"
+assert_equal "" "$(cat "$work/claude.args")" "and registers nothing"
+
+pass "xymonapi-mcp register connects this machine and registers the installed server with Claude Code and Codex, with the token file and XYMONAPI_PYTHON only when set"
