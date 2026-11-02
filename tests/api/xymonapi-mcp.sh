@@ -136,6 +136,7 @@ XYMONAPI_TOKEN=xat_0123456789abcdef0123456789abcdef0123456789a \
 	mcp "http://127.0.0.1:$(cat "$work/redirect.port")" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
 assert_contains 'Authorization: Bearer' "$(cat "$work/redirect.req")" "the API's own address got the token"
 assert_contains 'answered 302' "$(grep '"id":3' "$work/mcp.out")" "a redirect is a tool error"
+assert_contains 'request id ' "$(grep '"id":3' "$work/mcp.out")" "which names the request, to find it in the API's log"
 [ -e "$work/target.req" ] && fail "the redirect was followed, with: $(head -n 1 "$work/target.req")"
 
 # An API that is not there: a port nothing listens on.

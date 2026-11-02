@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import re
 import ssl
 import sys
@@ -129,8 +130,12 @@ def api(path: str, **params: str | None) -> dict:
         raise APIError(f"XYMONAPI_URL must be an http:// or https:// URL, not {URL!r}")
     # Left out when not given; "0" is a value.
     query = urlencode({k: v for k, v in params.items() if v is not None and v != ""})
+    # This call's identifier, which the API logs and sends back: an error
+    # says it, so that the API's log line about it can be found.
+    rid = secrets.token_hex(8)
     try:
-        req = urllib.request.Request(f"{URL}/xymon/api/v1{path}" + (f"?{query}" if query else ""))
+        req = urllib.request.Request(f"{URL}/xymon/api/v1{path}" + (f"?{query}" if query else ""),
+                                     headers={"X-Request-Id": rid})
         bearer = _token()
         if bearer:
             req.add_header("Authorization", f"Bearer {bearer}")
@@ -148,7 +153,8 @@ def api(path: str, **params: str | None) -> dict:
                        "setup script from /client again" if (TOKEN or TOKEN_FILE) else
                        " -- set XYMONAPI_TOKEN_FILE: the setup script from /client gets this "
                        "machine a token and writes it")
-        raise APIError(f"xymonapi answered {e.code}: {detail}", e.code) from e
+        rid = e.headers.get("X-Request-Id", rid) if e.headers else rid
+        raise APIError(f"xymonapi answered {e.code}: {detail} (request id {rid})", e.code) from e
     except urllib.error.URLError as e:
         if isinstance(e.reason, ssl.SSLCertVerificationError):
             raise APIError(f"xymonapi at {URL} has a certificate this machine does not trust: "

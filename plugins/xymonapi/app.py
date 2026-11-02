@@ -9,8 +9,11 @@ Started by xymonapi.sh, which checks Python and the modules first.
 """
 from __future__ import annotations
 
+import contextvars
 import logging
 import os
+import re
+import secrets
 import shutil
 import sys
 from pathlib import Path
@@ -25,9 +28,23 @@ import clientsetup
 import tokens
 import xymon
 
+# The request a log line is about, given to the client as X-Request-Id
+# (openapi.yaml, C5); "-" for a line about no request.
+REQUEST_ID: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
+_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
+
+
+class _WithRequestId(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = REQUEST_ID.get()
+        return True
+
+
 # To stderr, which the task's LOGFILE collects: $XYMONSERVERLOGS/xymonapi.log.
 logging.basicConfig(stream=sys.stderr, level=logging.INFO,
-                    format="%(asctime)s %(levelname)s %(message)s")
+                    format="%(asctime)s %(levelname)s [%(request_id)s] %(message)s")
+for _handler in logging.getLogger().handlers:
+    _handler.addFilter(_WithRequestId())
 log = logging.getLogger("xymonapi")
 
 SPEC_PATH = Path(__file__).resolve().parent / "openapi.yaml"
@@ -367,6 +384,26 @@ def build_app() -> FastAPI:
     app.add_route(base + "/tokens", _tokens, methods=["GET", "POST"])
     app.add_route(base + "/tokens/{client}", _token, methods=["DELETE"])
     app.openapi = lambda: spec                      # type: ignore[assignment]
+
+    # Added last, so outermost: every answer gets its X-Request-Id, a refusal
+    # of the password check and a framework 404 or 405 included, and every log
+    # line about the request carries it (C5). A failure is logged once with
+    # it, so that what a client was told can be found here.
+    @app.middleware("http")
+    async def _request_id(request, call_next):
+        rid = request.headers.get("x-request-id", "")
+        if not _REQUEST_ID.fullmatch(rid):
+            rid = secrets.token_hex(8)
+        reset = REQUEST_ID.set(rid)
+        try:
+            response = await call_next(request)
+            if response.status_code >= 400:
+                log.info("%s %s answered %d", request.method, request.url.path, response.status_code)
+        finally:
+            REQUEST_ID.reset(reset)
+        response.headers["X-Request-Id"] = rid
+        return response
+
     return app
 
 

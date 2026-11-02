@@ -248,6 +248,10 @@ The client tokens' SHA-256s, one JSON line each (TOKENS above).
 .IP "\fB$XYMONSERVERLOGS/xymonapi.log\fR"
 The log, written through the task's LOGFILE. A missing Python or module is
 reported here, and so is each token made, revoked, or used: user@machine.
+Every answer carries an X-Request-Id header -- the client's own, when it
+sends a valid one, or one the API makes -- and every line about a request
+shows it in brackets; each failure is logged once, with its status. A
+client's error that names its request id is found here by it.
 .LP
 $XYMONHOME/etc and $XYMONHOME/ext are links to wherever an installation keeps
 those directories, /etc/xymon for instance.
