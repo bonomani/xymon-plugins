@@ -46,7 +46,7 @@ server-side plugin. It writes into the Xymon server directory, so it is
 normally run as root. `MANDIR` (default `/usr/share/man`) says where the
 manual page goes, and `DESTDIR` stages the install for a package.
 `make install-client` installs only the API's client, for another machine:
-see [From another machine](#from-another-machine).
+see [Setting up another machine](#setting-up-another-machine).
 
 | installed | from |
 |---|---|
@@ -101,9 +101,11 @@ pkill -f "$XYMONHOME/ext/xymonapi/"          # the running API keeps the old cod
 
 The install replaces the plugin's directory and keeps the task file you
 enabled, the web server snippets and your settings; xymonlaunch starts the
-new code once the old process is gone. `xymonapi-connect` then tells each
-machine whose client is older to update it. What an update would bring,
-before pulling: `git fetch -q && git log --oneline HEAD..origin/stable`.
+new code once the old process is gone. A machine that installed from
+`/client` gets the new code by downloading it again and running
+`make install-client`; `xymonapi-connect`, run there, says whether it is
+behind. What an update would bring, before pulling:
+`git fetch -q && git log --oneline HEAD..origin/stable`.
 
 ## Uninstalling
 
@@ -142,7 +144,7 @@ themselves are plain and trusted. Whichever you choose, keep secrets out of
 the texts: `XYMONAPI_HIDE` names a file of regular expressions whose matches
 come out as `[hidden]`, in every text and in the search index.
 
-## From another machine
+## Setting up another machine
 
 A machine that reads the API -- a laptop, say -- needs its client and a
 token of its own, and for that `make`, `curl` and Python 3.10 or later,
@@ -152,6 +154,7 @@ clone of this repository:
 ```sh
 # Only when the certificate is the server's own, not one the machine trusts:
 # copy it where xymonapi-connect looks, over a channel you already trust.
+# Otherwise leave out these two lines and the --cacert option below.
 mkdir -p ~/.config/xymon-api
 scp xymon.example.ch:/etc/xymon/tls/xymond.pem ~/.config/xymon-api/xymon-ca.pem
 

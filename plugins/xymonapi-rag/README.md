@@ -23,7 +23,8 @@ setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 `make install` puts it in `$XYMONHOME/ext/xymonapi-rag/`, beside the
 `xymonapi` it reads the API with, its manual page in
 `$MANDIR/man1/`, and a daily `xymonlaunch` task, `tasks.d/xymonapi-rag`,
-written `DISABLED`. To enable it:
+written `DISABLED`; it also stages this directory for other machines, in
+what the server's `/client` serves. To enable it:
 
 1. install the modules in [`requirements.txt`](requirements.txt) for the
    Xymon user;
@@ -47,7 +48,7 @@ xymonapi-rag ask "has /boot filled up before, and where?"
 
 On another machine, `make install-client` here -- from a clone, or from the
 code the server's `/client` gives, as [`xymonapi`'s
-README](../xymonapi/README.md#from-another-machine) shows -- installs it
+README](../xymonapi/README.md#setting-up-another-machine) shows -- installs it
 under `$PREFIX/libexec/xymon-plugins/` with the command `xymonapi-rag` in
 `$PREFIX/bin` (`~/.local` by default). `xymonapi-connect URL`, installed
 with it, gets that machine its token and prints the settings to export.
@@ -57,8 +58,9 @@ Ollama by default, LM Studio with two settings. Pick the model with care: a
 small one such as `llama3.2` answers in a second but makes things up, where a
 larger one says when the passages do not hold the answer.
 
-`make uninstall` (on the server) or `make uninstall-client` removes it,
-and keeps the plugins it brought, which may serve others, and its index.
+`make uninstall` (on the server, where it also leaves `/client`) or
+`make uninstall-client` removes it, and keeps the plugins it brought, which
+may serve others, and its index.
 
 `eval` scores the search against a file of questions;
 [`tests/eval/docs.json`](../../tests/eval/docs.json) is the one CI runs.
