@@ -49,27 +49,23 @@ own (see [`xymonapi-mcp`](plugins/xymonapi-mcp/README.md)).
 
 ## Installing
 
+The download holds every plugin; install only those you want, each from its
+own directory, as its README says. A plugin's `make install` (on the Xymon
+server) or `make install-client` (elsewhere) installs first any plugin it
+needs, so one command is enough:
+
 ```sh
-make install XYMONHOME=/usr/lib/xymon/server     # every server-side plugin
-make install-client                              # every client-side plugin, under ~/.local
-make -C plugins/NAME install XYMONHOME=...       # one plugin, and what it needs
-make uninstall XYMONHOME=...                     # every server-side plugin
-make uninstall-client                            # every client-side plugin
+cd plugins/xymonapi-mcp && make install-client
 ```
 
-On a Xymon server a plugin lands in `$XYMONHOME/ext/NAME/`; elsewhere in
-`$PREFIX/libexec/xymon-plugins/NAME/`, with its command in `$PREFIX/bin`.
-Each writes its version beside its files, in `VERSION`. Installing again
-updates: each plugin's directory is replaced as a whole, while the settings,
-task files and data that live elsewhere are kept. Uninstalling one plugin
-is refused while another installed one needs it; each says what it leaves
-behind for you to remove. What to do next is in the plugin's README.
+Run again, it updates the plugin; `make uninstall` or `make uninstall-client`
+removes it. The same targets at the top act on every plugin of one side.
 
 ## Versions
 
-Each plugin has its own version, in its `PLUGIN` file, and its releases are
-tagged `NAME/vX.Y.Z`; none yet. How a release is made is in
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
+Each plugin has its own version, in its `PLUGIN` file, written beside its
+installed files as `VERSION`; its releases are tagged `NAME/vX.Y.Z`, none
+yet. How a release is made is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Tests
 

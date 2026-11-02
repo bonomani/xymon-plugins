@@ -47,7 +47,9 @@ xymonapi-rag search "what does purple mean"
 xymonapi-rag ask "has /boot filled up before, and where?"
 ```
 
-`make install-client` installs it on a laptop, as the setup script does.
+`make install-client` installs it on a laptop, as the setup script does,
+under `$PREFIX/libexec/xymon-plugins/` with the command `xymonapi-rag` in
+`$PREFIX/bin` (`~/.local` by default).
 `search` uses the server's index when there is none here. `ask` hands the
 passages to a language model speaking the OpenAI-compatible API -- a local
 Ollama by default, LM Studio with two settings. Pick the model with care: a
