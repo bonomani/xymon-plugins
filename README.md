@@ -36,8 +36,9 @@ In Claude Code:
 /plugin install xymonapi-mcp --marketplace bonomani/xymon-plugins
 ```
 
-or, on an older Claude Code, `/plugin marketplace add
-bonomani/xymon-plugins` then `/plugin install xymonapi-mcp@xymon-plugins`.
+or, on an older Claude Code,
+`/plugin marketplace add bonomani/xymon-plugins` then
+`/plugin install xymonapi-mcp@xymon-plugins`.
 The plugin runs [`xymonapi-mcp.sh`](plugins/xymonapi-mcp/xymonapi-mcp.sh)
 from where it is installed, with `XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`,
 `XYMONAPI_CA` and `XYMONAPI_PYTHON` from your environment, defaults in
