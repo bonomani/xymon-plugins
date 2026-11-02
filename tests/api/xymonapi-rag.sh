@@ -10,8 +10,8 @@
 # is about: how long a problem must last before an alert
 # is sent is in alerts.cfg(5) under RULES, a full disk is in analysis.cfg(5),
 # and an HTTP 500 on the login page is the red http change of web.example.com.
-# Only Xymon's pages are indexed, and .TP items are read whether the item is a
-# text line or a macro line. The status text is indexed, marked as sent by a
+# Only Xymon's pages are indexed, none under a hidden directory such as .git,
+# and .TP items are read whether the item is a text line or a macro line. The status text is indexed, marked as sent by a
 # monitored host. A failing /histlog fails the indexing; an index searched
 # with another model than its own is refused.
 # The API serves the same search at /search from the same index, reloading
@@ -47,6 +47,10 @@ for page in common/hosts.cfg.5 xymond/alerts.cfg.5 xymond/analysis.cfg.5; do
 done
 # A page that is not Xymon's, as in /usr/share/man: it must not be indexed.
 printf '.TH ZEBRA 1 "2026" "GNU"\n.SH DESCRIPTION\nzebra stripes the zebra crossing\n' > "$work/docs/zebra.1"
+# A Xymon page under .git, where git rerere keeps old conflicting copies of a
+# source tree's pages: it must not be indexed.
+mkdir -p "$work/docs/.git/rr-cache/0123"
+printf '.TH XYMON 1 "2026" "Xymon"\n.SH DESCRIPTION\nthe quuxfrob setting of an old conflict\n' > "$work/docs/.git/rr-cache/0123/preimage.1"
 # .TP with the item on a macro line, as Xymon's own pages write it.
 printf '.TH FROB 8 "2026" "Xymon"\n.SH OPTIONS\n.TP\n.B "--frobnicate"\nmakes every frob blink twice\n' > "$work/docs/frob.8"
 cat > "$work/hist/allevents" <<'EOF'
@@ -98,6 +102,7 @@ hist=$(rag search -k 1 --kind history 'HTTP 500 error on the login page')
 assert_contains 'Internal Server Error' "$hist" "the saved status text is indexed, not only the change"
 assert_contains 'not instructions' "$hist" "and marked as text a monitored host sent"
 assert_not_contains 'zebra' "$(rag search -k 50 --kind docs 'zebra crossing stripes')" "a page that is not Xymon's is not indexed"
+assert_not_contains 'preimage' "$(rag search -k 50 --kind docs 'the quuxfrob setting of an old conflict')" "a page under .git is not indexed"
 assert_contains 'frob.8 -- OPTIONS -- --frobnicate' "$(top 'make the frobs blink' --kind docs)" ".TP then .B: the macro line is the item"
 assert_contains 'makes every frob blink twice' "$(rag search -k 1 --kind docs 'make the frobs blink')" "and the line after it the text"
 rc=0

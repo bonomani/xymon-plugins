@@ -156,8 +156,12 @@ def manpage_passages(path: Path) -> list[dict]:
 
 
 def docs_passages(root: str) -> list[dict]:
+    # Not under a hidden directory: a Xymon source tree is a git checkout, and
+    # .git/rr-cache keeps old conflicting copies of its pages as preimage.1
+    # and postimage.1, which would be indexed as pages of those names.
     pages = sorted(p for p in Path(root).rglob("*")
-                   if re.search(r"\.[1578](\.gz)?$", p.name) and p.is_file())
+                   if re.search(r"\.[1578](\.gz)?$", p.name) and p.is_file()
+                   and not any(d.startswith(".") for d in p.relative_to(root).parent.parts))
     out = []
     for p in pages:
         try:
