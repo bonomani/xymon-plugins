@@ -14,8 +14,8 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
   reached over the network: install and enable it there first. This plugin
   does not install it, since it usually runs on another machine; it
   installs `xymonapi`'s client alone beside it.
-- Python 3.10 with the module in [`requirements.txt`](requirements.txt),
-  `mcp`; the setup script makes a virtualenv with it.
+- Python 3.10 or later, and nothing else: it speaks the protocol with the
+  standard library.
 
 ## Installing
 
@@ -43,8 +43,7 @@ marketplace at its branch `stable`, the code every test passed:
 The plugin carries its copy of `xymonapi`'s client. It then takes
 `XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and `XYMONAPI_PYTHON`
 from your environment, defaults in [`.mcp.json`](.mcp.json), and still needs
-Python with `mcp`, and a token: use the setup script or the marketplace, not
-both.
+a token: use the setup script or the marketplace, not both.
 
 `make uninstall-client` removes it, keeps `xymonapi`'s client, and says what
 the setup script did besides, to undo by hand: the registrations in Claude
@@ -59,7 +58,6 @@ For Claude Code, once, at user scope so every project has it:
 claude mcp add --scope user xymon \
   -e XYMONAPI_URL=https://xymon.example.ch \
   -e XYMONAPI_TOKEN_FILE=$HOME/.config/xymon-api/xymon.token \
-  -e XYMONAPI_PYTHON=$HOME/.local/libexec/xymon-plugins/venv/bin/python3 \
   -- ~/.local/bin/xymonapi-mcp
 ```
 
@@ -78,8 +76,7 @@ Cursor in `~/.cursor/mcp.json`; VS Code reads `.vscode/mcp.json`, with
       "command": "/home/me/.local/bin/xymonapi-mcp",
       "env": {
         "XYMONAPI_URL": "https://xymon.example.ch",
-        "XYMONAPI_TOKEN_FILE": "/home/me/.config/xymon-api/xymon.token",
-        "XYMONAPI_PYTHON": "/home/me/.local/libexec/xymon-plugins/venv/bin/python3"
+        "XYMONAPI_TOKEN_FILE": "/home/me/.config/xymon-api/xymon.token"
       }
     }
   }
@@ -92,9 +89,9 @@ as a list, and `environment` for `env`.
 
 - The token file holds what `POST /tokens` answers to one of the API's
   [users](../xymonapi/README.md#users), alone, mode 600; it is the only
-  credential sent. Leave it out when the API asks for no password, and
-  `XYMONAPI_PYTHON` when the system `python3` has `mcp`.
-- Add `XYMONAPI_CA` when the server's certificate is its own.
+  credential sent. Leave it out when the API asks for no password.
+- Add `XYMONAPI_CA` when the server's certificate is its own, and
+  `XYMONAPI_PYTHON` when the `python3` on `PATH` is older than 3.10.
 - For two Xymon servers, register twice, as `xymon-prod` and `xymon-lab`,
   each with its own URL and token file.
 

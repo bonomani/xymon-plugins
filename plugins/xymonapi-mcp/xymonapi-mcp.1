@@ -14,9 +14,9 @@ so the client gets what the API answers at that moment: nothing is stored,
 and nothing in Xymon is changed. Every tool is marked read-only.
 
 It runs where the client runs, which need not be the Xymon server, and needs
-Python 3.10 or later with the module mcp (xymonapi-mcp/requirements.txt) and
-nothing else: the searches too are the API's. When either is missing it
-says so on stderr and exits with status 77. It writes nothing but protocol
+Python 3.10 or later and nothing else: it speaks the protocol with the
+standard library, and the searches too are the API's. Without that Python
+it says so on stderr and exits with status 77. It writes nothing but protocol
 messages on stdout. \fBmake install-client\fR puts it under a PREFIX of
 yours, as the command xymonapi-mcp, with its version in VERSION beside it.
 It is written for the xymonapi version its PLUGIN file names; when the
@@ -78,8 +78,7 @@ already: the server's certificate, or the CA that signed it, PEM. Xymond's
 own certificate, when the API uses it (xymon-tls(7)), is such a one.
 Verification is never turned off: the token rides on this connection.
 .IP "\fBXYMONAPI_PYTHON\fR"
-The Python to run with, the python3 of a virtualenv that holds mcp for
-instance. The default is python3, found on PATH.
+The Python to run with, when the python3 found on PATH is older than 3.10.
 
 .SH "SEE ALSO"
 xymonapi(8)

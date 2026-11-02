@@ -124,9 +124,11 @@ The spec's `info.version` stays `1.0.0` until the API is first published.
 
 ### Python
 
-- `plugins/xymonapi/xymonapi_client.py` uses the standard library alone: the MCP
-  server and `xymonapi-rag` both load it, on laptops where little else may
-  be installed.
+- What runs on a laptop uses the standard library alone:
+  `plugins/xymonapi/xymonapi_client.py`, which the MCP server and
+  `xymonapi-rag` both load, and the MCP server itself, which speaks the
+  protocol without the `mcp` package. Nothing is installed there but the
+  plugins.
 - A new module dependency goes in that plugin's `requirements.txt`, and only
   when a few lines of the standard library will not do.
 - Python 3.10 is the floor; nothing newer is assumed.

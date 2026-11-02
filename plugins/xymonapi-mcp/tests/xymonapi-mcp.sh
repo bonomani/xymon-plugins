@@ -10,6 +10,9 @@
 # as a crash; it does not follow a redirect, which would carry the user and
 # password to another host, nor read a URL that is not http or https; and it
 # writes nothing but protocol messages on stdout. Every tool is called.
+# It runs on Python's standard library alone, and keeps to the protocol at
+# its edges: the version a client asks for, ping, notifications, unknown
+# methods, lines that are not JSON, and arguments a tool does not take.
 #
 # The client here is this script: MCP over stdio is JSON-RPC, one message per
 # line, so it writes the requests and reads the answers. Skips where the API
@@ -110,6 +113,43 @@ assert_contains 'search is not set up on this server' "$answer" "that says why"
 answer=$(call series '{"entity":"red.example.com","test":"la"}')
 assert_contains '"isError":true' "$answer" "an API refusal is a tool error"
 assert_contains 'answered 404' "$answer" "with the status the API answered"
+# The standard library alone: with -S, Python reads no site-packages, so a
+# module outside the standard library would not be found.
+printf '#!/bin/sh\nexec "%s" -S "$@"\n' "$(command -v "${XYMONAPI_PYTHON:-python3}")" > "$work/python-S"
+chmod 755 "$work/python-S"
+answer=$(XYMONAPI_PYTHON="$work/python-S" call health '{}')
+assert_contains 'alive' "$answer" "the MCP server runs on the standard library alone"
+grep -q 'ModuleNotFoundError' "$work/mcp.err" && fail "the MCP server needs a module outside the standard library: $(cat "$work/mcp.err")"
+
+# The protocol's edges, each line answered in turn, none of them needing
+# the API: the version asked for when it is known, the newest otherwise;
+# ping; no answer to a notification; -32601 for an unknown method; -32700
+# for a line that is not JSON, after which the next is still answered; a
+# missing argument, or one of the wrong type, a tool error that names it.
+{
+	echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}'
+	echo '{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"1999-01-01","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}'
+	echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+	echo '{"jsonrpc":"2.0","id":3,"method":"ping"}'
+	echo '{"jsonrpc":"2.0","id":4,"method":"no/such"}'
+	echo 'not json'
+	echo '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"status","arguments":{"test":"conn"}}}'
+	echo '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"search_docs","arguments":{"question":"x","k":"five"}}}'
+	echo '{"jsonrpc":"2.0","id":7,"method":"ping"}'
+} | XYMONAPI_URL="http://127.0.0.1:1" "$ROOT/plugins/xymonapi-mcp/xymonapi-mcp.sh" > "$work/edges.out" 2> "$work/edges.err" \
+	|| fail "the MCP server exited with an error at the protocol's edges: $(tail -n 5 "$work/edges.err")"
+edge() { grep "\"id\":$1[,}]" "$work/edges.out" || true; }
+assert_contains '"protocolVersion":"2024-11-05"' "$(edge 1)" "a known protocol version is the one answered"
+assert_contains '"protocolVersion":"2025-11-25"' "$(edge 2)" "an unknown one gets the newest"
+assert_equal '{"jsonrpc":"2.0","id":3,"result":{}}' "$(edge 3)" "ping is answered"
+assert_contains '"code":-32601' "$(edge 4)" "an unknown method is -32601"
+assert_contains '"code":-32700' "$(cat "$work/edges.out")" "a line that is not JSON is -32700"
+assert_contains 'missing argument: entity' "$(edge 5)" "a missing argument is a tool error that names it"
+assert_contains '"isError":true' "$(edge 5)" "as a tool error"
+assert_contains 'k must be an integer' "$(edge 6)" "an argument of the wrong type is named too"
+assert_equal '{"jsonrpc":"2.0","id":7,"result":{}}' "$(edge 7)" "and the server goes on after them"
+assert_equal "8" "$(wc -l < "$work/edges.out" | tr -d ' ')" "eight answers to nine lines: none to the notification"
+
 # The API not reachable at all: the error says what to check first.
 mcp "http://127.0.0.1:1" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
 answer=$(grep '"id":3' "$work/mcp.out")

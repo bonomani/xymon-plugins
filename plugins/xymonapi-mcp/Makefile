@@ -11,7 +11,7 @@
 PLUGIN = xymonapi-mcp
 include ../../build/plugin.mk
 
-FILES = server.py xymonapi-mcp.sh requirements.txt
+FILES = server.py xymonapi-mcp.sh
 
 all:
 
@@ -20,7 +20,7 @@ install:
 	$(MAKE) -C ../xymonapi install
 	$(call fresh,$(EXT))
 	cp -f $(FILES) "$(EXT)/"
-	chmod 644 "$(EXT)/server.py" "$(EXT)/requirements.txt"
+	chmod 644 "$(EXT)/server.py"
 	chmod 755 "$(EXT)/xymonapi-mcp.sh"
 	$(call version,$(EXT))
 
@@ -29,7 +29,7 @@ install-client:
 	$(call fresh,$(CLIENT))
 	mkdir -p "$(BIN)" "$(CLIENTMAN1)"
 	cp -f $(FILES) "$(CLIENT)/"
-	chmod 644 "$(CLIENT)/server.py" "$(CLIENT)/requirements.txt"
+	chmod 644 "$(CLIENT)/server.py"
 	chmod 755 "$(CLIENT)/xymonapi-mcp.sh"
 	$(call version,$(CLIENT))
 	$(call launcher,xymonapi-mcp,xymonapi-mcp/xymonapi-mcp.sh)
