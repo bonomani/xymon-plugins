@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# The Xymon API, xymonapi(8), and xymonapi_client.py, its client.
+# The Xymon API, xymonapi(8), and its client: xymonapi_client.py, and
+# xymonapi-connect(1), which connects a machine to the API.
 #
 #   make install XYMONHOME=/usr/lib/xymon/server   the API, on the server
 #   make install-client [PREFIX=$HOME/.local]      its client alone, elsewhere
@@ -37,9 +38,14 @@ install:
 # The client alone, for the plugins that read the API from elsewhere.
 install-client:
 	$(call fresh,$(CLIENT))
-	cp -f xymonapi_client.py "$(CLIENT)/"
+	mkdir -p "$(BIN)" "$(CLIENTMAN1)"
+	cp -f xymonapi_client.py xymonapi-connect.sh "$(CLIENT)/"
 	chmod 644 "$(CLIENT)/xymonapi_client.py"
+	chmod 755 "$(CLIENT)/xymonapi-connect.sh"
 	$(call version,$(CLIENT))
+	$(call launcher,xymonapi-connect,xymonapi/xymonapi-connect.sh)
+	cp -f xymonapi-connect.1 "$(CLIENTMAN1)/"
+	chmod 644 "$(CLIENTMAN1)/xymonapi-connect.1"
 
 # What it removes, and what it keeps: the web server's configuration may
 # include a snippet, and the tokens file is data.
@@ -55,6 +61,7 @@ uninstall:
 uninstall-client:
 	$(call needed_by,$(CLIENTROOT),xymonapi-mcp xymonapi-rag)
 	$(call gone,$(CLIENT))
-	@echo "Uninstalled xymonapi's client."
+	rm -f "$(BIN)/xymonapi-connect" "$(CLIENTMAN1)/xymonapi-connect.1"
+	@echo "Uninstalled xymonapi's client. Kept: the tokens in ~/.config/xymon-api/, which the API's /tokens revokes."
 
 .PHONY: all install install-client uninstall uninstall-client test

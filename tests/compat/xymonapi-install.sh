@@ -131,12 +131,14 @@ mkdir -p "$prefix/libexec/xymon-plugins/venv" && : > "$prefix/libexec/xymon-plug
 	|| fail "make install-client a second time failed: $(tail -n 5 "$work/client2.log")"
 [ -e "$prefix/libexec/xymon-plugins/xymonapi-rag/gone.py" ] && fail "a file no longer shipped stayed in the client's xymonapi-rag"
 assert_file_exists "$prefix/libexec/xymon-plugins/venv/kept"
-for f in xymonapi-mcp/server.py xymonapi-mcp/xymonapi-mcp.sh xymonapi/xymonapi_client.py \
+for f in xymonapi-mcp/server.py xymonapi-mcp/xymonapi-mcp.sh xymonapi/xymonapi_client.py xymonapi/xymonapi-connect.sh \
          xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt xymonapi-mcp/VERSION xymonapi-rag/VERSION; do
 	assert_file_exists "$prefix/libexec/xymon-plugins/$f"
 done
 assert_file_exists "$prefix/share/man/man1/xymonapi-mcp.1"
 assert_file_exists "$prefix/share/man/man1/xymonapi-rag.1"
+assert_file_exists "$prefix/share/man/man1/xymonapi-connect.1"
+[ -x "$prefix/bin/xymonapi-connect" ] || fail "bin/xymonapi-connect is not executable"
 [ -x "$prefix/bin/xymonapi-mcp" ] || fail "bin/xymonapi-mcp is not executable"
 [ -x "$prefix/bin/xymonapi-rag" ] || fail "bin/xymonapi-rag is not executable"
 grep -qF "\"$prefix/libexec/xymon-plugins/xymonapi-rag/xymonapi-rag.sh\"" "$prefix/bin/xymonapi-rag" \

@@ -5,7 +5,8 @@
 
 Runs COMMAND on a pseudo-terminal of its own, waits until it writes PROMPT,
 sends Ctrl-C and waits five seconds for it to end. Prints "echo on" or
-"echo off", the terminal's state then, and exits with COMMAND's status --
+"echo off", the terminal's state then, then what COMMAND wrote after the
+Ctrl-C -- a traceback, for one -- and exits with COMMAND's status --
 128 plus the signal when one killed it -- or 124 when it did not end, as
 when the Ctrl-C was ignored; COMMAND is then killed.
 """
@@ -46,14 +47,17 @@ time.sleep(0.3)                          # the read is waiting by now
 os.write(fd, b"\x03")
 
 status = None
+after = b""
 until = time.time() + 5
 while time.time() < until:
-    read(time.time() + 0.1)              # a full terminal would block it
+    after += read(time.time() + 0.1)     # a full terminal would block it
     done, st = os.waitpid(pid, os.WNOHANG)
     if done:
         status = st
         break
 print("echo on" if termios.tcgetattr(fd)[3] & termios.ECHO else "echo off")
+after += read(time.time() + 0.1)
+print(after.decode(errors="replace"), end="")
 if status is None:
     os.kill(pid, signal.SIGKILL)
     sys.exit(124)

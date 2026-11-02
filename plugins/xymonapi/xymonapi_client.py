@@ -3,25 +3,33 @@
 server and the search in xymonapi-rag/ both read the API through it.
 
 XYMONAPI_URL is where the API is, http://127.0.0.1:1986 by default.
-XYMONAPI_TOKEN_FILE names a file holding a client token -- the one the setup
-script /client writes keeps -- sent when the API asks for a user: the token
+XYMONAPI_TOKEN_FILE names a file holding a client token -- the one
+xymonapi-connect(1) keeps -- sent when the API asks for a user: the token
 is this machine's own, revoked on its own (xymonapi(8), TOKENS). It is the
 only credential sent: a password is never kept here. XYMONAPI_TOKEN is the
 token itself, for a test or a one-off.
 XYMONAPI_CA names the certificate, or the CA, to trust for an https:// URL
 when it is not one the system trusts already: xymond's own, from
 xymon-tls(7), which the API uses too.
+
+Run as a program, it is xymonapi-connect(1): `xymonapi_client.py connect
+URL [NAME]` connects this machine to the API at URL.
 """
 from __future__ import annotations
 
+import base64
+import getpass
 import json
 import os
-import secrets
 import re
+import secrets
+import shlex
+import socket
 import ssl
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 URL = os.environ.get("XYMONAPI_URL", "http://127.0.0.1:1986").rstrip("/")
@@ -149,10 +157,10 @@ def api(path: str, **params: str | None) -> dict:
         # failures of a first setup, what to check.
         detail = e.read().decode(errors="replace")
         if e.code == 401:
-            detail += (" -- the token in XYMONAPI_TOKEN_FILE was revoked or replaced: run the "
-                       "setup script from /client again" if (TOKEN or TOKEN_FILE) else
-                       " -- set XYMONAPI_TOKEN_FILE: the setup script from /client gets this "
-                       "machine a token and writes it")
+            detail += (" -- the token in XYMONAPI_TOKEN_FILE was revoked or replaced: run "
+                       "xymonapi-connect again" if (TOKEN or TOKEN_FILE) else
+                       " -- set XYMONAPI_TOKEN_FILE: xymonapi-connect gets this machine a "
+                       "token and writes it")
         rid = e.headers.get("X-Request-Id", rid) if e.headers else rid
         raise APIError(f"xymonapi answered {e.code}: {detail} (request id {rid})", e.code) from e
     except urllib.error.URLError as e:
@@ -167,3 +175,145 @@ def api(path: str, **params: str | None) -> dict:
         raise APIError(f"xymonapi at {URL}: {e}") from e
     except OSError as e:                 # the connection broke, or timed out, while reading
         raise APIError(f"xymonapi at {URL}: {e}") from e
+
+
+# xymonapi-connect(1): this machine's token for the API at URL, asked for
+# once with a user's password, which is not kept. What a client needs then
+# is printed, as shell settings.
+
+def _say(msg: str) -> None:
+    print(f"xymonapi-connect: {msg}", file=sys.stderr)
+
+
+def _machine() -> str:
+    """This machine's name, for its token: the short hostname, in the
+    characters a token's name may hold. It names the machine; it proves
+    nothing."""
+    name = re.sub(r"[^A-Za-z0-9_.-]", "-", socket.gethostname().split(".")[0])
+    return re.sub(r"^[^A-Za-z0-9]+", "", name)[:64] or "client"
+
+
+def _own_version() -> str:
+    """This client's version: VERSION beside it once installed, the PLUGIN
+    file's in a checkout."""
+    here = Path(__file__).resolve().parent
+    try:
+        return (here / "VERSION").read_text().strip()
+    except OSError:
+        pass
+    try:
+        m = re.search(r"^version: *(\S+)", (here / "PLUGIN").read_text(), re.M)
+        return m[1] if m else ""
+    except OSError:
+        return ""
+
+
+def _new_token(name: str) -> str:
+    """POST /tokens with a user and password asked here, on the terminal, or
+    read from stdin when it is not one. The password goes no further."""
+    user = os.environ.get("XYMONAPI_USER", "")
+    tty = sys.stdin.isatty()
+    if not user:
+        print("user: ", end="", file=sys.stderr, flush=True)
+        user = sys.stdin.readline().strip()
+        if not user:
+            raise APIError("a user of the API is needed")
+    if tty:
+        pw = getpass.getpass(f"password for {user}: ")
+    else:
+        print(f"password for {user}: ", end="", file=sys.stderr, flush=True)
+        pw = sys.stdin.readline().rstrip("\n")
+        print(file=sys.stderr)
+    auth = base64.b64encode(f"{user}:{pw}".encode()).decode()
+    pw = ""
+    req = urllib.request.Request(f"{URL}/xymon/api/v1/tokens", method="POST",
+                                 data=json.dumps({"client": name}).encode(),
+                                 headers={"Content-Type": "application/json",
+                                          "Authorization": f"Basic {auth}"})
+    try:
+        with open_url(req, 30) as r:
+            token = json.loads(r.read(MAX_BODY)).get("token", "")
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            raise APIError(f"the API refused the password for {user}") from e
+        raise APIError(f"xymonapi answered {e.code} for a token: {e.read().decode(errors='replace')}") from e
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise APIError(f"no token from {URL}: {e}") from e
+    if not token.startswith("xat_"):
+        raise APIError(f"the API gave no token: {token!r}")
+    return token
+
+
+def connect(argv: list[str]) -> int:
+    global URL, CA, TOKEN, TOKEN_FILE, _opener
+    if not argv or argv[0] in ("-h", "--help") or len(argv) > 2:
+        print("usage: xymonapi-connect URL [NAME]", file=sys.stderr)
+        return 2
+    url, name = argv[0].rstrip("/"), (argv[1] if len(argv) > 1 else "xymon")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", name):
+        _say(f"a name is letters, digits, '.', '_' and '-': not {name!r}")
+        return 2
+    conf = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "xymon-api"
+    token_file, ca_file = conf / f"{name}.token", conf / f"{name}-ca.pem"
+    URL, TOKEN, _opener = url, "", None
+    # The server's certificate, or its CA, when this machine does not trust
+    # it already: copied here first, by hand, over a channel already trusted.
+    CA = os.environ.get("XYMONAPI_CA") or (str(ca_file) if ca_file.is_file() else "")
+    try:
+        # Reached and trusted before anything is asked. A token kept from
+        # before is used while it works.
+        TOKEN_FILE = str(token_file) if token_file.is_file() else ""
+        try:
+            health = api("/health")
+        except APIError as e:
+            if e.status != 401:
+                if "does not trust" in str(e):
+                    _say(f"{URL} has a certificate this machine does not trust: copy the server's "
+                         f"certificate, or the CA that signed it, to {ca_file} and run this again")
+                    return 1
+                raise
+            conf.mkdir(parents=True, exist_ok=True)
+            TOKEN_FILE = ""
+            token = _new_token(_machine())
+            fd = os.open(token_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write(token + "\n")
+            os.chmod(token_file, 0o600)
+            TOKEN_FILE = str(token_file)
+            _say(f"a token for {_machine()} kept in {token_file} (mode 600); the API's /tokens lists and revokes it")
+            health = api("/health")
+    except APIError as e:
+        _say(str(e))
+        return 1
+    except KeyboardInterrupt:
+        print(file=sys.stderr)
+        return 130
+    old = conf / f"{name}.password"
+    if old.exists():
+        old.unlink()
+        _say(f"removed {old}: the token replaces the password, which is no longer kept")
+    # Whether the two sides run the same version: compatibility is what a
+    # version says, so a difference is worth knowing, and who can act on it.
+    theirs, mine = health.get("version", ""), _own_version()
+    t, m = _triple(theirs), _triple(mine)
+    if t and m and t < m:
+        _say(f"the API runs xymonapi {theirs}, this machine's client {mine}: the server's admin "
+             "can update it, with make install from an updated checkout")
+    elif t and m and t > m:
+        _say(f"the API runs xymonapi {theirs}, this machine's client {mine}: update here, "
+             "with git pull && make install-client")
+    settings = {"XYMONAPI_URL": URL}
+    if TOKEN_FILE:
+        settings["XYMONAPI_TOKEN_FILE"] = TOKEN_FILE
+    if CA:
+        settings["XYMONAPI_CA"] = CA
+    for k, v in settings.items():
+        print(f"{k}={shlex.quote(v)}")
+    return 0
+
+
+if __name__ == "__main__":
+    if sys.argv[1:2] != ["connect"]:
+        print("usage: xymonapi_client.py connect URL [NAME]", file=sys.stderr)
+        sys.exit(2)
+    sys.exit(connect(sys.argv[2:]))
