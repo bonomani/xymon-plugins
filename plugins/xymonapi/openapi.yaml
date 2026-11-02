@@ -7,7 +7,9 @@ info:
     alarms and its hosts. A verdict is never a colour; the colour is how the
     web pages show it. See xymonapi(8).
 
-    Rules every implementation keeps, beyond what the paths below say:
+    Rules every implementation keeps, beyond what the paths below say. Each
+    is checked by the tests that cite it as [Cn]; tests/api/xymonapi-clauses.sh
+    fails on a rule no test cites.
 
     C1. Every answer that is not a success is JSON, {"error": E, "detail": D},
         E one of Error's closed list, with its status: bad_request 400,

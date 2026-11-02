@@ -71,9 +71,9 @@ assert_equal "401" "$(code "$t1" "$api/health")" "the replaced token is refused"
 assert_equal "200" "$(code "$t2" "$api/health")" "its replacement works"
 
 # A token cannot manage tokens.
-assert_equal "401" "$(code "$t2" "$api/tokens")" "a token may not list tokens"
-assert_equal "401" "$(code "$t2" -X POST -H 'Content-Type: application/json' -d '{"client":"other"}' "$api/tokens")" "nor make one"
-assert_equal "401" "$(code "$t2" -X DELETE "$api/tokens/laptop")" "nor revoke one"
+assert_equal "401" "$(code "$t2" "$api/tokens")" "[C3] a token may not list tokens"
+assert_equal "401" "$(code "$t2" -X POST -H 'Content-Type: application/json' -d '{"client":"other"}' "$api/tokens")" "[C3] nor make one"
+assert_equal "401" "$(code "$t2" -X DELETE "$api/tokens/laptop")" "[C3] nor revoke one"
 
 # Altered by one character, or not a token at all.
 last=${t2: -1}; [ "$last" = A ] && other=B || other=A

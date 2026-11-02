@@ -58,19 +58,19 @@ url="http://127.0.0.1:$API_PORT/xymon/api/v1/health"
 code() { curl -s -o /dev/null -w '%{http_code}' "$@" "$url"; }
 
 rc=0
-assert_equal "401" "$(code)" "no user and password"
+assert_equal "401" "$(code)" "[C3] no user and password"
 # Header names are case-insensitive, and uvicorn sends them in lower case.
 assert_contains 'www-authenticate: basic realm="xymon"' "$(curl -s -D - -o /dev/null "$url" | tr -d '\r' | tr 'A-Z' 'a-z')" "the 401 asks for Basic authentication"
 assert_equal "200" "$(code -u alice:secret)" "alice, \$apr1\$, right password"
 assert_equal "200" "$(code -H "Authorization: basic $(printf 'alice:secret' | base64)")" "the scheme spelt basic, in lower case"
-assert_equal "401" "$(code -u alice:wrong)" "alice, wrong password"
+assert_equal "401" "$(code -u alice:wrong)" "[C3] alice, wrong password"
 assert_equal "200" "$(code -u bob:s3cret)" "bob, bcrypt, right password"
-assert_equal "401" "$(code -u carol:secret)" "a user the file does not hold"
+assert_equal "401" "$(code -u carol:secret)" "[C3] a user the file does not hold"
 assert_equal "401" "$(code -u -b:secret)" "a user name that looks like an option"
 
 # FastAPI serves these beside the API's own paths; a password covers them too.
 for path in /openapi.json /docs; do
-	assert_equal "401" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT$path")" "$path without a user"
+	assert_equal "401" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT$path")" "[C3] $path without a user"
 	assert_equal "200" "$(curl -s -o /dev/null -w '%{http_code}' -u alice:secret "http://127.0.0.1:$API_PORT$path")" "$path with a user"
 done
 
@@ -78,12 +78,12 @@ done
 # secret -- the address the request came through, the proxy's when its
 # headers say so, and no user or version. The version is /health's, behind
 # the password.
-assert_equal "200" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/client")" "/client without a user"
+assert_equal "200" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/client")" "[C4] /client without a user"
 script=$(curl -s "http://127.0.0.1:$API_PORT/xymon/api/v1/client")
 assert_contains "URL=http://127.0.0.1:$API_PORT" "$script" "/client writes the address the request came to"
 assert_contains "NAME=xymon" "$script" "and the default name"
-printf '%s\n' "$script" | grep -q '^USER=' && fail "/client wrote a USER= line"
-assert_not_contains "$version" "$script" "and not the version"
+printf '%s\n' "$script" | grep -q '^USER=' && fail "[C4] /client wrote a USER= line"
+assert_not_contains "$version" "$script" "[C4] and not the version"
 assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user"
 assert_not_contains "$version" "$(curl -s "$url")" "and not to a stranger"
 # Every field /health gives is one the spec lists for it: a field renamed in
