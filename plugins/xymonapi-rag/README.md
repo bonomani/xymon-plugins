@@ -15,7 +15,7 @@ setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 - **On a laptop:** `xymonapi`'s client beside it, which
   `make install-client` here installs first, and a running API, reached
   over the network, as `XYMONAPI_URL` says.
-- Python 3.10, and on the server the modules in
+- Python 3.10 or later, and on the server the modules in
   [`requirements.txt`](requirements.txt).
 
 ## On the server
