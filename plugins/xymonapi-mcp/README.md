@@ -9,6 +9,17 @@ over the [Xymon API](../xymonapi/README.md): `health`, `states`, `alarms`,
 and needs Python 3.10 with the module in [`requirements.txt`](requirements.txt).
 Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
+## Needs
+
+- **A running [`xymonapi`](../xymonapi/README.md)**, on the Xymon server,
+  reached over the network: install and enable it there first. This plugin
+  does not install it, since it usually runs on another machine.
+- Python 3.10 with the module `mcp`; the setup script makes a virtualenv
+  with it.
+
+Its install brings no other plugin. On the server, `xymonapi-rag` installs
+it beside itself, for the `client.py` it reads the API with.
+
 ## Installing
 
 The simplest way is the setup script the API gives (see

@@ -8,6 +8,19 @@ are; the [API](../xymonapi/README.md) serves it at `/search`, and the
 ask it there. Every command and setting is in
 [`xymonapi-rag.1`](xymonapi-rag.1).
 
+## Needs
+
+- **On the server:** [`xymonapi`](../xymonapi/README.md), which serves the
+  index at `/search`, and [`xymonapi-mcp`](../xymonapi-mcp/README.md), whose
+  `client.py` it uses. `make install` here installs both first; the API's
+  task must then be enabled, as its README says, for the search to be
+  served.
+- **On a laptop:** `xymonapi-mcp` beside it, which `make install-client`
+  here installs first, and a running `xymonapi` on the server, reached over
+  the network: install and enable it there first.
+- Python 3.10, and on the server the modules in
+  [`requirements.txt`](requirements.txt).
+
 ## On the server
 
 `make install` puts it in `$XYMONHOME/ext/xymonapi-rag/`, with the
