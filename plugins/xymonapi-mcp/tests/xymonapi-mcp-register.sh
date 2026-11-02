@@ -8,7 +8,7 @@
 # token kept -- and registers the MCP server with Claude Code and Codex: the
 # installed launcher as the command, with the API's address and the token
 # file; XYMONAPI_PYTHON only when it is set; the certificate only when one
-# is used. It removes the virtualenv an earlier setup made, and where a
+# is used. It leaves a virtualenv beside the plugins alone, and where a
 # client is not installed, prints the command to run later.
 #
 # claude and codex are stubs that record their arguments. Skips where the API
@@ -47,7 +47,8 @@ py=$(command -v "${XYMONAPI_PYTHON:-python3}")
 # A PATH with the stubs and the system's tools, and no real claude or codex.
 path="$work/stub:/usr/bin:/bin"
 
-# An earlier setup's virtualenv, beside the plugins.
+# A virtualenv beside the plugins, as make venv-client makes one: left as it
+# is, since the launchers run with it (tests/compat/xymonapi-python.sh).
 mkdir -p "$work/client/libexec/xymon-plugins/venv/bin"
 printf 'carol\nsecret\n' > "$work/in"
 rc=0
@@ -66,8 +67,8 @@ for c in claude codex; do
 	assert_not_contains "secret" "$args" "and never the password"
 done
 assert_contains "--scope" "$(cat "$work/claude.args")" "Claude Code at user scope"
-[ -e "$work/client/libexec/xymon-plugins/venv" ] && fail "the old virtualenv was left"
-assert_contains "removed $work/client/libexec/xymon-plugins/venv" "$out" "the old virtualenv is removed, and said so"
+assert_file_exists "$work/client/libexec/xymon-plugins/venv/bin"
+assert_not_contains "removed" "$out" "the virtualenv beside the plugins is left alone"
 
 # Again, with XYMONAPI_PYTHON set: passed on. The token works: nothing asked.
 : > "$work/claude.args"; : > "$work/codex.args"

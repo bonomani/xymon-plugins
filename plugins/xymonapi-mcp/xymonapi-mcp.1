@@ -36,8 +36,7 @@ xymon by default: this launcher as the command, with XYMONAPI_URL,
 XYMONAPI_TOKEN_FILE when there is a token, XYMONAPI_CA when a certificate is
 used, and XYMONAPI_PYTHON when it is set. A registration of that name is
 replaced. For a client that is not installed, it prints the command to run
-later. It also removes the virtualenv an earlier setup made beside the
-plugins, which this server no longer needs. It exits 1, registering
+later. It exits 1, registering
 nothing, when the connection fails.
 
 .SH TOOLS
@@ -94,7 +93,11 @@ already: the server's certificate, or the CA that signed it, PEM. Xymond's
 own certificate, when the API uses it (xymon-tls(7)), is such a one.
 Verification is never turned off: the token rides on this connection.
 .IP "\fBXYMONAPI_PYTHON\fR"
-The Python to run with, when the python3 found on PATH is older than 3.9.
+The Python to run with. Unset, the python3 of the virtualenv beside the
+plugins, $PREFIX/libexec/xymon-plugins/venv, which \fBmake venv-client\fR
+makes, when there is one; else the python3 found on PATH, after a
+confirmation when a terminal is there to ask, with a line on stderr when
+none is.
 
 .SH "SEE ALSO"
 xymonapi(8), xymonapi-connect(1)

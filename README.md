@@ -55,6 +55,12 @@ cd plugins/NAME && make install-client                           # elsewhere
 Run again, it updates the plugin; `make uninstall` or `make uninstall-client`
 removes it. The same targets at the top act on every plugin of one side.
 
+The launchers run with the Python `XYMONAPI_PYTHON` names, else with the
+virtualenv beside the installed plugins when there is one, else with the
+`python3` on PATH, asking first when a person is at the terminal. `make venv`
+(on the server) or `make venv-client` makes that virtualenv, with the modules
+of the plugins installed there.
+
 ## Versions
 
 Each plugin has its own version, in its `PLUGIN` file, written beside its

@@ -62,11 +62,14 @@ those really are -- `/etc/xymon` on many installations -- so the files land
 there. With `DESTDIR`, the staged directories are plain ones: a package built
 from that stage should check how its tool installs a directory over a link.
 
-The Python modules are not installed, and the user Xymon runs as must be
-able to import them: install them system-wide, from your distribution's
-packages for instance, or in a virtualenv that user can read, named in
-`XYMONAPI_PYTHON`. `pip install --user` run as root puts them where that user
-does not look.
+The Python modules are not installed with it. `make venv XYMONHOME=...`
+(`PYTHON=python3.x` for one other than `python3`) makes a virtualenv beside
+the plugins, `$XYMONHOME/ext/venv`, with the modules of every plugin
+installed there, and the launchers run with it unless `XYMONAPI_PYTHON` names
+another Python. Without one they fall back to the `python3` on PATH, which
+must then have the modules, importable by the user Xymon runs as: from your
+distribution's packages, for instance. `pip install --user` run as root puts
+them where that user does not look.
 
 Then remove `DISABLED` from the task, and check, with the default address:
 

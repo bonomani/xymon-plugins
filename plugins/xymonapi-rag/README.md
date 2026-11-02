@@ -26,8 +26,9 @@ setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 written `DISABLED`; it also stages this directory for other machines, in
 what the server's `/client` serves. To enable it:
 
-1. install the modules in [`requirements.txt`](requirements.txt) for the
-   Xymon user;
+1. install the modules in [`requirements.txt`](requirements.txt): `make venv
+   XYMONHOME=...` here puts them in a virtualenv beside the plugins, which
+   the launchers prefer to the `python3` on PATH;
 2. put `XYMONAPI_RAG_DOCS` -- a directory with Xymon's manual pages;
    `/usr/share/man` will do -- in a file under `xymonserver.d/`;
 3. remove `DISABLED` from the task.

@@ -35,6 +35,15 @@ install:
 	@echo "  $(ETC)/xymonapi-{apache,nginx,lighttpd}.conf in the web server, or give the API xymond's certificate: see xymonapi(8)."
 	@echo "Updating one that runs: it keeps the old code until restarted. Stop it, and xymonlaunch starts the new:"
 	@echo "  pkill -f '$(XYMONHOME)/ext/xymonapi/'"
+	$(call venv_hint,$(EXTROOT))
+
+# An isolated Python for the plugins installed here, with their modules.
+venv:
+	$(need_home)
+	$(call venv,$(EXTROOT))
+
+venv-client:
+	$(call venv,$(CLIENTROOT))
 
 # The client alone, for the plugins that read the API from elsewhere.
 install-client:
@@ -67,4 +76,4 @@ uninstall-client:
 	rm -f "$(BIN)/xymonapi-connect" "$(CLIENTMAN1)/xymonapi-connect.1"
 	@echo "Uninstalled xymonapi's client. Kept: the tokens in ~/.config/xymon-api/, which the API's /tokens revokes."
 
-.PHONY: all install install-client uninstall uninstall-client test
+.PHONY: all install install-client venv venv-client uninstall uninstall-client test

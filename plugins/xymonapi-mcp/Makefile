@@ -37,6 +37,15 @@ install-client:
 	cp -f xymonapi-mcp.1 "$(CLIENTMAN1)/"
 	chmod 644 "$(CLIENTMAN1)/xymonapi-mcp.1"
 
+# An isolated Python for the plugins installed here, with their modules;
+# this one needs none, but xymonapi beside it does on the server.
+venv:
+	$(need_home)
+	$(call venv,$(EXTROOT))
+
+venv-client:
+	$(call venv,$(CLIENTROOT))
+
 uninstall:
 	$(need_home)
 	$(call gone,$(EXT))
@@ -53,4 +62,4 @@ uninstall-client:
 	@echo "  revoke this machine's token: curl -X DELETE -u USER https://SERVER/xymon/api/v1/tokens/\$$(hostname -s)"
 	@echo "  rm ~/.config/xymon-api/xymon.token"
 
-.PHONY: all install install-client uninstall uninstall-client test
+.PHONY: all install install-client venv venv-client uninstall uninstall-client test

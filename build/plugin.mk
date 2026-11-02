@@ -23,6 +23,8 @@
 
 MANDIR = /usr/share/man
 PREFIX = $(HOME)/.local
+# The Python make venv makes the virtualenv with: 3.9 or later.
+PYTHON = python3
 EXTROOT = $(DESTDIR)$(XYMONHOME)/ext
 EXT = $(EXTROOT)/$(PLUGIN)
 ETC = $(DESTDIR)$(XYMONHOME)/etc
@@ -64,6 +66,28 @@ VERSION = $$(sed -n 's/^version: *//p' PLUGIN)
 define version
 	@v=$$(git describe --exact-match --tags --match '$(PLUGIN)/v*' 2>/dev/null) || v=$(VERSION); \
 	printf '%s\n' "$$v" > "$(1)/VERSION"; chmod 644 "$(1)/VERSION"
+endef
+
+# venv DIR -- a virtualenv at DIR/venv, beside the plugins installed in DIR,
+# with the modules of each, from the requirements.txt installed with it: what
+# every launcher runs with when XYMONAPI_PYTHON names no other, in place of
+# the python3 on PATH, which may lack them. Run again, it adds the modules
+# of a plugin installed since.
+define venv
+	@test -d "$(1)" || { echo "nothing is installed in $(1) yet" >&2; exit 1; }
+	@[ -x "$(1)/venv/bin/python3" ] || "$(PYTHON)" -m venv "$(1)/venv" || exit 1
+	@for r in "$(1)"/*/requirements.txt; do \
+		[ -e "$$r" ] || continue; \
+		echo "installing the modules of $$r"; \
+		"$(1)/venv/bin/python3" -m pip install -q -r "$$r" || exit 1; \
+	done
+	@echo "The plugins in $(1) run with $(1)/venv/bin/python3 (`"$(1)/venv/bin/python3" -V`)."
+endef
+
+# venv_hint DIR -- said after installing a plugin that needs modules, when
+# no virtualenv is there for them yet.
+define venv_hint
+	@[ -x "$(1)/venv/bin/python3" ] || echo "No virtualenv at $(1)/venv: make venv (venv-client elsewhere) [PYTHON=python3.x] makes one with the modules this plugin needs; without it, the python3 on PATH must have them."
 endef
 
 # Included at the top of each plugin's Makefile, before its all: so that

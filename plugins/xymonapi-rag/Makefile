@@ -29,6 +29,7 @@ install:
 	chmod 644 "$(MAN1)/xymonapi-rag.1"
 	mkdir -p "$(TASKDIR)"
 	$(call task,xymonapi-rag.tasks.DIST,xymonapi-rag)
+	$(call venv_hint,$(EXTROOT))
 
 install-client:
 	$(MAKE) -C ../xymonapi install-client
@@ -41,6 +42,15 @@ install-client:
 	$(call launcher,xymonapi-rag,xymonapi-rag/xymonapi-rag.sh)
 	cp -f xymonapi-rag.1 "$(CLIENTMAN1)/"
 	chmod 644 "$(CLIENTMAN1)/xymonapi-rag.1"
+	$(call venv_hint,$(CLIENTROOT))
+
+# An isolated Python for the plugins installed here, with their modules.
+venv:
+	$(need_home)
+	$(call venv,$(EXTROOT))
+
+venv-client:
+	$(call venv,$(CLIENTROOT))
 
 # It removes itself alone: the plugins it brought may serve others.
 uninstall:
@@ -55,4 +65,4 @@ uninstall-client:
 	rm -f "$(BIN)/xymonapi-rag" "$(CLIENTMAN1)/xymonapi-rag.1"
 	@echo "Uninstalled xymonapi-rag. Kept: xymonapi's client, and any index here, \$$XYMONAPI_RAG_INDEX."
 
-.PHONY: all install install-client uninstall uninstall-client test
+.PHONY: all install install-client venv venv-client uninstall uninstall-client test

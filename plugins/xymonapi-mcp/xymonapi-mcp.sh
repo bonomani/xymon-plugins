@@ -14,8 +14,27 @@
 # and say why on stderr, which the client logs: stdout carries the protocol
 # and nothing else.
 
-PYTHON=${XYMONAPI_PYTHON:-python3}
+# The Python to run with: XYMONAPI_PYTHON when set; else the virtualenv
+# beside the plugins, ../venv, which make venv (venv-client elsewhere) makes
+# with their modules; else
+# python3 on PATH, which may lack them -- asked about first when a person is
+# at the terminal, said on stderr when none is (a task, an AI client).
 here=`dirname "$0"`
+venv=`cd "$here/.." && pwd`/venv
+if [ -n "${XYMONAPI_PYTHON:-}" ]; then
+	PYTHON=$XYMONAPI_PYTHON
+elif [ -x "$venv/bin/python3" ]; then
+	PYTHON=$venv/bin/python3
+elif [ -t 0 ] && [ -t 2 ]; then
+	PYTHON=python3
+	printf 'xymonapi-mcp: no virtualenv at %s (make venv, or venv-client, makes one); run with %s, %s? [y/N] ' \
+		"$venv" "`command -v python3 || echo python3`" "`python3 -V 2>&1`" >&2
+	read -r yn
+	case $yn in [yY]*) ;; *) exit 77 ;; esac
+else
+	PYTHON=python3
+	echo "xymonapi-mcp: no virtualenv at $venv; running with python3 on PATH" >&2
+fi
 
 command -v "$PYTHON" >/dev/null 2>&1 || {
 	echo "xymonapi-mcp: $PYTHON not found; it needs Python 3.9 or later" >&2
@@ -36,21 +55,16 @@ command -v "$PYTHON" >/dev/null 2>&1 || {
 url=$2
 name=${3:-xymon}
 # The connection first: a token kept while it works, else a password asked
-# once. Its settings, shell-quoted, on stdout; its questions on stderr.
+# once. Its settings, shell-quoted, on stdout; its questions on stderr. It
+# runs with the Python chosen above, so that the choice is made, and asked
+# about, once; what the registration below carries is XYMONAPI_PYTHON as
+# given, not that choice.
 connect=$here/../xymonapi/xymonapi-connect.sh
-settings=`"$connect" "$url" "$name"` || exit $?
+settings=`XYMONAPI_PYTHON=$PYTHON "$connect" "$url" "$name"` || exit $?
 XYMONAPI_TOKEN_FILE=""
 XYMONAPI_CA=""
 eval "$settings"
 cmd=`cd "$here" && pwd`/xymonapi-mcp.sh
-
-# A virtualenv an earlier setup made, for the mcp module this server no
-# longer needs.
-venv=`cd "$here/.." && pwd`/venv
-if [ -d "$venv" ]; then
-	rm -rf "$venv"
-	echo "removed $venv: the MCP server needs no Python module beyond the standard library"
-fi
 
 # The settings an AI client gives the server, as -e or --env options.
 opts() {

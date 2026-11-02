@@ -215,9 +215,10 @@ whatever the web page shows. Read at start: an expression that is not one,
 or a file that cannot be read, stops the API from starting, since running
 without the hiding asked for would be worse than not running.
 .IP "\fBXYMONAPI_PYTHON\fR"
-The Python to run the API with, when the modules it needs are not installed
-for the system's python3: the python3 of a virtualenv that holds them, for
-instance. The default is python3, found on PATH.
+The Python to run the API with. Unset, the launcher takes the python3 of
+the virtualenv beside the plugins, $XYMONHOME/ext/venv, which \fBmake
+venv\fR makes with the modules the installed plugins need; without one, the
+python3 found on PATH, saying so on stderr, the task's log.
 
 .SH FILES
 .IP "\fB$XYMONHOME/ext/xymonapi/\fR"
