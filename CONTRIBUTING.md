@@ -35,12 +35,13 @@ without it, checked by reverting what makes it true.
 ## What differs here
 
 - **No `Changes`, no `RELEASENOTES`.** What an admin upgrading needs to know
-  goes in the notes of the plugin's release (see [Releasing](#releasing)),
-  and in the manual page when it changes how the plugin behaves.
+  goes in [`UPGRADING.md`](UPGRADING.md) (see
+  [Breaking changes](#breaking-changes)), and in the manual page when it
+  changes how the plugin behaves.
 - **Manual pages have no HTML copy.** Each plugin's page -- `xymonapi.8`,
   `xymonapi-mcp.1`, `xymonapi-rag.1` -- is the only copy: edit it, nothing
-  is generated. Its `.TH` line's date changes only in a release commit (see
-  [Releasing](#releasing)).
+  is generated. Its `.TH` line's date changes with the plugin's version (see
+  [Versions](#versions)).
 - **No branch protection.** Changes may be pushed to `main` directly; a pull
   request is welcome, and is the way when you want a second reader.
 - **Python, not C.** See [Python](#python) below; Xymon's C section does not
@@ -70,34 +71,36 @@ it belongs to, and the other installs that one: `xymonapi-rag` uses
 
 ### Versions
 
-A plugin's version is the `version:` line of its `PLUGIN` file, `X.Y.Z`. A
-release is a tag of that plugin, `NAME/vX.Y.Z`, matching it. `make install`
-writes the version beside the installed files, in `VERSION`, and `/health`
-gives the API's. The plugins that read the API -- `xymonapi-mcp`, and
-`xymonapi-rag` through its `client.py` -- name in their `PLUGIN` files the
-lowest `xymonapi` version they need; `client.py` repeats it as `API_FLOOR`,
-and `xymonapi-auth` checks that the three agree, so change them together.
+A plugin's version is the `version:` line of its `PLUGIN` file, `X.Y.Z`.
+`make install` writes it beside the installed files, in `VERSION`, and
+`/health` gives the API's. It changes when compatibility does, in the same
+commit as the change: the last number for an addition, the first for a
+change that breaks something for users or for another plugin. Other changes
+leave it alone.
 
-### Releasing
+The plugins that read the API -- `xymonapi-mcp`, and `xymonapi-rag` through
+its `client.py` -- name in their `PLUGIN` files the lowest `xymonapi`
+version they need; `client.py` repeats it as `API_FLOOR`, and a test checks
+that the three agree, so change them together. A client raises its floor
+only to a version the API already has.
 
-A release of one plugin is one commit and one tag:
+### Breaking changes
 
-1. in the plugin's `PLUGIN` file, the new `version:`;
-2. in its manual page's `.TH` line, the date of the release;
-3. when it needs a newer API than before, the floor in the `PLUGIN` files
-   that name it and in `client.py`, together (see [Versions](#versions));
-4. the commit, titled `NAME: release X.Y.Z`, then the tag `NAME/vX.Y.Z` on
-   it, pushed;
-5. a GitHub release on that tag, whose notes say what changed for an admin,
-   and what an upgrade needs them to do, if anything.
+A change that breaks something adds, in the same commit, a section to
+[`UPGRADING.md`](UPGRADING.md): the plugin, its new version, what breaks and
+what to do. For the API's contract, CI checks it (`build/contract-check.sh`):
+a change to `openapi.yaml` needs a new version of `xymonapi`, one that
+`oasdiff` finds breaking needs a new major number and a section in
+`UPGRADING.md`, and the run's summary prints the contract's changelog as a
+draft. A behaviour that breaks outside the contract is for you to see.
 
-Nothing else changes these: a version, a `.TH` date and a tag move only
-together, in a release.
+### stable
 
-A client's floor names a released `xymonapi` version, so the API is released
-before a client that needs a newer one. Whatever a released client may rely
-on, the API keeps: a change that the contract's tests catch needs a new major
-version of `xymonapi`, and the clients that want it raise their floor.
+`main` takes every change. When every check of a push to `main` passes, CI
+moves the branch `stable` forward to it, never back: `stable` is the newest
+code everything passed, and what outside users and the laptop setup script
+install. There are no release tags; to publish one, tag `stable`'s commit
+`NAME/vX.Y.Z` with the plugin's version.
 
 ### The contract
 

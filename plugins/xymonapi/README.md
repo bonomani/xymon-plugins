@@ -49,7 +49,7 @@ manual page goes, and `DESTDIR` stages the install for a package.
 | installed | from |
 |---|---|
 | `$XYMONHOME/ext/xymonapi/`: the code, `openapi.yaml`, `requirements.txt` and the launcher `xymonapi.sh` | this directory |
-| `$XYMONHOME/ext/xymonapi/VERSION`, which `/health` gives | the release tag, `xymonapi/vX.Y.Z`, when the checkout is at one, else `version` in [`PLUGIN`](PLUGIN) |
+| `$XYMONHOME/ext/xymonapi/VERSION`, which `/health` gives | `version` in [`PLUGIN`](PLUGIN), or the tag `xymonapi/vX.Y.Z` when the checkout is at one |
 | `$XYMONHOME/etc/tasks.d/xymonapi`, the task, written `DISABLED`, and only when there is none | `xymonapi.tasks.DIST` |
 | `$XYMONHOME/etc/xymonapi-{apache,nginx,lighttpd}.conf`, web server snippets, written once | the files of the same name |
 | `$MANDIR/man8/xymonapi.8` | [`xymonapi.8`](xymonapi.8) |
@@ -166,7 +166,8 @@ through; set it on any server other machines reach. The script:
    to get this machine a token of its own, named by its short hostname, and
    keeps the token in `~/.config/xymon-api/xymon.token`, not the password;
 3. asks `/health` for the version the server runs, and installs the client
-   side of that release -- or the newest code, when the server runs none;
+   side of that release -- or of the branch `stable`, the newest code every
+   test passed, when the server runs none;
 4. makes a virtualenv with the `mcp` module, checks `/health` answers, and
    registers the MCP server with Claude Code and with Codex, each when it is
    installed.

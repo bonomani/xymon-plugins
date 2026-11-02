@@ -28,19 +28,17 @@ A directory under `plugins/` holding:
 
 ## Getting the code
 
-Any of these gives the same tree:
+Take the branch `stable`: the newest code every test passed, which CI moves
+forward. `main` holds every change as it lands.
 
 ```sh
-git clone https://github.com/bonomani/xymon-plugins              # update later with git pull
-curl -L https://github.com/bonomani/xymon-plugins/archive/refs/heads/main.tar.gz | tar xz   # no git
+git clone --branch stable https://github.com/bonomani/xymon-plugins   # update later with git pull
+curl -L https://github.com/bonomani/xymon-plugins/archive/refs/heads/stable.tar.gz | tar xz
 ```
 
-or the [zip](https://github.com/bonomani/xymon-plugins/archive/refs/heads/main.zip)
-of the same. A clone is the better choice: without git, `VERSION` holds the
-plugin's version alone, never a release tag, and a checkout cannot be asked
-how far behind it is. Once releases exist, each is a tag, `NAME/vX.Y.Z`, to
-clone (`git clone --branch NAME/vX.Y.Z ...`) or download as an archive from
-the repository's Releases page.
+or the [zip](https://github.com/bonomani/xymon-plugins/archive/refs/heads/stable.zip).
+A clone is the better choice: it updates with `git pull`, and can be asked
+how far behind it is.
 
 A plugin's README says when it can be had without this download.
 
@@ -62,8 +60,10 @@ removes it. The same targets at the top act on every plugin of one side.
 ## Versions
 
 Each plugin has its own version, in its `PLUGIN` file, written beside its
-installed files as `VERSION`; its releases are tagged `NAME/vX.Y.Z`, none
-yet. How a release is made is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+installed files as `VERSION`. It changes when compatibility does; what a
+change that breaks something asks of you is in
+[`UPGRADING.md`](UPGRADING.md). How versions move is in
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Tests
 

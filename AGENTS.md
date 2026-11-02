@@ -43,8 +43,9 @@ and which you inferred.
 - **Do not change the contract without its test.** A rule added to
   `openapi.yaml` is cited by a test in the same commit;
   `plugins/xymonapi/tests/xymonapi-clauses.sh` fails otherwise.
-- **Do not bump a version** -- a `PLUGIN` file's, a `.TH` line's, or the
-  spec's `info.version` -- unless the change is a release.
+- **Do not bump a version** -- a `PLUGIN` file's or a `.TH` line's --
+  unless the change alters compatibility (see `CONTRIBUTING.md`, Versions);
+  the spec's `info.version` stays until the API is first published.
 
 ## If something here is wrong
 
