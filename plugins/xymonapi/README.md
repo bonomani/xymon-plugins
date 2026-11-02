@@ -174,8 +174,7 @@ through; set it on any server other machines reach. The script:
    one of the API's [users](#users) -- to get this machine a token of its
    own, named by its short hostname, and keeps the token in
    `~/.config/xymon-api/xymon.token`, not the password;
-3. installs the client side from the branch `stable`, the newest code every
-   test passed;
+3. installs the client side from the branch `stable`;
 4. makes a virtualenv with the `mcp` module, checks `/health` answers, and
    registers the MCP server with Claude Code and with Codex, each when it is
    installed.
