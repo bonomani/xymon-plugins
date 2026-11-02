@@ -423,7 +423,16 @@ def search(question: str, kind: str | None = None, k: int = 5, remote: bool = Tr
         if not remote:
             raise
         return _search_remote(question, kind, k)
-    best = np.argsort(-scores)[:k]
+    # One passage per section: a long one is cut into several of one title,
+    # which would otherwise fill the K places with the same section.
+    best, seen = [], set()
+    for i in np.argsort(-scores):
+        key = (passages[keep[i]]["kind"], passages[keep[i]]["title"])
+        if key not in seen:
+            seen.add(key)
+            best.append(i)
+            if len(best) == k:
+                break
     return [dict(passages[keep[i]], score=round(float(scores[i]), 3)) for i in best]
 
 
