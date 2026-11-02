@@ -42,4 +42,16 @@ install-client:
 	cp -f xymonapi-rag.1 "$(CLIENTMAN1)/"
 	chmod 644 "$(CLIENTMAN1)/xymonapi-rag.1"
 
-.PHONY: all install install-client
+# It removes itself alone: the plugins it brought may serve others.
+uninstall:
+	$(need_home)
+	$(call gone,$(EXT))
+	rm -f "$(MAN1)/xymonapi-rag.1" "$(TASKDIR)/xymonapi-rag"
+	@echo "Uninstalled xymonapi-rag. Kept: its index, \$$XYMONAPI_RAG_INDEX, and xymonapi and xymonapi-mcp."
+
+uninstall-client:
+	$(call gone,$(CLIENT))
+	rm -f "$(BIN)/xymonapi-rag" "$(CLIENTMAN1)/xymonapi-rag.1"
+	@echo "Uninstalled xymonapi-rag. Kept: xymonapi-mcp, and any index here, \$$XYMONAPI_RAG_INDEX."
+
+.PHONY: all install install-client uninstall uninstall-client

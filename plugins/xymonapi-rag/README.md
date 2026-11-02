@@ -43,5 +43,8 @@ small one such as `llama3.2` answers in a second but makes things up, where a
 larger one says when the passages do not hold the answer. With an MCP
 client, its tools are the simpler way.
 
+`make uninstall` (on the server) or `make uninstall-client` removes it,
+and keeps the plugins it brought, which may serve others, and its index.
+
 `eval` scores the search against a file of questions;
 [`tests/eval/docs.json`](../../tests/eval/docs.json) is the one CI runs.

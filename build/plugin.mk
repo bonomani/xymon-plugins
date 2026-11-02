@@ -73,6 +73,23 @@ define fresh
 	mkdir -p "$(1)"
 endef
 
+# needed_by DIR PLUGINS -- refuse to uninstall this plugin while one of
+# PLUGINS, which need it beside them, is installed in DIR: removing it would
+# leave that one broken. Uninstall that one first.
+define needed_by
+	@for p in $(2); do \
+		if [ -e "$(1)/$$p" ]; then \
+			echo "$(PLUGIN) is needed by $$p, installed in $(1): uninstall $$p first" >&2; exit 1; \
+		fi; \
+	done
+endef
+
+# gone DIR -- remove this plugin's directory, as fresh empties it.
+define gone
+	@case "$(PLUGIN)" in ""|*/*|.|..) echo "PLUGIN must name one plugin directory" >&2; exit 1 ;; esac
+	rm -rf "$(1)"
+endef
+
 # task DIST NAME -- write DIST as $(TASKDIR)/NAME, with @XYMONHOME@ replaced,
 # unless NAME is there already: the one an admin enabled is not put back to
 # DISABLED by the next install. The replacement is escaped for sed first: a

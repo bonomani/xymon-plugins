@@ -33,4 +33,15 @@ install:
 	@echo "Updating one that runs: it keeps the old code until restarted. Stop it, and xymonlaunch starts the new:"
 	@echo "  pkill -f '$(XYMONHOME)/ext/xymonapi/'"
 
-.PHONY: all install
+# What it removes, and what it keeps: the web server's configuration may
+# include a snippet, and the tokens file is data.
+uninstall:
+	$(need_home)
+	$(call needed_by,$(EXTROOT),xymonapi-rag)
+	$(call gone,$(EXT))
+	rm -f "$(MAN8)/xymonapi.8" "$(TASKDIR)/xymonapi"
+	@echo "Uninstalled xymonapi. Kept, for you to remove: $(ETC)/xymonapi-{apache,nginx,lighttpd}.conf --"
+	@echo "  take its Include out of the web server first -- and the tokens file, \$$XYMONAPI_TOKENS"
+	@echo "  (\$$XYMONVAR/xymonapi/tokens by default)."
+
+.PHONY: all install uninstall

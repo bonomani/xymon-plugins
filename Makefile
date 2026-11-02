@@ -5,6 +5,7 @@
 #
 #   make install XYMONHOME=/usr/lib/xymon/server   on the Xymon server
 #   make install-client [PREFIX=$HOME/.local]      where no Xymon is
+#   make uninstall XYMONHOME=..., make uninstall-client [PREFIX=...]
 #
 # A plugin that needs another installs it first, so the lists name only the
 # ends: xymonapi-rag brings xymonapi-mcp with it on either side, and on the
@@ -22,4 +23,15 @@ install:
 install-client:
 	@for p in $(CLIENT); do $(MAKE) -C "plugins/$$p" install-client || exit 1; done
 
-.PHONY: all install install-client
+# Every plugin of a side, those that need another first; and on a laptop the
+# virtualenv the setup script made beside them.
+uninstall:
+	@test -n "$(XYMONHOME)" || { echo "usage: make uninstall XYMONHOME=<the Xymon server directory>" >&2; exit 1; }
+	@for p in xymonapi-rag xymonapi-mcp xymonapi; do $(MAKE) -C "plugins/$$p" uninstall || exit 1; done
+
+uninstall-client:
+	@for p in xymonapi-rag xymonapi-mcp; do $(MAKE) -C "plugins/$$p" uninstall-client || exit 1; done
+	rm -rf "$(DESTDIR)$(or $(PREFIX),$(HOME)/.local)/libexec/xymon-plugins/venv"
+	-rmdir "$(DESTDIR)$(or $(PREFIX),$(HOME)/.local)/libexec/xymon-plugins" 2>/dev/null
+
+.PHONY: all install install-client uninstall uninstall-client

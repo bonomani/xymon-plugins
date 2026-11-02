@@ -32,14 +32,17 @@ A directory under `plugins/` holding:
 make install XYMONHOME=/usr/lib/xymon/server     # every server-side plugin
 make install-client                              # every client-side plugin, under ~/.local
 make -C plugins/NAME install XYMONHOME=...       # one plugin, and what it needs
+make uninstall XYMONHOME=...                     # every server-side plugin
+make uninstall-client                            # every client-side plugin
 ```
 
 On a Xymon server a plugin lands in `$XYMONHOME/ext/NAME/`; elsewhere in
 `$PREFIX/libexec/xymon-plugins/NAME/`, with its command in `$PREFIX/bin`.
 Each writes its version beside its files, in `VERSION`. Installing again
 updates: each plugin's directory is replaced as a whole, while the settings,
-task files and data that live elsewhere are kept. What to do next is in the
-plugin's README.
+task files and data that live elsewhere are kept. Uninstalling one plugin
+is refused while another installed one needs it; each says what it leaves
+behind for you to remove. What to do next is in the plugin's README.
 
 ## Versions
 

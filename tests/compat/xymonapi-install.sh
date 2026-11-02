@@ -15,7 +15,10 @@
 # again replaces each plugin's directory, so a file no longer shipped is
 # gone, and says to restart the API; the client's virtualenv beside the
 # plugins is kept. A plugin installed alone brings the plugins it needs
-# beside it: xymonapi-rag on the server, the API and its client.
+# beside it: xymonapi-rag on the server, the API and its client. make
+# uninstall refuses a plugin another installed one needs, removes each
+# plugin's files, manual page and task, and keeps the web server snippets
+# and the data, saying so; on a laptop it says what to undo by hand.
 #
 # Installed into a scratch directory. No Python is needed: the API is copied,
 # not run. Uses the test helpers of the Xymon tree in XYMON_SRC.
@@ -146,4 +149,37 @@ if command -v "${XYMONAPI_PYTHON:-python3}" >/dev/null 2>&1; then
 	assert_contains 'search' "$(cat "$work/help.out")" "and names its commands"
 fi
 
-pass "make install puts the three plugins in ext/ with disabled tasks and the Apache snippet, keeps what the admin edited, takes odd directory names, and install-client lays out the client side"
+# Uninstalling: a plugin another installed one needs is refused, naming it;
+# the whole side removes each plugin's files, manual page and task, keeps
+# the web server snippets and the data, and says so. On a laptop it also
+# says what the setup script did besides.
+for p in xymonapi xymonapi-mcp; do
+	rc=0
+	"$make" -C "$ROOT/plugins/$p" uninstall XYMONHOME="$home" MANDIR="$work/man" >"$work/un-$p.log" 2>&1 || rc=$?
+	[ "$rc" -ne 0 ] || fail "uninstalling $p while xymonapi-rag needs it succeeded"
+	assert_contains "needed by xymonapi-rag" "$(cat "$work/un-$p.log")" "and says which plugin needs $p"
+	assert_file_exists "$home/ext/$p/VERSION"
+done
+"$make" -C "$ROOT" uninstall XYMONHOME="$home" MANDIR="$work/man" >"$work/uninstall.log" 2>&1 \
+	|| fail "make uninstall failed: $(tail -n 5 "$work/uninstall.log")"
+for f in ext/xymonapi ext/xymonapi-mcp ext/xymonapi-rag etc/tasks.d/xymonapi etc/tasks.d/xymonapi-rag; do
+	[ -e "$home/$f" ] && fail "make uninstall left $f"
+done
+[ -e "$work/man/man8/xymonapi.8" ] && fail "make uninstall left the manual page xymonapi.8"
+[ -e "$work/man/man1/xymonapi-rag.1" ] && fail "make uninstall left the manual page xymonapi-rag.1"
+assert_file_exists "$home/etc/xymonapi-apache.conf"
+assert_contains "take its Include out of the web server first" "$(cat "$work/uninstall.log")" "uninstall says the snippets are kept, and how to remove them"
+assert_contains "XYMONAPI_TOKENS" "$(cat "$work/uninstall.log")" "and that the tokens file is kept"
+
+rc=0
+"$make" -C "$ROOT/plugins/xymonapi-mcp" uninstall-client PREFIX="$prefix" >"$work/unc-mcp.log" 2>&1 || rc=$?
+[ "$rc" -ne 0 ] || fail "uninstall-client of xymonapi-mcp while xymonapi-rag needs it succeeded"
+"$make" -C "$ROOT" uninstall-client PREFIX="$prefix" >"$work/unclient.log" 2>&1 \
+	|| fail "make uninstall-client failed: $(tail -n 5 "$work/unclient.log")"
+[ -e "$prefix/libexec/xymon-plugins" ] && fail "make uninstall-client left $prefix/libexec/xymon-plugins: $(ls -A "$prefix/libexec/xymon-plugins")"
+for f in bin/xymonapi-mcp bin/xymonapi-rag share/man/man1/xymonapi-mcp.1 share/man/man1/xymonapi-rag.1; do
+	[ -e "$prefix/$f" ] && fail "make uninstall-client left $f"
+done
+assert_contains "claude mcp remove" "$(cat "$work/unclient.log")" "uninstall-client says what the setup script did besides"
+
+pass "make install puts the three plugins in ext/ with disabled tasks and the Apache snippet, keeps what the admin edited, takes odd directory names, replaces each plugin's directory on update; install-client lays out the client side; uninstall removes them, refusing one another needs"

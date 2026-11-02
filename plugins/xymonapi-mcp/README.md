@@ -37,6 +37,11 @@ or, on an older Claude Code,
 environment, defaults in [`.mcp.json`](.mcp.json), and still needs Python
 with `mcp`, and a token: use the setup script or the marketplace, not both.
 
+`make uninstall-client` removes it, and is refused while `xymonapi-rag`,
+which reads the API through it, is installed; it then says what the setup
+script did besides, to undo by hand: the registrations in Claude Code and
+Codex, and this machine's token, to revoke on the server and delete here.
+
 ## Registering it by hand
 
 For Claude Code, once, at user scope so every project has it:
