@@ -28,6 +28,14 @@ fi
 # shellcheck source=/dev/null
 . "$XYMON_SRC/tests/lib/xymond-daemon.sh"
 
+# find_root -- this repository's top. Xymon's own takes the test's directory
+# two levels up, which is right for its tests/<dir>/ but not for a plugin's
+# tests under plugins/<name>/tests/: this file's place, tests/lib/, is the
+# same for every test.
+find_root() {
+	cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd
+}
+
 API_PORT=""
 API_PID=""
 # With XYMONAPI_TLS_CERT in the environment the API speaks HTTPS, and curl

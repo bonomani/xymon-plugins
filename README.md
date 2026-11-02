@@ -54,8 +54,9 @@ helpers they use:
 XYMON_SRC=/path/to/built/xymon tests/run.sh
 ```
 
-Each test, under [`tests/api/`](tests/api), says at its top what it checks
-and what it needs; one that cannot run here skips, and says why. CI runs
+Each plugin's tests are under its `tests/`, and those of how the plugins fit
+together under [`tests/compat/`](tests/compat). Each says at its top what it
+checks and what it needs; one that cannot run here skips, and says why. CI runs
 them all with nothing missing:
 [`.github/workflows/test.yml`](.github/workflows/test.yml).
 

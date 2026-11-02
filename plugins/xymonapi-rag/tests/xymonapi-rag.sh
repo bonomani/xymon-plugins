@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-rag.sh
+# plugins/xymonapi-rag/tests/xymonapi-rag.sh
 #
 # xymonapi-rag indexes Xymon's own manual pages and the history of colour
 # changes with the status text saved at each -- from xymond's files where
@@ -31,7 +31,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-history.sh
+# plugins/xymonapi/tests/xymonapi-history.sh
 #
 # /events returns the colour changes in $XYMONHISTDIR/allevents, the newest
 # first, filtered by host, test and time and cut to a limit; with no allevents
@@ -21,7 +21,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 

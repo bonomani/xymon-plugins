@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-board.sh
+# plugins/xymonapi/tests/xymonapi-board.sh
 #
 # The API reports the board a running xymond holds: a status sent to xymond
 # comes back from /states with its colour turned into a verdict, a red one is
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 

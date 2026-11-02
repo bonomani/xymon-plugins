@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-contract.sh
+# plugins/xymonapi/tests/xymonapi-contract.sh
 #
 # Every failure the API can answer is one of the errors openapi.yaml lists,
 # with the status that goes with it: one request per kind of failure -- a
@@ -19,7 +19,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 

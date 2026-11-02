@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-rag-startup.sh
+# plugins/xymonapi-rag/tests/xymonapi-rag-startup.sh
 #
 # Off the Xymon server -- no XYMONHISTDIR, so the history comes through the
 # API -- xymonapi-rag index can start before the API listens, as when both
@@ -18,7 +18,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 

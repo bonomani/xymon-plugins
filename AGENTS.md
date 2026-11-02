@@ -32,15 +32,17 @@ and which you inferred.
   server and `client.py`, laptop side; `plugins/xymonapi-rag/` the search,
   both sides.
 - `plugins/xymonapi/openapi.yaml` the contract, with its numbered rules.
-- `tests/api/` the suite, `tests/lib/` its helpers, `tests/eval/` the search's
-  questions; `build/plugin.mk` what every plugin's `Makefile` includes.
+- `plugins/<name>/tests/` each plugin's tests, `tests/compat/` those of how
+  the plugins fit together, `tests/lib/` their helpers, `tests/eval/` the
+  search's questions; `build/plugin.mk` what every plugin's `Makefile`
+  includes.
 
 ## Do not
 
 - **Do not `git add -A` or `git add .`.** Stage the paths you changed.
 - **Do not change the contract without its test.** A rule added to
   `openapi.yaml` is cited by a test in the same commit;
-  `tests/api/xymonapi-clauses.sh` fails otherwise.
+  `plugins/xymonapi/tests/xymonapi-clauses.sh` fails otherwise.
 - **Do not bump a version** -- a `PLUGIN` file's, a `.TH` line's, or the
   spec's `info.version` -- unless the change is a release.
 

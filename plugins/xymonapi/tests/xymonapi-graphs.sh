@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-graphs.sh
+# plugins/xymonapi/tests/xymonapi-graphs.sh
 #
 # /graphs fetches the PNG showgraph.cgi draws, through its wrapper
 # showgraph.sh at XYMONSERVERCGIURL. xymonserver.cfg ships that as a path,
@@ -21,7 +21,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 

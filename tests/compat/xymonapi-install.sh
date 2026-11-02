@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-install.sh
+# tests/compat/xymonapi-install.sh
 #
 # make install puts the API in $XYMONHOME/ext/xymonapi/, the
 # search and the MCP client beside it, its manual page in

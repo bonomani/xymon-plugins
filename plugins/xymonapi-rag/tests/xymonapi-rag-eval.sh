@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-rag-eval.sh
+# plugins/xymonapi-rag/tests/xymonapi-rag-eval.sh
 #
 # The search, scored: every manual page of the Xymon tree in XYMON_SRC is
 # indexed, and the ten questions of tests/eval/docs.json are asked, each
@@ -15,7 +15,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 work=$(mktempdir)

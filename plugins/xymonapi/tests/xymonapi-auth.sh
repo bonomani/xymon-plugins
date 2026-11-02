@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-auth.sh
+# plugins/xymonapi/tests/xymonapi-auth.sh
 #
 # With XYMONAPI_PASSWD naming an htpasswd file, the API answers only a user
 # and password that file holds, and 401 with a WWW-Authenticate challenge to
@@ -24,7 +24,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 

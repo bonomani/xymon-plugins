@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-series.sh
+# plugins/xymonapi/tests/xymonapi-series.sh
 #
 # /series reads one dataset of HOST/TEST.rrd under XYMONRRDS and returns its
 # values over the time range asked for, and the API refuses a host, test or
@@ -16,7 +16,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 

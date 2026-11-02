@@ -108,7 +108,7 @@ added there first.
 
 A behaviour the paths alone do not say is a numbered rule in its
 description, `C1.`, `C2.`, and so on. A test that checks a rule cites it in
-its message, as `[C3]`; `tests/api/xymonapi-clauses.sh` fails when a rule is
+its message, as `[C3]`; `plugins/xymonapi/tests/xymonapi-clauses.sh` fails when a rule is
 cited by no test, or a test cites a rule that does not exist. A new rule
 therefore comes with its test, and a rule removed takes its citations with
 it. Numbers are not reused.
@@ -135,7 +135,13 @@ The tests run against a server build of Xymon's current `main`, named by
 XYMON_SRC=/path/to/built/xymon tests/run.sh
 ```
 
-What each test checks, and what they need, is in the README's Tests section.
+A test belongs to the plugin it checks, under `plugins/<name>/tests/`, and
+may start the plugins that one requires, never others: `xymonapi-mcp`'s
+tests start an API, `xymonapi`'s start nothing of the other plugins. A test
+of how the plugins fit together -- installing them all, the setup script
+end to end, the floors agreeing -- goes under `tests/compat/`. Helpers
+shared by several tests are under `tests/lib/`. Each test says at its top
+what it checks and what it needs.
 Unlike Xymon's, a test here may use Python: a helper written in Python goes
 under `tests/lib/`, as `fake-llm.py` and `ctrl-c.py` do. A test that cannot
 run where something it needs is missing skips, with exit 77, and says what.

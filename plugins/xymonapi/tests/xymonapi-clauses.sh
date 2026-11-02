@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-clauses.sh
+# plugins/xymonapi/tests/xymonapi-clauses.sh
 #
 # Every rule openapi.yaml numbers -- the C<n>. lines of its description -- is
 # checked by at least one test, which cites it as [C<n>] in an assertion's
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 spec="$ROOT/plugins/xymonapi/openapi.yaml"
@@ -24,7 +24,7 @@ rules=$(sed -n 's/^ *\(C[0-9][0-9]*\)\. .*/\1/p' "$spec")
 
 # One line per citation: the test's file name, then the rule. This file is
 # left out: it names the form of a citation, not a rule.
-cites=$(grep -o '\[C[0-9][0-9]*\]' "$ROOT"/tests/api/*.sh /dev/null | grep -v '/xymonapi-clauses\.sh:' \
+cites=$(grep -o '\[C[0-9][0-9]*\]' "$ROOT"/plugins/*/tests/*.sh "$ROOT"/tests/compat/*.sh /dev/null | grep -v '/xymonapi-clauses\.sh:' \
 	| sed 's|.*/\([^/]*\)\.sh:\[\(C[0-9]*\)\]|\1 \2|' | sort -u)
 
 missing=""

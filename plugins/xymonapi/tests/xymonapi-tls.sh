@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-tls.sh
+# plugins/xymonapi/tests/xymonapi-tls.sh
 #
 # With a certificate and key -- xymond's own, $XYMONHOME/etc/tls/xymond.pem
 # and .key as xymon-tls(7) places them, or the files XYMONAPI_TLS_CERT and
@@ -18,7 +18,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 

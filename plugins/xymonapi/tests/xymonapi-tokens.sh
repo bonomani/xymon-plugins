@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# tests/api/xymonapi-tokens.sh
+# plugins/xymonapi/tests/xymonapi-tokens.sh
 #
 # A user who gives the password gets a token for one machine, and that token
 # opens the API on its own; the token file holds its SHA-256, never the
@@ -22,7 +22,7 @@
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
-. "$(dirname "$0")/../lib/xymonapi.sh"
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
 
 ROOT=$(find_root)
 
