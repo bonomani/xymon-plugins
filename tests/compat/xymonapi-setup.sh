@@ -11,9 +11,10 @@
 # installs the release /health gives, says how far it is behind the
 # newest, and registers the MCP server with that token file in Claude Code
 # and Codex. A Ctrl-C at its password prompt ends it with echo back on;
-# without make it says so before starting; a virtualenv a run before left
-# half made is made again; a certificate it does not trust is said before
-# anything is asked.
+# without make it says so before starting; it installs no Python module,
+# and removes the virtualenv an earlier version made; it names
+# XYMONAPI_PYTHON in the registrations only when it is set; a certificate it
+# does not trust is said before anything is asked.
 #
 # Skips where the API cannot run (tests/lib/xymonapi.sh). Needs the xymon
 # client of the Xymon tree in XYMON_SRC (for a free port), Apache's htpasswd,
@@ -53,25 +54,23 @@ start_api
 # on no command line. The script is run as a laptop would, up to its health
 # check and registration: git, make, claude and codex are stubs on PATH
 # (git, claude and codex record their arguments; git counts 3 commits
-# between the server's and the newest) and the virtualenv is
-# already there, so nothing is fetched or built.
+# between the server's and the newest), so nothing is fetched or built.
 hard='pa ss"wo\rd*'
 htpasswd -bB "$work/htpasswd" carol "$hard" 2>/dev/null || fail "htpasswd could not add carol"
 curl -s "http://127.0.0.1:$API_PORT/xymon/api/v1/client" > "$work/carol.sh"
 lap=$work/lap
-mkdir -p "$work/stub" "$lap/src/.git" "$lap/prefix/libexec/xymon-plugins/venv/bin" "$lap/cfg/xymon-api"
+mkdir -p "$work/stub" "$lap/src/.git" "$lap/cfg/xymon-api"
 printf '#!/bin/sh\nprintf "%%s\\n" "$@" >> "%s/git.args"\ncase " $* " in *" rev-list "*) echo 3 ;; esac\n' "$lap" > "$work/stub/git"
 printf '#!/bin/sh\nexit 0\n' > "$work/stub/make"
 printf '#!/bin/sh\nprintf "%%s\\n" "$@" >> "%s/claude.args"\n' "$lap" > "$work/stub/claude"
 printf '#!/bin/sh\nprintf "%%s\\n" "$@" >> "%s/codex.args"\n' "$lap" > "$work/stub/codex"
-printf '#!/bin/sh\nexit 0\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
-chmod 755 "$work/stub/git" "$work/stub/make" "$work/stub/claude" "$work/stub/codex" "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
+chmod 755 "$work/stub/git" "$work/stub/make" "$work/stub/claude" "$work/stub/codex"
 # A password file an earlier version of the script kept: it must go.
 printf '%s\n' "$hard" > "$lap/cfg/xymon-api/xymon.password"
 rc=0
 # The user and password on stdin, as a person typing them gives them to read.
 out=$(cd "$lap" && printf 'carol\n%s\n' "$hard" | HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src" PATH="$work/stub:$PATH" \
-	sh "$work/carol.sh" "$lap/prefix" 2>&1) || rc=$?
+	XYMONAPI_PYTHON= sh "$work/carol.sh" "$lap/prefix" 2>&1) || rc=$?
 [ "$rc" -eq 0 ] || fail "the setup script failed with $rc: $out"
 assert_not_contains 'refused the password' "$out" "the API took carol's password from the script's curl"
 assert_contains "$(printf -- '--detach\n%s' "$version")" "$(cat "$lap/git.args")" "the script installs the release /health gave"
@@ -124,80 +123,22 @@ out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src
 [ "$rc" -ne 0 ] || fail "the setup script went on without make: $out"
 assert_contains "make is needed" "$out" "the setup script says make is missing"
 
-# A virtualenv a run before left half made -- its python3 there, without
-# mcp -- is made again, not taken as it is: the Python here makes a venv
-# whose pip records that it ran.
-printf '#!/bin/sh\nexit 1\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
-cat > "$work/stub/python-venv" <<STUB
-#!/bin/sh
-if [ "\$1" = -m ]; then
-	mkdir -p "\$3/bin"
-	printf '#!/bin/sh\\nexit 0\\n' > "\$3/bin/python3"
-	printf '#!/bin/sh\\necho pip >> "$lap/pip.log"\\n' > "\$3/bin/pip"
-	chmod 755 "\$3/bin/python3" "\$3/bin/pip"
-fi
-exit 0
-STUB
-chmod 755 "$work/stub/python-venv"
+# The registrations name XYMONAPI_PYTHON only when it is set: the first
+# run above had none, this one names a Python; and the virtualenv an
+# earlier version made, with mcp in it, is removed and said so.
+assert_not_contains 'XYMONAPI_PYTHON' "$(cat "$lap/claude.args" "$lap/codex.args")" "with no XYMONAPI_PYTHON, the registrations name none"
+mkdir -p "$lap/prefix/libexec/xymon-plugins/venv/bin"
+: > "$lap/claude.args"; : > "$lap/codex.args"
+py=$(command -v "${XYMONAPI_PYTHON:-python3}")
 rc=0
 out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src" PATH="$work/stub:$PATH" \
-	XYMONAPI_PYTHON="$work/stub/python-venv" sh "$work/carol.sh" "$lap/prefix" 2>&1 < /dev/null) || rc=$?
-[ "$rc" -eq 0 ] || fail "the setup script failed with $rc over a half-made venv: $out"
-assert_file_exists "$lap/pip.log"
-assert_contains "pip" "$(cat "$lap/pip.log")" "a half-made venv is made again, and mcp installed in it"
-
-# A Python whose venv has no ensurepip, as Debian's without python3-venv:
-# the venv is made without pip, and pip comes from get-pip.py, which curl --
-# here a stand-in for that one URL alone -- fetches. A Python that cannot
-# make one even so stops the script, saying what to install.
-real_curl=$(command -v curl)
-mkdir -p "$work/getpip"
-cat > "$work/getpip/curl" <<STUB
-#!/bin/sh
-case " \$* " in
-*bootstrap.pypa.io/get-pip.py*)
-	while [ "\$1" != -o ]; do shift; done
-	echo '# get-pip' > "\$2"; echo fetched >> "$lap/getpip.log"; exit 0 ;;
-esac
-exec "$real_curl" "\$@"
-STUB
-cat > "$work/stub/python-nopip" <<STUB
-#!/bin/sh
-[ "\$1 \$2" = "-m venv" ] || exit 0
-[ "\$3" = --without-pip ] || { echo "ensurepip is not available"; mkdir -p "\$3/bin"; exit 1; }
-mkdir -p "\$4/bin"
-cat > "\$4/bin/python3" <<'PY'
-#!/bin/sh
-case \$1 in
-*/get-pip.py) d=\$(dirname "\$1"); printf '#!/bin/sh\\necho pip >> "$lap/pip.log"\\n' > "\$d/bin/pip"; chmod 755 "\$d/bin/pip" ;;
-esac
-exit 0
-PY
-chmod 755 "\$4/bin/python3"
-STUB
-printf '#!/bin/sh\n[ "$1 $2" = "-m venv" ] && exit 1\nexit 0\n' > "$work/stub/python-novenv"
-chmod 755 "$work/getpip/curl" "$work/stub/python-nopip" "$work/stub/python-novenv"
-printf '#!/bin/sh\nexit 1\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
-: > "$lap/pip.log"
-rc=0
-out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src" PATH="$work/getpip:$work/stub:$PATH" \
-	XYMONAPI_PYTHON="$work/stub/python-nopip" sh "$work/carol.sh" "$lap/prefix" 2>&1 < /dev/null) || rc=$?
-[ "$rc" -eq 0 ] || fail "the setup script failed with $rc where venv has no ensurepip: $out"
-assert_contains "fetched" "$(cat "$lap/getpip.log" 2>/dev/null)" "without ensurepip, the script fetches get-pip.py"
-assert_contains "pip" "$(cat "$lap/pip.log")" "and pip, from it, installs mcp"
-assert_contains "making it without, and fetching pip" "$out" "and says so"
-assert_not_contains "ensurepip is not available" "$out" "in its own words, not Python's, which venv prints on stdout and which tells to recreate the venv by hand"
-[ -e "$lap/prefix/libexec/xymon-plugins/venv/get-pip.py" ] && fail "get-pip.py was left in the venv"
-printf '#!/bin/sh\nexit 1\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
-rc=0
-out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src" PATH="$work/getpip:$work/stub:$PATH" \
-	XYMONAPI_PYTHON="$work/stub/python-novenv" sh "$work/carol.sh" "$lap/prefix" 2>&1 < /dev/null) || rc=$?
-[ "$rc" -ne 0 ] || fail "the setup script went on with no virtualenv: $out"
-assert_contains "install python3-venv" "$out" "a Python that makes no virtualenv: the script says what to install"
-assert_contains "XYMONAPI_PYTHON" "$out" "or which setting names another Python"
-mkdir -p "$lap/prefix/libexec/xymon-plugins/venv/bin"
-printf '#!/bin/sh\nexit 0\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
-chmod 755 "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
+	XYMONAPI_PYTHON="$py" sh "$work/carol.sh" "$lap/prefix" 2>&1 < /dev/null) || rc=$?
+[ "$rc" -eq 0 ] || fail "the setup script failed with $rc with XYMONAPI_PYTHON set: $out"
+assert_contains "XYMONAPI_PYTHON=$py" "$(cat "$lap/claude.args")" "with XYMONAPI_PYTHON set, Claude Code is given it"
+assert_contains "XYMONAPI_PYTHON=$py" "$(cat "$lap/codex.args")" "and Codex"
+[ -e "$lap/prefix/libexec/xymon-plugins/venv" ] && fail "the old virtualenv was left"
+assert_contains "removed $lap/prefix/libexec/xymon-plugins/venv" "$out" "the old virtualenv is removed, and said so"
+assert_not_contains "pip" "$out" "and no Python module is installed"
 # An API that runs no release: the script takes the stable branch, the
 # newest code every test passed. The token kept above lets it in unasked.
 printf '0.1.0\n' > "$work/inst/ext/xymonapi/VERSION"
@@ -224,12 +165,10 @@ chmod 600 "$work/home/etc/tls/xymond.key"
 # request is to /health, and only a 401 there makes it ask for a user and
 # password, so a certificate it does not trust is said first; this API asks
 # for no password, and the test pins the message. git and make are stubs,
-# and the virtualenv is there, so nothing is fetched or built.
+# so nothing is fetched or built.
 XYMONHOME="$work/home" XYMONAPI_PASSWD="" XYMONAPI_TLS_CERT="$work/home/etc/tls/xymond.pem" start_api
 lap=$work/lap-tls
-mkdir -p "$lap/src/.git" "$lap/prefix/libexec/xymon-plugins/venv/bin" "$lap/cfg"
-printf '#!/bin/sh\nexit 0\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
-chmod 755 "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
+mkdir -p "$lap/src/.git" "$lap/cfg"
 XYMONAPI_TLS_CERT="$work/home/etc/tls/xymond.pem" api_get /client > "$work/setup.sh"
 rc=0
 out=$(cd "$lap" && printf 'secret\n' | HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src" PATH="$work/stub:$PATH" \

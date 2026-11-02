@@ -144,11 +144,10 @@ come out as `[hidden]`, in every text and in the search index.
 
 ## On a laptop
 
-A laptop needs `git`, `make`, `curl`, and Python 3.10 or later; on a Mac,
-`git` and `make` come with the Xcode command-line tools. Where Python's
-`venv` cannot install pip -- Debian and Ubuntu without `python3-venv` -- the
-script fetches pip from `bootstrap.pypa.io`. Ask the API for
-its setup script, read it, run it:
+A laptop needs `git`, `make`, `curl`, and Python 3.10 or later, and no
+Python module beyond its standard library; on a Mac, `git` and `make` come
+with the Xcode command-line tools. Ask the API for its setup script, read
+it, run it:
 
 ```sh
 # Only when the certificate is the server's own, not one the laptop trusts:
@@ -180,9 +179,8 @@ through; set it on any server other machines reach. The script:
    own, named by its short hostname, and keeps the token in
    `~/.config/xymon-api/xymon.token`, not the password;
 3. installs the client side from the branch `stable`;
-4. makes a virtualenv with the `mcp` module, checks `/health` answers, and
-   registers the MCP server with Claude Code and with Codex, each when it is
-   installed.
+4. checks `/health` answers, and registers the MCP server with Claude Code
+   and with Codex, each when it is installed.
 
 Running it again keeps a token that still works and replaces one that does
 not. `XYMONAPI_USER`, when set, is the user, not asked. `?name=xymon-lab`
