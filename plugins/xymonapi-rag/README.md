@@ -50,8 +50,14 @@ On another machine, `make install-client` here -- from a clone, or from the
 code the server's `/client` gives, as [`xymonapi`'s
 README](../xymonapi/README.md#setting-up-another-machine) shows -- installs it
 under `$PREFIX/libexec/xymon-plugins/` with the command `xymonapi-rag` in
-`$PREFIX/bin` (`~/.local` by default). `xymonapi-connect URL`, installed
-with it, gets that machine its token and prints the settings to export.
+`$PREFIX/bin` (`~/.local` by default). `xymonapi-connect`, installed with
+it, gets that machine its token and prints the settings `xymonapi-rag`
+reads; to put them in the shell's environment:
+
+```sh
+set -a; eval "$(xymonapi-connect https://xymon.example.ch)"; set +a
+```
+
 `search` uses the server's index when there is none here. `ask` hands the
 passages to a language model speaking the OpenAI-compatible API -- a local
 Ollama by default, LM Studio with two settings. Pick the model with care: a

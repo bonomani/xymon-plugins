@@ -11,9 +11,9 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 ## Needs
 
 - **A running [`xymonapi`](../xymonapi/README.md)**, on the Xymon server,
-  reached over the network: install and enable it there first. This plugin
-  does not install it, since it usually runs on another machine; it
-  installs `xymonapi`'s client alone beside it.
+  reached over the network: install and enable it there first. On another
+  machine, this plugin does not install it; it installs `xymonapi`'s client
+  alone beside it.
 - Python 3.10 or later, and nothing else: it speaks the protocol with the
   standard library.
 
