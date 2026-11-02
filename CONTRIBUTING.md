@@ -94,6 +94,11 @@ A release of one plugin is one commit and one tag:
 Nothing else changes these: a version, a `.TH` date and a tag move only
 together, in a release.
 
+A client's floor names a released `xymonapi` version, so the API is released
+before a client that needs a newer one. Whatever a released client may rely
+on, the API keeps: a change that the contract's tests catch needs a new major
+version of `xymonapi`, and the clients that want it raise their floor.
+
 ### The contract
 
 `plugins/xymonapi/openapi.yaml` is the API's contract. A change to what a
