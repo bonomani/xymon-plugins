@@ -192,7 +192,7 @@ VENV=$PREFIX/libexec/xymon-plugins/venv
 if ! "$VENV/bin/python3" -c 'import mcp' >/dev/null 2>&1; then
 	say "the Python module mcp, in $VENV"
 	rm -rf "$VENV"
-	if ! "$PYTHON" -m venv "$VENV" 2>/dev/null; then
+	if ! "$PYTHON" -m venv "$VENV" >/dev/null 2>&1; then
 		echo "this Python's venv cannot install pip (no python3-venv?): making it without, and fetching pip"
 		rm -rf "$VENV"
 		{{ "$PYTHON" -m venv --without-pip "$VENV" &&

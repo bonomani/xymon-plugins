@@ -164,7 +164,7 @@ STUB
 cat > "$work/stub/python-nopip" <<STUB
 #!/bin/sh
 [ "\$1 \$2" = "-m venv" ] || exit 0
-[ "\$3" = --without-pip ] || { echo "ensurepip is not available" >&2; mkdir -p "\$3/bin"; exit 1; }
+[ "\$3" = --without-pip ] || { echo "ensurepip is not available"; mkdir -p "\$3/bin"; exit 1; }
 mkdir -p "\$4/bin"
 cat > "\$4/bin/python3" <<'PY'
 #!/bin/sh
@@ -186,6 +186,7 @@ out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src
 assert_contains "fetched" "$(cat "$lap/getpip.log" 2>/dev/null)" "without ensurepip, the script fetches get-pip.py"
 assert_contains "pip" "$(cat "$lap/pip.log")" "and pip, from it, installs mcp"
 assert_contains "making it without, and fetching pip" "$out" "and says so"
+assert_not_contains "ensurepip is not available" "$out" "in its own words, not Python's, which venv prints on stdout and which tells to recreate the venv by hand"
 [ -e "$lap/prefix/libexec/xymon-plugins/venv/get-pip.py" ] && fail "get-pip.py was left in the venv"
 printf '#!/bin/sh\nexit 1\n' > "$lap/prefix/libexec/xymon-plugins/venv/bin/python3"
 rc=0
