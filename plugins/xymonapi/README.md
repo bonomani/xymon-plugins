@@ -3,7 +3,7 @@
 A read-only HTTP and JSON interface to a Xymon server: the status board, its
 alarms and hosts, the values in its RRD files, the graphs drawn from them,
 and the history of colour changes with the status text saved at each. It
-changes nothing in Xymon; it only reads. It runs on the server as one of
+changes nothing in Xymon. It runs on the server as one of
 Xymon's `xymonlaunch` tasks, with Xymon's own settings.
 
 Its operations, under `/xymon/api/v1`, all GET but for `/tokens`:
@@ -30,8 +30,7 @@ numbered rules every implementation keeps.
   `xymonserver.d/`, which no release reads yet; on 4.3.30 a file there is
   ignored, and with it the password the API should ask for.
 - Python 3.10 or later, with the modules in
-  [`requirements.txt`](requirements.txt), importable by the user Xymon runs
-  as.
+  [`requirements.txt`](requirements.txt).
 - `rrdtool`, for `/series`; a web server running Xymon's CGI programs at
   `XYMONSERVERCGIURL`, for `/graphs`; Apache's `htpasswd`, when a password
   file is used.
@@ -60,10 +59,11 @@ those really are -- `/etc/xymon` on many installations -- so the files land
 there. With `DESTDIR`, the staged directories are plain ones: a package built
 from that stage should check how its tool installs a directory over a link.
 
-The Python modules are not installed. Install them system-wide, from your
-distribution's packages for instance, or in a virtualenv the Xymon user can
-read, and name its `python3` in `XYMONAPI_PYTHON`: `pip install --user` run
-as root puts them where that user does not look.
+The Python modules are not installed, and the user Xymon runs as must be
+able to import them: install them system-wide, from your distribution's
+packages for instance, or in a virtualenv that user can read, named in
+`XYMONAPI_PYTHON`. `pip install --user` run as root puts them where that user
+does not look.
 
 Then remove `DISABLED` from the task, and check, with the default address:
 
@@ -74,9 +74,8 @@ curl http://127.0.0.1:1986/xymon/api/v1/health
 A `401` means it runs and asks for a user: add `-u` with one of Xymon's
 users.
 
-Where it listens and how to require a password are in `xymonapi.8`, as is
-every setting. To see whether the server runs the newest code, in the
-checkout `make install` ran from:
+To see whether the server runs the newest code, in the checkout
+`make install` ran from:
 
 ```sh
 git fetch -q && git log --oneline HEAD..origin/main
@@ -115,29 +114,22 @@ Mac, `git` and `make` come with the Xcode command-line tools. Ask the API for
 its setup script, read it, run it:
 
 ```sh
-curl https://xymon.example.ch/xymon/api/v1/client > xymon-setup.sh
+# Only when the certificate is the server's own, not one the laptop trusts:
+# copy it where the script looks, and name it to curl. Otherwise leave out
+# these two lines and the --cacert options below.
+mkdir -p ~/.config/xymon-api
+scp xymon.example.ch:/etc/xymon/tls/xymond.pem ~/.config/xymon-api/xymon-ca.pem
+
+# Optional: does the API answer here? Its "search" says if there is an index,
+# how big and how old.
+curl --cacert ~/.config/xymon-api/xymon-ca.pem -u me https://xymon.example.ch/xymon/api/v1/health
+
+curl --cacert ~/.config/xymon-api/xymon-ca.pem https://xymon.example.ch/xymon/api/v1/client > xymon-setup.sh
 sh xymon-setup.sh
 ```
 
-Where the certificate is the server's own and not one the laptop trusts, copy
-it first to where the script looks for it, and name it to curl. Never `-k`: a
-script fetched without checking the certificate could be anyone's.
-
-```sh
-mkdir -p ~/.config/xymon-api
-scp xymon.example.ch:/etc/xymon/tls/xymond.pem ~/.config/xymon-api/xymon-ca.pem
-curl --cacert ~/.config/xymon-api/xymon-ca.pem \
-  https://xymon.example.ch/xymon/api/v1/client > xymon-setup.sh
-```
-
-Before running it, you can check the API answers from the laptop, with your
-user -- and `--cacert` as above when the certificate is the server's own.
-Its `search` field also says whether the server has a search index, how big
-and how old:
-
-```sh
-curl -u me https://xymon.example.ch/xymon/api/v1/health
-```
+Never `-k`: a script fetched without checking the certificate could be
+anyone's.
 
 `/client` asks for no password: the script holds the API's address and
 nothing secret, not even the version the server runs. The address is

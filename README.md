@@ -12,9 +12,6 @@ before the split, and carries its whole history.
 | [`xymonapi-mcp`](plugins/xymonapi-mcp) | your machine | gives an AI client read-only tools over the API |
 | [`xymonapi-rag`](plugins/xymonapi-rag) | both | finds the manual-page and history passages a question is about |
 
-Each plugin has its own README, for installing and using it, and its own
-manual page, for every behaviour and setting.
-
 ## Quick start
 
 On the Xymon server, as root:
@@ -56,15 +53,12 @@ see [`plugins/xymonapi`](plugins/xymonapi/README.md) and
 
 ## Security, in short
 
-- The API only reads; it changes nothing in Xymon.
-- It asks for the users of Xymon's own password file. A laptop keeps a
-  token of its own, never the password, and a removed user's tokens stop
-  working.
-- From another machine, use HTTPS, or an SSH tunnel.
-- Status texts can hold secrets: `XYMONAPI_HIDE` blanks what you name, in
-  every answer and in the search index.
-- An AI client online sends what the tools return to its provider; a local
-  model keeps it on your network.
+The API only reads, and changes nothing in Xymon. It asks for the users of
+Xymon's own password file; a laptop keeps a token of its own, never the
+password, and a removed user's tokens stop working. From another machine, use
+HTTPS or an SSH tunnel. `XYMONAPI_HIDE` blanks the secrets status texts may
+hold, in every answer and in the search index. An online AI client sends what
+the tools return to its provider; a local model keeps it on your network.
 
 ## Versions
 
