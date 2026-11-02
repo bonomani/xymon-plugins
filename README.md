@@ -40,8 +40,6 @@ or the [zip](https://github.com/bonomani/xymon-plugins/archive/refs/heads/stable
 A clone is the better choice: it updates with `git pull`, and can be asked
 how far behind it is.
 
-A plugin's README says when it can be had without this download.
-
 ## Installing
 
 The download holds every plugin; install only those you want, each from its

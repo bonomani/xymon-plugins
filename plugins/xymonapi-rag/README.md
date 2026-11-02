@@ -1,10 +1,11 @@
 # xymonapi-rag
 
-It finds the passages of Xymon's manual pages and history that a question
-is about, by what they mean rather than the words they share. The index lives on the Xymon server, where the pages and the history
-are; the [API](../xymonapi/README.md) serves it at `/search`, and the
-[MCP server](../xymonapi-mcp/README.md)'s `search_docs` and `search_history`
-ask it there. Every command and setting is in
+It finds the passages of Xymon's manual pages and history that a question is
+about, by what they mean rather than the words they share. The index lives
+on the Xymon server, where the pages and the history are; the
+[API](../xymonapi/README.md) serves it at `/search`, and the [MCP
+server](../xymonapi-mcp/README.md)'s `search_docs` and `search_history` ask
+it there. Every command and setting is in
 [`xymonapi-rag.1`](xymonapi-rag.1).
 
 ## Needs

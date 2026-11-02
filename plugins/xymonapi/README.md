@@ -49,7 +49,7 @@ manual page goes, and `DESTDIR` stages the install for a package.
 | installed | from |
 |---|---|
 | `$XYMONHOME/ext/xymonapi/`: the code, `openapi.yaml`, `requirements.txt` and the launcher `xymonapi.sh` | this directory |
-| `$XYMONHOME/ext/xymonapi/VERSION`, which `/health` gives | `version` in [`PLUGIN`](PLUGIN), or the tag `xymonapi/vX.Y.Z` when the checkout is at one |
+| `$XYMONHOME/ext/xymonapi/VERSION`, which `/health` gives | `version` in [`PLUGIN`](PLUGIN) |
 | `$XYMONHOME/etc/tasks.d/xymonapi`, the task, written `DISABLED`, and only when there is none | `xymonapi.tasks.DIST` |
 | `$XYMONHOME/etc/xymonapi-{apache,nginx,lighttpd}.conf`, web server snippets, written once | the files of the same name |
 | `$MANDIR/man8/xymonapi.8` | [`xymonapi.8`](xymonapi.8) |
@@ -71,15 +71,23 @@ Then remove `DISABLED` from the task, and check, with the default address:
 curl http://127.0.0.1:1986/xymon/api/v1/health
 ```
 
-A `401` means it runs and asks for a user: add `-u` with one of Xymon's
-users.
+A `401` means it runs and asks for a user: add `-u` with one of its users
+(see [Users](#users)).
 
-To see whether the server runs the newest code, in the checkout
-`make install` ran from:
+## Users
+
+The API's users are those of Xymon's own web password file,
+`$XYMONHOME/etc/xymonpasswd`: the same names and passwords as the Xymon web
+pages. Add one with Xymon's `useradm.cgi`, or by hand:
 
 ```sh
-git fetch -q && git log --oneline HEAD..origin/main
+htpasswd -B "$XYMONHOME/etc/xymonpasswd" alice
 ```
+
+The API reads the file at each request: nothing to restart. Without that
+file, the API asks for no password at all -- fine while it listens on
+127.0.0.1 alone, not once other machines reach it. `XYMONAPI_PASSWD` names
+another file, as `xymonapi.8` says.
 
 ## Updating
 
@@ -91,7 +99,9 @@ pkill -f "$XYMONHOME/ext/xymonapi/"          # the running API keeps the old cod
 The install replaces the plugin's directory and keeps the task file you
 enabled, the web server snippets and your settings; xymonlaunch starts the
 new code once the old process is gone. Then run the setup script again on
-each laptop, to bring its client to the same version.
+each laptop, to bring its client to the same version. What an update would
+bring, before pulling: `git fetch -q && git log --oneline
+HEAD..origin/stable`.
 
 ## Uninstalling
 
@@ -107,10 +117,8 @@ before deleting them -- and the tokens file, `$XYMONAPI_TOKENS`.
 
 ## Reaching it from another machine
 
-Xymon is what you look at when the rest is down, so the API depends on
-nothing central: its password file and its certificate are Xymon's own,
-files on the server. It listens on 127.0.0.1 unless told otherwise. From
-another machine, use HTTPS, one of:
+It listens on 127.0.0.1 unless told otherwise. From another machine, use
+HTTPS, one of:
 
 - **Its own HTTPS.** Where xymond has a certificate for TLS (`xymon-tls(7)`,
   from Xymon pull requests #617–#623, not yet merged), the API finds it in
@@ -162,12 +170,12 @@ through; set it on any server other machines reach. The script:
 
 1. checks it reaches the API and trusts its certificate, and stops there,
    before asking anything, when it does not;
-2. when the API asks for a password, asks for your user and password once,
-   to get this machine a token of its own, named by its short hostname, and
-   keeps the token in `~/.config/xymon-api/xymon.token`, not the password;
-3. asks `/health` for the version the server runs, and installs the client
-   side of that release -- or of the branch `stable`, the newest code every
-   test passed, when the server runs none;
+2. when the API asks for a password, asks for your user and password once --
+   one of the API's [users](#users) -- to get this machine a token of its
+   own, named by its short hostname, and keeps the token in
+   `~/.config/xymon-api/xymon.token`, not the password;
+3. installs the client side from the branch `stable`, the newest code every
+   test passed;
 4. makes a virtualenv with the `mcp` module, checks `/health` answers, and
    registers the MCP server with Claude Code and with Codex, each when it is
    installed.

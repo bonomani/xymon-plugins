@@ -5,8 +5,7 @@ An MCP server: it gives an AI client that speaks the Model Context Protocol
 over the [Xymon API](../xymonapi/README.md): `health`, `states`, `alarms`,
 `entities`, `status`, `series`, and two searches, `search_docs` and
 `search_history`, which ask the API's `/search`
-([`xymonapi-rag`](../xymonapi-rag/README.md)). It runs where the client runs,
-and needs Python 3.10 with the module in [`requirements.txt`](requirements.txt).
+([`xymonapi-rag`](../xymonapi-rag/README.md)). It runs where the client runs.
 Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
 ## Needs
@@ -14,8 +13,8 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 - **A running [`xymonapi`](../xymonapi/README.md)**, on the Xymon server,
   reached over the network: install and enable it there first. This plugin
   does not install it, since it usually runs on another machine.
-- Python 3.10 with the module `mcp`; the setup script makes a virtualenv
-  with it.
+- Python 3.10 with the module in [`requirements.txt`](requirements.txt),
+  `mcp`; the setup script makes a virtualenv with it.
 
 Its install brings no other plugin. On the server, `xymonapi-rag` installs
 it beside itself, for the `client.py` it reads the API with.
@@ -92,9 +91,10 @@ opencode reads its own form, in `~/.config/opencode/opencode.json` or a
 project's `opencode.json`: under `mcp`, with `"type": "local"`, the command
 as a list, and `environment` for `env`.
 
-- The token file holds what `POST /tokens` with your password answers, alone,
-  mode 600; it is the only credential sent. Leave it out when the API asks
-  for no password, and `XYMONAPI_PYTHON` when the system `python3` has `mcp`.
+- The token file holds what `POST /tokens` answers to one of the API's
+  [users](../xymonapi/README.md#users), alone, mode 600; it is the only
+  credential sent. Leave it out when the API asks for no password, and
+  `XYMONAPI_PYTHON` when the system `python3` has `mcp`.
 - Add `XYMONAPI_CA` when the server's certificate is its own.
 - For two Xymon servers, register twice, as `xymon-prod` and `xymon-lab`,
   each with its own URL and token file.
