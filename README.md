@@ -213,12 +213,12 @@ The script:
 6. registers the MCP server with Claude Code and with Codex, each when it is
    installed.
 
-The API's `/tokens` lists your machines and revokes one, and removing a
-user from the password file revokes all of theirs (`xymonapi.8`, TOKENS).
-Running the script again keeps a token that still works and replaces one
-that does not. `XYMONAPI_USER`, when set, is the user, not
-asked. `?name=xymon-lab` gives a second server its own name and token file;
-`?format=env` gives the two settings alone.
+The API's `/tokens` lists your machines and revokes one, and removing a user
+from the password file revokes all of theirs (`xymonapi.8`, TOKENS). Running
+the script again keeps a token that still works and replaces one that does
+not. `XYMONAPI_USER`, when set, is the user, not asked. `?name=xymon-lab`
+gives a second server its own name and token file; `?format=env` gives the
+two settings alone.
 
 By hand, `make install-client` from a clone puts `xymonapi-mcp` and
 `xymonapi-rag` in `$PREFIX/bin` (`~/.local` by default) and the code under
@@ -229,10 +229,10 @@ must be reachable from the laptop first: see
 
 ## Settings
 
-All of them are environment variables. The API's go in a file under
-`xymonserver.d/`; the client's and the search's go there too for the index
-task, and in the MCP client's registration. Every one is described in the
-manual page named.
+All of them are environment variables. The API's and the search's go in a
+file under `xymonserver.d/`; the client's go in the MCP client's
+registration, or the environment of `xymonapi-rag` off the server. Every one
+is described in the manual page named.
 
 | setting | meaning | default |
 |---|---|---|
