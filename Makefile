@@ -7,9 +7,10 @@
 #   make install-client [PREFIX=$HOME/.local]      where no Xymon is
 #
 # A plugin that needs another installs it first, so the lists name only the
-# ends: xymonapi-rag brings xymonapi-mcp with it on either side.
+# ends: xymonapi-rag brings xymonapi-mcp with it on either side, and on the
+# server xymonapi too.
 
-SERVER = xymonapi xymonapi-rag
+SERVER = xymonapi-rag
 CLIENT = xymonapi-rag
 
 all:

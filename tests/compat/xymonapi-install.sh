@@ -12,7 +12,8 @@
 # XYMONHOME it installs nothing and says so. The Apache snippet goes to
 # $XYMONHOME/etc, kept too once there. make install-client puts the MCP
 # server and the search commands under PREFIX, with two commands in bin
-# that run them from there.
+# that run them from there. A plugin installed alone brings the plugins it
+# needs beside it: xymonapi-rag on the server, the API and its client.
 #
 # Installed into a scratch directory. No Python is needed: the API is copied,
 # not run. Uses the test helpers of the Xymon tree in XYMON_SRC.
@@ -90,6 +91,16 @@ assert_contains 'Installed. Enable the API' "$(cat "$work/install.log")" "make i
 echo "# mine" > "$home/etc/xymonapi-apache.conf"
 "$make" -C "$ROOT" install XYMONHOME="$home" MANDIR="$work/man" >/dev/null 2>&1 || fail "a third install failed"
 assert_equal "# mine" "$(cat "$home/etc/xymonapi-apache.conf")" "an edited Apache snippet is kept"
+
+# One plugin alone brings what it needs beside it: on the server,
+# xymonapi-rag needs the API that serves its index and the client it reads
+# the API with.
+alone=$work/alone
+"$make" -C "$ROOT/plugins/xymonapi-rag" install XYMONHOME="$alone" MANDIR="$work/man-alone" >"$work/alone.log" 2>&1 \
+	|| fail "make install of xymonapi-rag alone failed: $(tail -n 5 "$work/alone.log")"
+for p in xymonapi xymonapi-mcp xymonapi-rag; do
+	assert_file_exists "$alone/ext/$p/VERSION"
+done
 
 # The client side: no Xymon here, PREFIX with a space in its name.
 prefix="$work/client prefix"

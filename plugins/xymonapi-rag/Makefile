@@ -17,6 +17,7 @@ all:
 
 install:
 	$(need_home)
+	$(MAKE) -C ../xymonapi install
 	$(MAKE) -C ../xymonapi-mcp install
 	mkdir -p "$(EXT)"
 	cp -f $(FILES) "$(EXT)/"
