@@ -90,3 +90,28 @@ jobs:
         run: |
           git fetch -q origin stable || true
           OASDIFF="$RUNNER_TEMP/oasdiff" build/contract-check.sh origin/stable | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # stable: the newest commit of main every check passed, which outside users
+  # install. Moved forward only, never back nor forced; a run that finishes
+  # after a newer one leaves it where it is.
+  stable:
+    needs: [test, contract]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Move stable to this commit
+        run: |
+          if git fetch -q origin stable; then
+            if git merge-base --is-ancestor "$GITHUB_SHA" origin/stable; then
+              echo "stable already holds $GITHUB_SHA"; exit 0
+            fi
+            git merge-base --is-ancestor origin/stable "$GITHUB_SHA" \
+              || { echo "stable is not behind $GITHUB_SHA: left as it is" >&2; exit 1; }
+          fi
+          git push origin "$GITHUB_SHA:refs/heads/stable"

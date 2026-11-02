@@ -145,6 +145,18 @@ out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src
 [ "$rc" -eq 0 ] || fail "the setup script failed with $rc over a half-made venv: $out"
 assert_file_exists "$lap/pip.log"
 assert_contains "pip" "$(cat "$lap/pip.log")" "a half-made venv is made again, and mcp installed in it"
+# An API that runs no release: the script takes the stable branch, the
+# newest code every test passed. The token kept above lets it in unasked.
+printf '0.1.0\n' > "$work/inst/ext/xymonapi/VERSION"
+printf '#!/bin/sh\nprintf "%%s\\n" "$@" >> "%s/git.args"\ncase " $* " in *" refs/tags/"*) exit 1 ;; esac\n' "$lap" > "$work/stub/git"
+: > "$lap/git.args"
+rc=0
+out=$(cd "$lap" && HOME="$lap" XDG_CONFIG_HOME="$lap/cfg" XYMONAPI_SRC="$lap/src" PATH="$work/stub:$PATH" \
+	sh "$work/carol.sh" "$lap/prefix" 2>&1 < /dev/null) || rc=$?
+[ "$rc" -eq 0 ] || fail "the setup script failed with $rc against an API of no release: $out"
+assert_contains "$(printf -- '--detach\norigin/stable')" "$(cat "$lap/git.args")" "an API of no release: the script installs the stable branch"
+assert_contains "taking its stable branch" "$out" "and says so"
+printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
 stop_process "$API_PID"; API_PID=""
 
 # A self-signed certificate for 127.0.0.1, as xymon-tls(7) would make one.

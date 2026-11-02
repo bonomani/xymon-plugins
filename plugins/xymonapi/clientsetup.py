@@ -154,8 +154,9 @@ else
 	git clone -q {repo_q} "$SRC"
 fi
 # The release the API was installed from, so both sides run the same code;
-# from no release, or one the repository has no tag for, the newest.
-# Detached, so a branch checked out there is left as it is.
+# from no release, or one the repository has no tag for, the stable branch:
+# the newest code every test passed. Detached, so a branch checked out there
+# is left as it is.
 if [ -n "$REF" ] && git -C "$SRC" rev-parse -q --verify "refs/tags/$REF" >/dev/null; then
 	git -C "$SRC" checkout -q --detach "$REF"
 	# Whether the server is behind the repository's newest: said here, where
@@ -168,9 +169,13 @@ if [ -n "$REF" ] && git -C "$SRC" rev-parse -q --verify "refs/tags/$REF" >/dev/n
 		*) echo "the API runs $REF, $behind commit(s) behind the newest of {repo}: make install on the server, from an updated checkout, brings it up to date" ;;
 	esac
 else
-	[ -n "$REF" ] && echo "the API runs xymonapi $REF, which is no release of {repo}; taking its newest code"
+	[ -n "$REF" ] && echo "the API runs xymonapi $REF, which is no release of {repo}; taking its stable branch"
 	git -C "$SRC" remote set-head origin -a >/dev/null
-	git -C "$SRC" checkout -q --detach origin/HEAD
+	if git -C "$SRC" rev-parse -q --verify origin/stable >/dev/null; then
+		git -C "$SRC" checkout -q --detach origin/stable
+	else
+		git -C "$SRC" checkout -q --detach origin/HEAD
+	fi
 fi
 
 say "the client, under $PREFIX"
