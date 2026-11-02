@@ -1,33 +1,35 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# The MCP server for the Xymon API, xymonapi-mcp(1), and client.py, the
-# module every plugin reads the API through.
+# The MCP server for the Xymon API, xymonapi-mcp(1).
 #
 #   make install-client [PREFIX=$HOME/.local]   where the AI client runs
-#   make install XYMONHOME=...                  on the server, for xymonapi-rag
+#   make install XYMONHOME=...                  on the Xymon server
 #
-# It needs a running xymonapi(8), here or elsewhere, and nothing of this
-# tree beside it.
+# It reads the API through xymonapi's client, beside it, which either target
+# installs first; the API itself runs on the server. xymonapi_client.py here
+# is a link to that client, for a marketplace install of this directory alone.
 
 PLUGIN = xymonapi-mcp
 include ../../build/plugin.mk
 
-FILES = server.py client.py xymonapi-mcp.sh requirements.txt
+FILES = server.py xymonapi-mcp.sh requirements.txt
 
 all:
 
 install:
 	$(need_home)
+	$(MAKE) -C ../xymonapi install
 	$(call fresh,$(EXT))
 	cp -f $(FILES) "$(EXT)/"
-	chmod 644 "$(EXT)/server.py" "$(EXT)/client.py" "$(EXT)/requirements.txt"
+	chmod 644 "$(EXT)/server.py" "$(EXT)/requirements.txt"
 	chmod 755 "$(EXT)/xymonapi-mcp.sh"
 	$(call version,$(EXT))
 
 install-client:
+	$(MAKE) -C ../xymonapi install-client
 	$(call fresh,$(CLIENT))
 	mkdir -p "$(BIN)" "$(CLIENTMAN1)"
 	cp -f $(FILES) "$(CLIENT)/"
-	chmod 644 "$(CLIENT)/server.py" "$(CLIENT)/client.py" "$(CLIENT)/requirements.txt"
+	chmod 644 "$(CLIENT)/server.py" "$(CLIENT)/requirements.txt"
 	chmod 755 "$(CLIENT)/xymonapi-mcp.sh"
 	$(call version,$(CLIENT))
 	$(call launcher,xymonapi-mcp,xymonapi-mcp/xymonapi-mcp.sh)
@@ -36,14 +38,12 @@ install-client:
 
 uninstall:
 	$(need_home)
-	$(call needed_by,$(EXTROOT),xymonapi-rag)
 	$(call gone,$(EXT))
-	@echo "Uninstalled xymonapi-mcp."
+	@echo "Uninstalled xymonapi-mcp. Kept: xymonapi."
 
 # The setup script also registered the server with the AI clients and kept a
 # token: said, not done, since they are this user's and the server's.
 uninstall-client:
-	$(call needed_by,$(CLIENTROOT),xymonapi-rag)
 	$(call gone,$(CLIENT))
 	rm -f "$(BIN)/xymonapi-mcp" "$(CLIENTMAN1)/xymonapi-mcp.1"
 	@echo "Uninstalled xymonapi-mcp. What the setup script did besides, to undo by hand:"

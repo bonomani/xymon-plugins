@@ -11,20 +11,19 @@ it there. Every command and setting is in
 ## Needs
 
 - **On the server:** [`xymonapi`](../xymonapi/README.md), which serves the
-  index at `/search`, and [`xymonapi-mcp`](../xymonapi-mcp/README.md), whose
-  `client.py` it uses. `make install` here installs both first; the API's
-  task must then be enabled, as its README says, for the search to be
-  served.
-- **On a laptop:** `xymonapi-mcp` beside it, which `make install-client`
-  here installs first, and the running API that one needs (see its
-  [Needs](../xymonapi-mcp/README.md#needs)).
+  index at `/search` and whose client it uses. `make install` here installs
+  it first; the API's task must then be enabled, as its README says, for
+  the search to be served.
+- **On a laptop:** `xymonapi`'s client beside it, which `make
+  install-client` here installs first, and a running API, reached over the
+  network, as `XYMONAPI_URL` says.
 - Python 3.10, and on the server the modules in
   [`requirements.txt`](requirements.txt).
 
 ## On the server
 
-`make install` puts it in `$XYMONHOME/ext/xymonapi-rag/`, with the
-`xymonapi-mcp` it reads the API with, its manual page in
+`make install` puts it in `$XYMONHOME/ext/xymonapi-rag/`, beside the
+`xymonapi` it reads the API with, its manual page in
 `$MANDIR/man1/`, and a daily `xymonlaunch` task, `tasks.d/xymonapi-rag`,
 written `DISABLED`. To enable it:
 

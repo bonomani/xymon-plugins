@@ -12,11 +12,10 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
 - **A running [`xymonapi`](../xymonapi/README.md)**, on the Xymon server,
   reached over the network: install and enable it there first. This plugin
-  does not install it, since it usually runs on another machine.
+  does not install it, since it usually runs on another machine; it
+  installs `xymonapi`'s client alone beside it.
 - Python 3.10 with the module in [`requirements.txt`](requirements.txt),
   `mcp`; the setup script makes a virtualenv with it.
-
-Its install brings no other plugin.
 
 ## Installing
 
@@ -30,18 +29,18 @@ make install-client                # under ~/.local; PREFIX=... for elsewhere
 ```
 
 puts the command `xymonapi-mcp` in `$PREFIX/bin` and the code under
-`$PREFIX/libexec/xymon-plugins/xymonapi-mcp`.
+`$PREFIX/libexec/xymon-plugins/xymonapi-mcp`, after `xymonapi`'s client in
+`$PREFIX/libexec/xymon-plugins/xymonapi`.
 
 Claude Code can also install it as a plugin, from this repository's
-marketplace:
+marketplace at its branch `stable`, the code every test passed:
 
 ```
-/plugin install xymonapi-mcp --marketplace bonomani/xymon-plugins
+/plugin marketplace add https://github.com/bonomani/xymon-plugins.git#stable
+/plugin install xymonapi-mcp@xymon-plugins
 ```
 
-or, on an older Claude Code,
-`/plugin marketplace add bonomani/xymon-plugins` then
-`/plugin install xymonapi-mcp@xymon-plugins`. It then takes `XYMONAPI_URL`,
+The plugin carries its copy of `xymonapi`'s client. It then takes `XYMONAPI_URL`,
 `XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and `XYMONAPI_PYTHON` from your
 environment, defaults in [`.mcp.json`](.mcp.json), and still needs Python
 with `mcp`, and a token: use the setup script or the marketplace, not both.

@@ -4,5 +4,5 @@ name: xymonapi-mcp
 version: 0.1.0
 side: client
 summary: an MCP server that gives an AI client read-only tools over the Xymon API
-requires: xymonapi >= 0.1.0 (over the network, XYMONAPI_URL), python >= 3.10
+requires: xymonapi >= 0.1.0 (its client beside it; the API over the network, XYMONAPI_URL), python >= 3.10
 manual: xymonapi-mcp.1

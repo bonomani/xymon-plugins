@@ -66,8 +66,10 @@ without it, checked by reverting what makes it true.
 Each plugin is a directory under `plugins/` with a `Makefile` that installs
 it alone and a `PLUGIN` file. A plugin that needs another names it there and
 installs it first. Code shared by two plugins lives in one of them, the one
-it belongs to, and the other installs that one: `xymonapi-rag` uses
-`xymonapi-mcp`'s `client.py`. A plugin's README and manual page name the
+it belongs to, and the other installs that one: the API's client,
+`xymonapi_client.py`, is `xymonapi`'s. A plugin that a Claude Code
+marketplace installs alone carries a symbolic link to such a file, which the
+marketplace copies as a file. A plugin's README and manual page name the
 plugins it uses, never those that use it: a new plugin built on another
 changes nothing of that one.
 
@@ -80,9 +82,9 @@ commit as the change: the last number for an addition, the first for a
 change that breaks something for users or for another plugin. Other changes
 leave it alone.
 
-The plugins that read the API -- `xymonapi-mcp`, and `xymonapi-rag` through
-its `client.py` -- name in their `PLUGIN` files the lowest `xymonapi`
-version they need; `client.py` repeats it as `API_FLOOR`, and a test checks
+The plugins that read the API through `xymonapi_client.py` --
+`xymonapi-mcp` and `xymonapi-rag` -- name in their `PLUGIN` files the lowest
+`xymonapi` version they need; the client repeats it as `API_FLOOR`, and a test checks
 that the three agree, so change them together. A client raises its floor
 only to a version the API already has.
 
@@ -122,7 +124,7 @@ The spec's `info.version` stays `1.0.0` until the API is first published.
 
 ### Python
 
-- `plugins/xymonapi-mcp/client.py` uses the standard library alone: the MCP
+- `plugins/xymonapi/xymonapi_client.py` uses the standard library alone: the MCP
   server and `xymonapi-rag` both load it, on laptops where little else may
   be installed.
 - A new module dependency goes in that plugin's `requirements.txt`, and only

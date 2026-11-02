@@ -3,19 +3,20 @@
 #
 # tests/compat/xymonapi-install.sh
 #
-# make install puts the API in $XYMONHOME/ext/xymonapi/, the search and the
-# MCP client beside it, its manual page in man8/, and its task in
+# make install puts the API, with its client, in $XYMONHOME/ext/xymonapi/,
+# the search beside it, its manual page in man8/, and its task in
 # $XYMONHOME/etc/tasks.d/xymonapi -- disabled, with ENVFILE naming that
 # server's xymonserver.cfg. An install over one where the admin enabled the
 # task leaves that file alone: putting DISABLED back would stop the API at
 # the next upgrade, with nothing to say why. Without XYMONHOME it installs
 # nothing and says so. The Apache snippet goes to $XYMONHOME/etc, kept too
 # once there. make install-client puts the MCP server and the search commands
-# under PREFIX, with two commands in bin that run them from there. Installing
+# under PREFIX, with two commands in bin that run them from there, and
+# xymonapi's client alone beside them, not the API. Installing
 # again replaces each plugin's directory, so a file no longer shipped is
 # gone, and says to restart the API; the client's virtualenv beside the
 # plugins is kept. A plugin installed alone brings the plugins it needs
-# beside it: xymonapi-rag on the server, the API and its client. make
+# beside it: xymonapi-rag on the server, the API with its client. make
 # uninstall refuses a plugin another installed one needs, removes each
 # plugin's files, manual page and task, and keeps the web server snippets
 # and the data, saying so; on a laptop it says what to undo by hand.
@@ -43,16 +44,16 @@ assert_contains "XYMONHOME" "$(cat "$work/nohome.log")" "and it says what is mis
 ( umask 077 && "$make" -C "$ROOT" install XYMONHOME="$home" MANDIR="$work/man" ) >"$work/install.log" 2>&1 \
 	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
 
-for f in app.py xymon.py clientsetup.py tokens.py openapi.yaml requirements.txt xymonapi.sh; do
+for f in app.py xymon.py xymonapi_client.py clientsetup.py tokens.py openapi.yaml requirements.txt xymonapi.sh; do
 	assert_file_exists "$home/ext/xymonapi/$f"
 done
-for f in xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt xymonapi-mcp/client.py; do
+for f in xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt; do
 	assert_file_exists "$home/ext/$f"
 done
 [ -x "$home/ext/xymonapi/xymonapi.sh" ] || fail "the launcher is not executable"
 # Each plugin records its version beside its files: its release tag when
 # the checkout is at one, else the version in its PLUGIN file.
-for p in xymonapi xymonapi-mcp xymonapi-rag; do
+for p in xymonapi xymonapi-rag; do
 	assert_file_exists "$home/ext/$p/VERSION"
 	want=$(git -C "$ROOT" describe --exact-match --tags --match "$p/v*" 2>/dev/null || sed -n 's/^version: *//p' "$ROOT/plugins/$p/PLUGIN")
 	assert_equal "$want" "$(cat "$home/ext/$p/VERSION")" "$p/VERSION holds its tag or its PLUGIN version"
@@ -71,11 +72,11 @@ assert_equal "-rw-r--r--" "$mode" "the task file's mode under umask 077"
 # An update replaces each plugin's directory: a file the new version no
 # longer ships does not stay behind, and the install says to restart the API.
 echo 'stale' > "$home/ext/xymonapi/gone.py"
-echo 'stale' > "$home/ext/xymonapi-mcp/gone.py"
+echo 'stale' > "$home/ext/xymonapi-rag/gone.py"
 "$make" -C "$ROOT" install XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
 	|| fail "installing over an install failed: $(tail -n 5 "$work/update.log")"
 [ -e "$home/ext/xymonapi/gone.py" ] && fail "a file no longer shipped stayed in ext/xymonapi after an update"
-[ -e "$home/ext/xymonapi-mcp/gone.py" ] && fail "a file no longer shipped stayed in ext/xymonapi-mcp after an update"
+[ -e "$home/ext/xymonapi-rag/gone.py" ] && fail "a file no longer shipped stayed in ext/xymonapi-rag after an update"
 assert_file_exists "$home/ext/xymonapi/app.py"
 assert_contains "pkill -f '$home/ext/xymonapi/'" "$(cat "$work/update.log")" "the install says how to restart the API"
 
@@ -109,12 +110,12 @@ echo "# mine" > "$home/etc/xymonapi-apache.conf"
 assert_equal "# mine" "$(cat "$home/etc/xymonapi-apache.conf")" "an edited Apache snippet is kept"
 
 # One plugin alone brings what it needs beside it: on the server,
-# xymonapi-rag needs the API that serves its index and the client it reads
+# xymonapi-rag needs the API that serves its index, and its client it reads
 # the API with.
 alone=$work/alone
 "$make" -C "$ROOT/plugins/xymonapi-rag" install XYMONHOME="$alone" MANDIR="$work/man-alone" >"$work/alone.log" 2>&1 \
 	|| fail "make install of xymonapi-rag alone failed: $(tail -n 5 "$work/alone.log")"
-for p in xymonapi xymonapi-mcp xymonapi-rag; do
+for p in xymonapi xymonapi-rag; do
 	assert_file_exists "$alone/ext/$p/VERSION"
 done
 
@@ -130,7 +131,7 @@ mkdir -p "$prefix/libexec/xymon-plugins/venv" && : > "$prefix/libexec/xymon-plug
 	|| fail "make install-client a second time failed: $(tail -n 5 "$work/client2.log")"
 [ -e "$prefix/libexec/xymon-plugins/xymonapi-rag/gone.py" ] && fail "a file no longer shipped stayed in the client's xymonapi-rag"
 assert_file_exists "$prefix/libexec/xymon-plugins/venv/kept"
-for f in xymonapi-mcp/server.py xymonapi-mcp/client.py xymonapi-mcp/xymonapi-mcp.sh xymonapi-mcp/requirements.txt \
+for f in xymonapi-mcp/server.py xymonapi-mcp/xymonapi-mcp.sh xymonapi-mcp/requirements.txt xymonapi/xymonapi_client.py \
          xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requirements.txt xymonapi-mcp/VERSION xymonapi-rag/VERSION; do
 	assert_file_exists "$prefix/libexec/xymon-plugins/$f"
 done
@@ -142,7 +143,7 @@ grep -qF "\"$prefix/libexec/xymon-plugins/xymonapi-rag/xymonapi-rag.sh\"" "$pref
 	|| fail "bin/xymonapi-rag does not run the installed launcher, quoted: $(cat "$prefix/bin/xymonapi-rag")"
 [ -e "$prefix/libexec/xymon-plugins/xymonapi/app.py" ] && fail "install-client installed the API"
 # The installed xymonapi-rag runs: --help needs Python alone, and finds
-# client.py in xymonapi-mcp/ beside it, as in the repository.
+# xymonapi_client.py in xymonapi/ beside it, as in the repository.
 if command -v "${XYMONAPI_PYTHON:-python3}" >/dev/null 2>&1; then
 	XYMONAPI_PYTHON="${XYMONAPI_PYTHON:-python3}" "$prefix/bin/xymonapi-rag" --help > "$work/help.out" 2>&1 \
 		|| fail "the installed xymonapi-rag --help failed: $(cat "$work/help.out")"
@@ -153,7 +154,7 @@ fi
 # the whole side removes each plugin's files, manual page and task, keeps
 # the web server snippets and the data, and says so. On a laptop it also
 # says what the setup script did besides.
-for p in xymonapi xymonapi-mcp; do
+for p in xymonapi; do
 	rc=0
 	"$make" -C "$ROOT/plugins/$p" uninstall XYMONHOME="$home" MANDIR="$work/man" >"$work/un-$p.log" 2>&1 || rc=$?
 	[ "$rc" -ne 0 ] || fail "uninstalling $p while xymonapi-rag needs it succeeded"
@@ -172,8 +173,9 @@ assert_contains "take its Include out of the web server first" "$(cat "$work/uni
 assert_contains "XYMONAPI_TOKENS" "$(cat "$work/uninstall.log")" "and that the tokens file is kept"
 
 rc=0
-"$make" -C "$ROOT/plugins/xymonapi-mcp" uninstall-client PREFIX="$prefix" >"$work/unc-mcp.log" 2>&1 || rc=$?
-[ "$rc" -ne 0 ] || fail "uninstall-client of xymonapi-mcp while xymonapi-rag needs it succeeded"
+"$make" -C "$ROOT/plugins/xymonapi" uninstall-client PREFIX="$prefix" >"$work/unc-api.log" 2>&1 || rc=$?
+[ "$rc" -ne 0 ] || fail "uninstall-client of xymonapi's client while xymonapi-mcp needs it succeeded"
+assert_contains "needed by xymonapi-mcp" "$(cat "$work/unc-api.log")" "and says which plugin needs it"
 "$make" -C "$ROOT" uninstall-client PREFIX="$prefix" >"$work/unclient.log" 2>&1 \
 	|| fail "make uninstall-client failed: $(tail -n 5 "$work/unclient.log")"
 [ -e "$prefix/libexec/xymon-plugins" ] && fail "make uninstall-client left $prefix/libexec/xymon-plugins: $(ls -A "$prefix/libexec/xymon-plugins")"
@@ -182,4 +184,4 @@ for f in bin/xymonapi-mcp bin/xymonapi-rag share/man/man1/xymonapi-mcp.1 share/m
 done
 assert_contains "claude mcp remove" "$(cat "$work/unclient.log")" "uninstall-client says what the setup script did besides"
 
-pass "make install puts the three plugins in ext/ with disabled tasks and the Apache snippet, keeps what the admin edited, takes odd directory names, replaces each plugin's directory on update; install-client lays out the client side; uninstall removes them, refusing one another needs"
+pass "make install puts the server plugins in ext/ with disabled tasks and the Apache snippet, keeps what the admin edited, takes odd directory names, replaces each plugin's directory on update; install-client lays out the client side; uninstall removes them, refusing one another needs"

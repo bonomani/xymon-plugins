@@ -6,15 +6,22 @@ calls its tools. Each tool is one request to a running xymonapi(8), so what
 the client gets is what the API answers, now: nothing is stored here, and
 nothing in Xymon is changed.
 
-Where the API is, and the token to send it, are client.py's settings.
+Where the API is, and the token to send it, are xymonapi_client.py's settings.
 """
 from __future__ import annotations
+
+import sys
+from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-import client
+# xymonapi_client.py is xymonapi's, the API's own client. Here it is a link to
+# it, which a marketplace install copies as a file, this plugin's directory
+# alone; where make installs the plugins side by side, it is in xymonapi's.
+sys.path.append(str(Path(__file__).resolve().parent.parent / "xymonapi"))
+import xymonapi_client as client  # noqa: E402
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 

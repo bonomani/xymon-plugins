@@ -9,11 +9,11 @@
 #   make test                                      every test, with XYMON_SRC set
 #
 # A plugin that needs another installs it first, so the lists name only the
-# ends: xymonapi-rag brings xymonapi-mcp with it on either side, and on the
-# server xymonapi too.
+# ends: xymonapi-mcp and xymonapi-rag bring xymonapi with them, its client
+# on a laptop, the API on the server. The MCP server is a laptop's.
 
 SERVER = xymonapi-rag
-CLIENT = xymonapi-rag
+CLIENT = xymonapi-mcp xymonapi-rag
 
 all:
 
@@ -31,7 +31,7 @@ uninstall:
 	@for p in xymonapi-rag xymonapi-mcp xymonapi; do $(MAKE) -C "plugins/$$p" uninstall || exit 1; done
 
 uninstall-client:
-	@for p in xymonapi-rag xymonapi-mcp; do $(MAKE) -C "plugins/$$p" uninstall-client || exit 1; done
+	@for p in xymonapi-rag xymonapi-mcp xymonapi; do $(MAKE) -C "plugins/$$p" uninstall-client || exit 1; done
 	rm -rf "$(DESTDIR)$(or $(PREFIX),$(HOME)/.local)/libexec/xymon-plugins/venv"
 	-rmdir "$(DESTDIR)$(or $(PREFIX),$(HOME)/.local)/libexec/xymon-plugins" 2>/dev/null
 

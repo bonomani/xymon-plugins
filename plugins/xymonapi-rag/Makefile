@@ -4,9 +4,9 @@
 #   make install XYMONHOME=...                  the index task, on the server
 #   make install-client [PREFIX=$HOME/.local]   search and ask, elsewhere
 #
-# It reads the API through xymonapi-mcp's client.py, beside it, so either
-# target installs that plugin first; on the server it also reads the history
-# through xymonapi's xymon.py, which make install of that plugin puts there.
+# It reads the API through xymonapi's client, beside it, so either target
+# installs that plugin first: on the server the API too, whose xymon.py it
+# also reads the history through.
 
 PLUGIN = xymonapi-rag
 include ../../build/plugin.mk
@@ -18,7 +18,6 @@ all:
 install:
 	$(need_home)
 	$(MAKE) -C ../xymonapi install
-	$(MAKE) -C ../xymonapi-mcp install
 	$(call fresh,$(EXT))
 	cp -f $(FILES) "$(EXT)/"
 	chmod 644 "$(EXT)/xymonrag.py" "$(EXT)/requirements.txt"
@@ -31,7 +30,7 @@ install:
 	$(call task,xymonapi-rag.tasks.DIST,xymonapi-rag)
 
 install-client:
-	$(MAKE) -C ../xymonapi-mcp install-client
+	$(MAKE) -C ../xymonapi install-client
 	$(call fresh,$(CLIENT))
 	mkdir -p "$(BIN)" "$(CLIENTMAN1)"
 	cp -f $(FILES) "$(CLIENT)/"
@@ -47,11 +46,11 @@ uninstall:
 	$(need_home)
 	$(call gone,$(EXT))
 	rm -f "$(MAN1)/xymonapi-rag.1" "$(TASKDIR)/xymonapi-rag"
-	@echo "Uninstalled xymonapi-rag. Kept: its index, \$$XYMONAPI_RAG_INDEX, and xymonapi and xymonapi-mcp."
+	@echo "Uninstalled xymonapi-rag. Kept: its index, \$$XYMONAPI_RAG_INDEX, and xymonapi."
 
 uninstall-client:
 	$(call gone,$(CLIENT))
 	rm -f "$(BIN)/xymonapi-rag" "$(CLIENTMAN1)/xymonapi-rag.1"
-	@echo "Uninstalled xymonapi-rag. Kept: xymonapi-mcp, and any index here, \$$XYMONAPI_RAG_INDEX."
+	@echo "Uninstalled xymonapi-rag. Kept: xymonapi's client, and any index here, \$$XYMONAPI_RAG_INDEX."
 
 .PHONY: all install install-client uninstall uninstall-client test

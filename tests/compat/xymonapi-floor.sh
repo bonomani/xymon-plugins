@@ -4,8 +4,8 @@
 # tests/compat/xymonapi-floor.sh
 #
 # The client plugins name the oldest xymonapi they work with -- the floor --
-# in their PLUGIN files, and client.py, which both read the API through,
-# repeats it: the three agree. Installed as make install-client lays them
+# in their PLUGIN files, and xymonapi_client.py, which both read the API
+# through, repeats it: the three agree. Installed as make install-client lays them
 # out, against an API older than the floor, the MCP server says so with each
 # answer and on stderr, and xymonapi-rag on stderr; against one at or past
 # it, neither says anything.
@@ -45,7 +45,7 @@ start_api
 assert_file_exists "$work/client/libexec/xymon-plugins/xymonapi-mcp/VERSION"
 floor=$(sed -n 's/^requires: xymonapi >= \([0-9.]*\).*/\1/p' "$ROOT/plugins/xymonapi-mcp/PLUGIN")
 [ -n "$floor" ] || fail "xymonapi-mcp's PLUGIN names no xymonapi version it needs"
-assert_contains "API_FLOOR = \"$floor\"" "$(cat "$ROOT/plugins/xymonapi-mcp/client.py")" "client.py repeats the floor of its PLUGIN file"
+assert_contains "API_FLOOR = \"$floor\"" "$(cat "$ROOT/plugins/xymonapi/xymonapi_client.py")" "xymonapi_client.py repeats the floor of its PLUGIN file"
 assert_contains "xymonapi >= $floor" "$(cat "$ROOT/plugins/xymonapi-rag/PLUGIN")" "and xymonapi-rag, which reads the API through it, names the same floor"
 printf '%s\n' xymonapi/v0.0.1 > "$work/inst/ext/xymonapi/VERSION"
 mine=$(curl -s -u alice:secret -X POST -H 'Content-Type: application/json' -d '{"client":"mcptest"}' "http://127.0.0.1:$API_PORT/xymon/api/v1/tokens" \
@@ -62,7 +62,7 @@ XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymon-plugins" \
 	mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
 answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $(tail -n 5 "$work/mcp.err")"
 assert_not_contains 'warning' "$answer" "an API past the floor: no warning"
-# xymonapi-rag reads the API through the same client.py: with no index here
+# xymonapi-rag reads the API through the same xymonapi_client.py: with no index here
 # its search asks the API, and an old API is said on stderr before that.
 printf '%s\n' xymonapi/v0.0.1 > "$work/inst/ext/xymonapi/VERSION"
 XYMONAPI_URL="http://127.0.0.1:$API_PORT" XYMONAPI_TOKEN="$mine" XYMONAPI_RAG_INDEX="$work/none.npz" \
@@ -73,4 +73,4 @@ XYMONAPI_URL="http://127.0.0.1:$API_PORT" XYMONAPI_TOKEN="$mine" XYMONAPI_RAG_IN
 	"$work/client/libexec/xymon-plugins/xymonapi-rag/xymonapi-rag.sh" search -k 1 'anything' > /dev/null 2> "$work/rag.err" || true
 assert_not_contains 'this client needs' "$(cat "$work/rag.err")" "and nothing when it is not"
 
-pass "the floor agrees in both PLUGIN files and client.py, and an API below it is said by xymonapi-mcp and xymonapi-rag, one at or past it is not"
+pass "the floor agrees in both PLUGIN files and xymonapi_client.py, and an API below it is said by xymonapi-mcp and xymonapi-rag, one at or past it is not"

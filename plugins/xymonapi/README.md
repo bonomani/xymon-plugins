@@ -42,7 +42,9 @@ make install XYMONHOME=/usr/lib/xymon/server
 ```
 
 Run here, it installs the API alone; run at the repository's top, every
-server-side plugin. It writes into the Xymon server directory, so it is
+server-side plugin. `make install-client PREFIX=...` installs only the API's
+client, `xymonapi_client.py`, under `$PREFIX/libexec/xymon-plugins/xymonapi`,
+for the plugins that read the API from another machine. It writes into the Xymon server directory, so it is
 normally run as root. `MANDIR` (default `/usr/share/man`) says where the
 manual page goes, and `DESTDIR` stages the install for a package.
 
