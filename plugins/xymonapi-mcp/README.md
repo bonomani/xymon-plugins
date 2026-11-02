@@ -40,15 +40,16 @@ marketplace at its branch `stable`, the code every test passed:
 /plugin install xymonapi-mcp@xymon-plugins
 ```
 
-The plugin carries its copy of `xymonapi`'s client. It then takes `XYMONAPI_URL`,
-`XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and `XYMONAPI_PYTHON` from your
-environment, defaults in [`.mcp.json`](.mcp.json), and still needs Python
-with `mcp`, and a token: use the setup script or the marketplace, not both.
+The plugin carries its copy of `xymonapi`'s client. It then takes
+`XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and `XYMONAPI_PYTHON`
+from your environment, defaults in [`.mcp.json`](.mcp.json), and still needs
+Python with `mcp`, and a token: use the setup script or the marketplace, not
+both.
 
-`make uninstall-client` removes it, and is refused, naming the plugin, while
-another installed one needs it; it then says what the setup script did
-besides, to undo by hand: the registrations in Claude Code and
-Codex, and this machine's token, to revoke on the server and delete here.
+`make uninstall-client` removes it, keeps `xymonapi`'s client, and says what
+the setup script did besides, to undo by hand: the registrations in Claude
+Code and Codex, and this machine's token, to revoke on the server and delete
+here.
 
 ## Registering it by hand
 

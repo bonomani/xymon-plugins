@@ -2,11 +2,9 @@
 
 It finds the passages of Xymon's manual pages and history that a question is
 about, by what they mean rather than the words they share. The index lives
-on the Xymon server, where the pages and the history are; the
-[API](../xymonapi/README.md) serves it at `/search`, and the [MCP
-server](../xymonapi-mcp/README.md)'s `search_docs` and `search_history` ask
-it there. Every command and setting is in
-[`xymonapi-rag.1`](xymonapi-rag.1).
+on the Xymon server, where the pages and the history are, and the
+[API](../xymonapi/README.md) serves it at `/search`. Every command and
+setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 
 ## Needs
 
@@ -14,9 +12,9 @@ it there. Every command and setting is in
   index at `/search` and whose client it uses. `make install` here installs
   it first; the API's task must then be enabled, as its README says, for
   the search to be served.
-- **On a laptop:** `xymonapi`'s client beside it, which `make
-  install-client` here installs first, and a running API, reached over the
-  network, as `XYMONAPI_URL` says.
+- **On a laptop:** `xymonapi`'s client beside it, which
+  `make install-client` here installs first, and a running API, reached
+  over the network, as `XYMONAPI_URL` says.
 - Python 3.10, and on the server the modules in
   [`requirements.txt`](requirements.txt).
 
@@ -54,8 +52,7 @@ under `$PREFIX/libexec/xymon-plugins/` with the command `xymonapi-rag` in
 passages to a language model speaking the OpenAI-compatible API -- a local
 Ollama by default, LM Studio with two settings. Pick the model with care: a
 small one such as `llama3.2` answers in a second but makes things up, where a
-larger one says when the passages do not hold the answer. With an MCP
-client, its tools are the simpler way.
+larger one says when the passages do not hold the answer.
 
 `make uninstall` (on the server) or `make uninstall-client` removes it,
 and keeps the plugins it brought, which may serve others, and its index.

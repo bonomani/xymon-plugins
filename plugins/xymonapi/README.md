@@ -15,7 +15,7 @@ Its operations, under `/xymon/api/v1`, all GET but for `/tokens`:
 | `/status` | one test's current status, text and acknowledgement included |
 | `/series`, `/graphs` | the values of one RRD dataset; the PNG showgraph draws |
 | `/events`, `/histlog` | the colour changes, newest first; the status text saved at one |
-| `/search` | the manual-page and history passages nearest a question (`xymonapi-rag`) |
+| `/search` | the manual-page and history passages nearest a question, when the server has a search index |
 | `/client` | a setup script for a laptop, this API's address filled in |
 | `/tokens` | a machine's own token, listed, made and revoked with your password |
 
@@ -42,11 +42,12 @@ make install XYMONHOME=/usr/lib/xymon/server
 ```
 
 Run here, it installs the API alone; run at the repository's top, every
-server-side plugin. `make install-client PREFIX=...` installs only the API's
-client, `xymonapi_client.py`, under `$PREFIX/libexec/xymon-plugins/xymonapi`,
-for the plugins that read the API from another machine. It writes into the Xymon server directory, so it is
+server-side plugin. It writes into the Xymon server directory, so it is
 normally run as root. `MANDIR` (default `/usr/share/man`) says where the
 manual page goes, and `DESTDIR` stages the install for a package.
+`make install-client` installs only the API's client,
+`xymonapi_client.py`, under `$PREFIX/libexec/xymon-plugins/xymonapi`
+(`~/.local` by default), to read the API from another machine.
 
 | installed | from |
 |---|---|
@@ -111,11 +112,12 @@ HEAD..origin/stable`.
 make uninstall XYMONHOME=...
 ```
 
-Run here, it removes the API alone, and is refused, naming the plugin,
-while another installed one needs it; at the repository's top, every
-server-side plugin. It removes the code, the manual page and the task. It keeps the web
+Run here, it removes the API alone, and is refused, naming the plugin, while
+another installed one needs it; at the repository's top, every server-side
+plugin. It removes the code, the manual page and the task. It keeps the web
 server snippets -- take the `Include` out of your web server's configuration
 before deleting them -- and the tokens file, `$XYMONAPI_TOKENS`.
+`make uninstall-client` removes the client, refused in the same way.
 
 ## Reaching it from another machine
 
@@ -186,6 +188,3 @@ not. `XYMONAPI_USER`, when set, is the user, not asked. `?name=xymon-lab`
 gives a second server its own name and token file; `?format=env` gives the
 two settings alone. `/tokens` lists your machines and revokes one, and
 removing a user from the password file revokes all of theirs.
-
-What the laptop runs then is [`xymonapi-mcp`](../xymonapi-mcp/README.md) and
-[`xymonapi-rag`](../xymonapi-rag/README.md).
