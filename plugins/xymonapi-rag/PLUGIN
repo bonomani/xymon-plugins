@@ -1,8 +1,24 @@
 # What this plugin is, for the index in README.md and for whoever installs
-# it alone. One key per line; the Makefile beside it does the installing.
+# it alone. One key per line, a key repeated for each line of a message;
+# ./install.sh at the repository's top installs it from the lines below.
 name: xymonapi-rag
 version: 0.1.0
 side: server, client
 summary: a search of Xymon's manual pages and history by meaning; the index task on the server, search and ask anywhere
 requires: xymonapi >= 0.1.0 (its client beside it; the API beside it on the server, over the network elsewhere), python >= 3.9
 manual: xymonapi-rag.1
+
+# How ./install.sh installs it: see xymonapi's PLUGIN file.
+needs: xymonapi
+server-files: xymonrag.py xymonapi-rag.sh requirements.txt
+server-manual: xymonapi-rag.1
+server-modules: fastembed numpy
+task: xymonapi-rag.tasks.DIST
+uninstalled: Uninstalled xymonapi-rag. Kept: its index, $XYMONAPI_RAG_INDEX, and xymonapi.
+client-files: xymonrag.py xymonapi-rag.sh requirements.txt
+client-manual: xymonapi-rag.1
+client-modules: fastembed numpy
+venv-note: only to keep an index on this machine: search and ask through the server need none
+command: xymonapi-rag xymonapi-rag.sh
+executable: xymonapi-rag.sh
+uninstalled-client: Uninstalled xymonapi-rag. Kept: xymonapi's client, and any index here, $XYMONAPI_RAG_INDEX.
