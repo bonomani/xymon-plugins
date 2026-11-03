@@ -96,8 +96,10 @@ endef
 # python3.14 down to python3.9 and python3, on PATH and in PYTHON_DIRS -- is
 # made the virtualenv's, with --system-site-packages, so that it is only
 # pinned beside the plugins and nothing is copied or fetched; with no such
-# Python, the hint says which make venv would use. With a virtualenv there,
-# the modules it lacks are named, for make venv to install.
+# Python, the hint says which make venv would use. A candidate is named by
+# the interpreter it runs (sys.executable), not a shim or symlink found on
+# PATH, so the message and the hint say what the virtualenv records. With a
+# virtualenv there, the modules it lacks are named, for make venv to install.
 PYTHON_GIVEN = $(if $(filter command line environment,$(origin PYTHON)),$(PYTHON))
 define venv_auto
 	@if [ -x "$(1)/venv/bin/python3" ]; then \
@@ -110,6 +112,7 @@ define venv_auto
 				case $$c in /*) p=$$c ;; *) if [ -n "$$d" ]; then p=$$d/$$c; else p=`command -v "$$c" 2>/dev/null`; fi ;; esac; \
 				[ -n "$$p" ] && [ -x "$$p" ] || continue; \
 				"$$p" -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null || continue; \
+				real=`"$$p" -c 'import sys; print(sys.executable)' 2>/dev/null`; [ -n "$$real" ] && [ -x "$$real" ] && p=$$real; \
 				[ -n "$$newest" ] || newest=$$p; \
 				"$$p" -c 'import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in sys.argv[1:]))' $(MODULES) 2>/dev/null || continue; \
 				py=$$p; break 2; \
