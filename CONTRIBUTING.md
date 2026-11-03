@@ -98,9 +98,11 @@ draft. A behaviour that breaks outside the contract is for you to see.
 
 ### stable
 
-`main` takes every change. When every check of a push to `main` passes, CI
-moves the branch `stable` forward to it, never back: `stable` is the newest
-code everything passed, and what outside users install. There are no release tags; to publish one, tag `stable`'s commit
+`main` takes every change. When every check of a push to the default branch
+passes, CI moves the branch `stable` forward to it, never back: here the
+default is `main`, so `stable` is the newest code everything passed, and
+what outside users install. A fork that keeps an integration line, `dev`,
+makes it its default, and its CI moves the fork's own `stable` the same way. There are no release tags; to publish one, tag `stable`'s commit
 `NAME/vX.Y.Z` with the plugin's version.
 
 ### The contract
