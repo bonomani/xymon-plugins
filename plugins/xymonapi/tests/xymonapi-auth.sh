@@ -81,6 +81,10 @@ assert_equal "xymon-plugins" "$(ls "$work/unpacked")" "rooted at xymon-plugins/"
 grep -rqF "$(cut -d: -f2 "$work/htpasswd" | head -n 1)" "$work/unpacked" && fail "[C4] /plugins gave the password file's contents"
 find "$work/unpacked" -type f -name tokens | grep -q . && fail "[C4] /plugins gave a tokens file"
 assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user"
+# The process names its directory in its command line, which is what a
+# restart finds it by: pkill -f "$XYMONHOME/ext/xymonapi/".
+pgrep -f "$work/inst/ext/xymonapi/" | grep -qx "$API_PID" \
+	|| fail "pgrep -f on the API's directory does not find it, so the documented pkill would not stop it: $(ps -o command= -p "$API_PID")"
 assert_not_contains "$version" "$(curl -s "$url")" "and not to a stranger"
 # Every field /health gives is one the spec lists for it: a field renamed in
 # the code and not in openapi.yaml is a contract the API does not keep.
