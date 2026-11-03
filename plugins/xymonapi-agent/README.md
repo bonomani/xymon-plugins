@@ -108,6 +108,25 @@ the fixed part of the prompt and each backend's restriction stay, and the
 tools allowed are exactly those of its `mcp` list. The manual page has
 every key.
 
+**A coordinator.** A profile that names other agents gets them as its
+tools, one `ask_NAME` each, and routes a plain question to the right one:
+
+```toml
+# ~/.config/xymonapi-agent/agents/ops.toml
+description = "routes a question to the right agent"
+backend = ["claude"]
+agents = ["xymon", "lab", "backup"]
+```
+
+```sh
+xymonapi-agent --agent ops ask "anything wrong overnight, including the backups?"
+```
+
+Each ask runs that agent in a process of its own, with its own backends
+and sandbox, never the coordinator's. Two guards stop runaway chains: a
+depth of 2 coordinators, and 8 asks per question, both settings. A
+coordinator can still have MCP servers of its own; by default it has none.
+
 **Backends in order.** `backend` is a list, and so is
 `XYMONAPI_AGENT_BACKEND=claude,opencode` or `--backend claude,opencode`: the
 first on PATH runs; if it exits with an error, times out or answers

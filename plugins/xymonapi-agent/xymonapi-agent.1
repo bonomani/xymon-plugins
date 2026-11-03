@@ -9,6 +9,8 @@ xymonapi-agent \- ask an AI agent a question about Xymon, headless
 .B "xymonapi-agent [--agent NAME] [--backend NAMES] backends"
 .br
 .B "xymonapi-agent [--agent NAME] [--backend NAMES] doctor [--json]"
+.br
+.B "xymonapi-agent --agent NAME mcp-agents"
 
 .SH DESCRIPTION
 xymonapi-agent asks a question about a Xymon server to an AI agent and
@@ -58,7 +60,12 @@ run, its long arguments shortened, so what the backend was told can be
 seen without a secret in it.
 .IP "\fBagents\fR"
 Each agent, built in or from a profile: its description, backends, MCP
-servers, model and environment, and the file it came from.
+servers, the agents it coordinates, model and environment, and the file it
+came from.
+.IP "\fBmcp-agents\fR"
+Serve a coordinator's agents as MCP tools on stdin and stdout: what its
+backend is given to run, not a command for a terminal. For an agent that
+coordinates none, an error.
 .IP "\fBbackends\fR"
 For each backend, whether its command is on PATH and how far it is held
 to the MCP servers; then which answer for the agent, in order, or why none
@@ -92,6 +99,10 @@ an error.
 .IP "\fBprompt\fR"
 Text appended to the fixed system prompt: what the servers are, how to
 answer. It cannot remove the fixed part.
+.IP "\fBagents\fR"
+A list of other agents' names: this agent is then a \fIcoordinator\fR (see
+COORDINATORS). With it, \fBmcp\fR is empty by default: a coordinator's
+tools are its agents.
 .IP "\fB[env]\fR"
 Variables set over this environment for the backend and the MCP servers:
 another Xymon server's XYMONAPI_URL and XYMONAPI_TOKEN_FILE, a server's
@@ -102,6 +113,28 @@ lists of them, true, false, numbers, comments, [tables]. Anything else is
 refused with the file and line, by every command, so a bad profile is seen
 at once. A profile cannot loosen a backend's restriction: the tools it
 allows are those of its \fBmcp\fR list, and nothing else.
+
+.SH COORDINATORS
+An agent whose profile has \fBagents\fR gets, besides any MCP server of
+its own, one named \fBagents\fR: this command itself, run by the backend as
+\fBxymonapi-agent --agent NAME mcp-agents\fR, serving one tool per agent,
+\fBask_\fIAGENT\fR(question), described by that agent's \fBdescription\fR.
+Its prompt says to route the question to the agents it concerns, ask each
+what it alone can answer, and merge the answers naming which agent said
+what. A call runs \fBxymonapi-agent --agent AGENT ask --json\fR in a process
+of its own: that agent's backends, servers, sandbox and environment, not
+the coordinator's -- XYMONAPI_AGENT_AGENT, XYMONAPI_AGENT_BACKEND and
+XYMONAPI_AGENT_DEPTH are not passed down. The answer is the tool's text; a
+failure, with the agent's last line, is a tool error the backend sees.
+
+Two guards. XYMONAPI_AGENT_DEPTH, 2 by default, is how many coordinators
+deep an ask may go: each child runs with one less, and at 0 every ask_
+call is refused, so two coordinators that name each other stop.
+XYMONAPI_AGENT_SUBASKS, 8, is the most asks one question may make of the
+agents; the next is refused with a word to answer with what it has. A
+profile that names itself, or an agent no profile defines, is refused as
+a bad profile. \fBdoctor\fR does not apply to a coordinator without the
+xymon server, and says so.
 
 .SH BACKENDS
 The backends to try, in order, are \fB--backend\fR, else
@@ -153,6 +186,8 @@ provider/model for opencode. Unset, each uses its own default. A profile's
 Seconds to wait for an answer; 600 by default.
 .IP "\fBXYMONAPI_AGENT_MAX_TURNS\fR"
 For Claude Code, the most tool-calling turns one question may take; 30.
+.IP "\fBXYMONAPI_AGENT_DEPTH\fR, \fBXYMONAPI_AGENT_SUBASKS\fR"
+A coordinator's guards; see COORDINATORS. 2 and 8.
 .IP "\fBXYMONAPI_AGENT_SITE\fR"
 For the built-in agent, a name for the Xymon site, said in the system
 prompt. A profile's \fBsite\fR is this for that agent.
