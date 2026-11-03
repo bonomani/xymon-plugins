@@ -2,7 +2,12 @@
 """A client for xymonapi(8), with nothing but the standard library: the MCP
 server and the search in xymonapi-rag/ both read the API through it.
 
-XYMONAPI_URL is where the API is, http://127.0.0.1:1986 by default.
+XYMONAPI_URL is where the API is: http:// or https://, or unix:PATH, the
+API's own Unix socket on the server, where no credential is needed because
+the socket's permissions already say who may connect. Unset, it is that
+socket, XYMONAPI_SOCKET or $XYMONVAR/xymonapi/api.sock, when the file is
+there -- the plugins' tasks on the server have both settings -- and
+http://127.0.0.1:1986 otherwise.
 XYMONAPI_TOKEN_FILE names a file holding a client token -- the one
 xymonapi-connect(1) keeps -- sent when the API asks for a user: the token
 is this machine's own, revoked on its own (xymonapi(8), TOKENS). It is the
@@ -19,6 +24,7 @@ from __future__ import annotations
 
 import base64
 import getpass
+import http.client
 import json
 import os
 import re
@@ -30,9 +36,16 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import quote, unquote, urlencode, urlsplit
 
-URL = os.environ.get("XYMONAPI_URL", "http://127.0.0.1:1986").rstrip("/")
+
+def _default_url() -> str:
+    sock = os.environ.get("XYMONAPI_SOCKET") or (
+        os.path.join(os.environ["XYMONVAR"], "xymonapi", "api.sock") if os.environ.get("XYMONVAR") else "")
+    return f"unix:{sock}" if sock and os.path.exists(sock) else "http://127.0.0.1:1986"
+
+
+URL = (os.environ.get("XYMONAPI_URL") or _default_url()).rstrip("/")
 CA = os.environ.get("XYMONAPI_CA", "")
 TOKEN = os.environ.get("XYMONAPI_TOKEN", "")
 TOKEN_FILE = os.environ.get("XYMONAPI_TOKEN_FILE", "")
@@ -78,6 +91,38 @@ def _context() -> ssl.SSLContext:
     return ctx
 
 
+class _UnixConnection(http.client.HTTPConnection):
+    """HTTP over a Unix socket: the path, percent-encoded, stands where a
+    host would in the URL, unix://%2Fvar%2F...%2Fapi.sock/xymon/api/v1/..."""
+
+    def __init__(self, host: str, timeout=None, **kwargs):
+        super().__init__("localhost", timeout=timeout, **kwargs)
+        self.path = unquote(host)
+
+    def connect(self) -> None:
+        self.sock = socket.socket(socket.AF_UNIX)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self.path)
+
+
+class _UnixHandler(urllib.request.AbstractHTTPHandler):
+    def unix_open(self, req):
+        req.add_unredirected_header("Host", "localhost")
+        return self.do_open(_UnixConnection, req)
+
+    unix_request = urllib.request.AbstractHTTPHandler.do_request_
+
+
+def _url(path: str) -> str:
+    """The full URL of PATH under /xymon/api/v1 at URL, in the form the opener
+    takes: as given for http(s), the socket's path encoded as the host for
+    unix:PATH (or unix:///PATH)."""
+    parts = urlsplit(URL)
+    if parts.scheme == "unix":
+        return f"unix://{quote(parts.path, safe='')}/xymon/api/v1{path}"
+    return f"{URL}/xymon/api/v1{path}"
+
+
 _opener: urllib.request.OpenerDirector | None = None
 
 
@@ -89,7 +134,7 @@ def open_url(req, timeout: float):
     global _opener
     if _opener is None:
         _opener = urllib.request.build_opener(
-            _NoRedirect, urllib.request.HTTPSHandler(context=_context()))
+            _NoRedirect, urllib.request.HTTPSHandler(context=_context()), _UnixHandler)
     return _opener.open(req, timeout=timeout)
 
 
@@ -133,16 +178,16 @@ MAX_BODY = 16 * 1024 * 1024
 
 def api(path: str, **params: str | None) -> dict:
     """GET PATH under /xymon/api/v1 and return the JSON it answers."""
-    # http and https only: urllib also reads file:// and ftp:// URLs.
-    if urlsplit(URL).scheme not in ("http", "https"):
-        raise APIError(f"XYMONAPI_URL must be an http:// or https:// URL, not {URL!r}")
+    # http, https and the API's own socket: urllib also reads file:// and ftp:// URLs.
+    if urlsplit(URL).scheme not in ("http", "https", "unix"):
+        raise APIError(f"XYMONAPI_URL must be an http:// or https:// URL, or unix:PATH, not {URL!r}")
     # Left out when not given; "0" is a value.
     query = urlencode({k: v for k, v in params.items() if v is not None and v != ""})
     # This call's identifier, which the API logs and sends back: an error
     # says it, so that the API's log line about it can be found.
     rid = secrets.token_hex(8)
     try:
-        req = urllib.request.Request(f"{URL}/xymon/api/v1{path}" + (f"?{query}" if query else ""),
+        req = urllib.request.Request(_url(path) + (f"?{query}" if query else ""),
                                      headers={"X-Request-Id": rid})
         bearer = _token()
         if bearer:
@@ -168,6 +213,9 @@ def api(path: str, **params: str | None) -> dict:
             raise APIError(f"xymonapi at {URL} has a certificate this machine does not trust: "
                            f"{e.reason.verify_message} -- name the server's certificate, or the "
                            "CA that signed it, in XYMONAPI_CA") from e
+        if urlsplit(URL).scheme == "unix":
+            raise APIError(f"cannot reach xymonapi at {URL}: {e.reason} -- is the API running, with "
+                           "that socket (XYMONAPI_SOCKET), and may this user connect to it?") from e
         raise APIError(f"cannot reach xymonapi at {URL}: {e.reason} -- is the API running, and "
                        "XYMONAPI_URL right? From another machine it is reached over HTTPS, "
                        "as xymonapi(8) says") from e
@@ -226,7 +274,7 @@ def _new_token(name: str) -> str:
         print(file=sys.stderr)
     auth = base64.b64encode(f"{user}:{pw}".encode()).decode()
     pw = ""
-    req = urllib.request.Request(f"{URL}/xymon/api/v1/tokens", method="POST",
+    req = urllib.request.Request(_url("/tokens"), method="POST",
                                  data=json.dumps({"client": name}).encode(),
                                  headers={"Content-Type": "application/json",
                                           "Authorization": f"Basic {auth}"})
@@ -288,6 +336,10 @@ def connect(argv: list[str]) -> int:
     except KeyboardInterrupt:
         print(file=sys.stderr)
         return 130
+    if not TOKEN_FILE:
+        _say(f"{URL} asks no credential: the socket's permissions, or the API's settings, let this "
+             "user in; nothing is kept here" if urlsplit(URL).scheme == "unix" else
+             f"{URL} asks no password, so no token is needed; nothing is kept here")
     old = conf / f"{name}.password"
     if old.exists():
         old.unlink()

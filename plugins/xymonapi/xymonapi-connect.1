@@ -19,7 +19,9 @@ server's certificate;
 .IP 2. 4
 keeps a token from an earlier run while it still works;
 .IP 3. 4
-otherwise, when the API asks for a password, asks for a user of the API
+otherwise, when the API asks for a password -- it does not through its
+Unix socket, unix:PATH, where the socket's permissions decided already who
+connects, and then nothing is asked or kept -- asks for a user of the API
 (XYMONAPI_USER when set) and the password once, on the terminal, or as two
 lines on stdin when stdin is not one; gets with them a token for this
 machine, named by its short hostname; and writes it to
@@ -42,7 +44,9 @@ file. The API's /tokens lists this user's machines and revokes one.
 
 .SH OPTIONS
 .IP URL
-The API's address, http:// or https://, as other machines reach it.
+The API's address: http:// or https://, as other machines reach it; or
+unix:PATH, the API's own socket on the server, $XYMONVAR/xymonapi/api.sock
+unless xymonapi(8) was told otherwise, for a program on that machine.
 .IP NAME
 Letters, digits, '.', '_' and '-', 64 at most.
 

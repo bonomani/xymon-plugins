@@ -29,6 +29,13 @@ exits with status 77.
 The OpenAPI description of every operation is served at /openapi.json, and
 is the file openapi.yaml beside the program.
 
+It listens on a port, 127.0.0.1:1986 by default, where every request needs
+a user's password or a client token (TOKENS), and on a Unix socket for this
+machine's own programs, $XYMONVAR/xymonapi/api.sock by default, where none
+does: who may connect there is decided by the socket's permissions, the
+Xymon user and its group, as xymond itself trusts the programs beside it.
+XYMONAPI_SOCKET under ENVIRONMENT has the detail.
+
 .SH OPERATIONS
 Every path is under /xymon/api/v1. Only GET is accepted, but for POST and
 DELETE on /tokens: another method answers 405, and any other path 404. A
@@ -147,6 +154,8 @@ The caller's tokens: each machine's name and when its token was made.
 .IP "\fBDELETE /tokens/\fRNAME"
 Revokes the caller's token on NAME.
 .LP
+Through the socket (XYMONAPI_SOCKET) the token operations are refused, as
+they are to a token: they say who the caller is, and the socket does not.
 A user sees and revokes only their own tokens. An admin revokes anyone's by
 removing that line from $XYMONAPI_TOKENS: one JSON object per token, with
 its user, machine and SHA-256. Removing the user from XYMONAPI_PASSWD
@@ -177,14 +186,30 @@ Where xymond_history keeps the events and the saved status texts, for
 The index /search reads, and the embedding model, as for xymonapi-rag(1),
 which writes the index with the same settings from the same file.
 .LP
-Seven settings are its own. Put them in a file under
+Eight settings are its own. Put them in a file under
 \fBxymonserver.d/\fR beside xymonserver.cfg, which reads its files, for
 instance xymonapi.cfg:
 .IP "\fBXYMONAPI_LISTEN\fR"
 The address and port to listen on, as HOST:PORT or [ADDRESS]:PORT for IPv6.
 The default is 127.0.0.1:1986, which only this machine reaches.
+.IP "\fBXYMONAPI_SOCKET\fR"
+A Unix socket to listen on as well, for the programs of this machine --
+the plugins' own tasks, an MCP server or a search run here -- which need
+no password there: $XYMONVAR/xymonapi/api.sock by default, and none when
+set to the empty string. The API makes it mode 660, in a directory of mode
+750, so the Xymon user and the members of its group connect and nobody
+else; who connected is the kernel's finding, which no header or address
+could give, and the port is not changed by it: a request there, through
+the web server or not, needs the password or a token as before. The token
+operations are refused through the socket. The clients take the socket as
+\fBXYMONAPI_URL=unix:\fRPATH, and by default when XYMONVAR, from
+xymonserver.cfg, leads them to it, as the tasks have it; a person wanting
+in from a shell is a member of the Xymon user's group, or
+runs the client as that user. The socket speaks plain HTTP, TLS on the port
+or not: nothing of it leaves the machine.
 .IP "\fBXYMONAPI_PASSWD\fR"
-An htpasswd file: every request but /client needs a user and password
+An htpasswd file: every request but /client, and but those through the
+socket, needs a user and password
 from it, or a client token, and is answered 401 otherwise. The default is Xymon's own,
 $XYMONHOME/etc/xymonpasswd, when it exists -- the file the web pages use,
 whose users useradm.cgi and chpasswd.cgi manage -- so the API asks for
@@ -194,7 +219,8 @@ checked by Apache's htpasswd program, which must be on PATH; xymonapi does
 not start if it is not, or if it cannot read the file.
 .IP "\fBXYMONAPI_TOKENS\fR"
 The file of client tokens (TOKENS above), $XYMONVAR/xymonapi/tokens by
-default. The API creates it, mode 600, in a directory of mode 700.
+default. The API creates it, mode 600, in a directory of mode 750: the
+socket's, whose group reads neither the file nor the lock.
 .IP "\fBXYMONAPI_TLS_CERT\fR, \fBXYMONAPI_TLS_KEY\fR"
 A certificate and its key, PEM: with them the API speaks HTTPS on its port,
 and plain HTTP gets no answer. The defaults are xymond's own,
@@ -238,6 +264,8 @@ A file of yours here holds the settings of its own listed under
 ENVIRONMENT. Nothing is installed there.
 .IP "\fB$XYMONVAR/xymonapi/tokens\fR"
 The client tokens' SHA-256s, one JSON line each (TOKENS above).
+.IP "\fB$XYMONVAR/xymonapi/api.sock\fR"
+The Unix socket (XYMONAPI_SOCKET above), while the API runs.
 .IP "\fB$XYMONSERVERLOGS/xymonapi.log\fR"
 The log, written through the task's LOGFILE. A missing Python or module is
 reported here, and so is each token made, revoked, or used: user@machine.
@@ -259,6 +287,14 @@ xymonapi needs nothing central -- no directory, no certificate authority
 it must reach, no name service -- so that it answers when the rest of the
 network is in trouble: Xymon is what one looks at then. Its password file
 and its certificate are Xymon's own, files on the server.
+
+On the server itself, the socket: a program run as the Xymon user, or by a
+member of its group, reads the API with no password and no token, and
+xymonapi-connect(1) given unix:PATH says so and keeps nothing. The
+password protects the port, which the network reaches; the socket, which
+only the machine reaches, has the permissions a file has, and those are
+Xymon's own: whoever can read xymond's files can read what the API says of
+them.
 
 From other machines, use HTTPS: with xymond's certificate the API speaks it
 itself (XYMONAPI_TLS_CERT), and where the web server has a certificate the

@@ -31,6 +31,11 @@ make install-client                # under ~/.local; PREFIX=... for elsewhere
 xymonapi-mcp register https://xymon.example.ch
 ```
 
+On the Xymon server itself, give `register` the API's socket instead of a
+URL, `unix:$XYMONVAR/xymonapi/api.sock`: no password and no token, since
+the socket's permissions already say who may read the API (`xymonapi.8`,
+`XYMONAPI_SOCKET`).
+
 Then ask your AI client "which hosts are red?". The server's `/client`
 holds this plugin when `make install`, here or at the repository's top, ran
 on the server, which stages it there and runs nothing of it. Leave out
@@ -42,7 +47,7 @@ README](../xymonapi/README.md#setting-up-another-machine) says.
 the code under `$PREFIX/libexec/xymon-plugins/xymonapi-mcp`, after
 `xymonapi`'s client and `xymonapi-connect`. `register` connects this machine
 to the API with `xymonapi-connect` -- your password once, for a token of its
-own -- then registers the server with Claude Code and Codex as `xymon`;
+own; nothing for the socket -- then registers the server with Claude Code and Codex as `xymon`;
 `register URL xymon-lab` names a second server.
 
 Claude Code can also install it as a plugin, from this repository's

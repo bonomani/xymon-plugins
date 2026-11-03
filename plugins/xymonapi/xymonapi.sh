@@ -57,6 +57,10 @@ listen=${XYMONAPI_LISTEN:-127.0.0.1:1986}
 port=${listen##*:}
 host=`echo "${listen%:*}" | sed -e 's/^\[//' -e 's/\]$//'`
 
+# The Unix socket for this machine's own clients, which need no password
+# there: XYMONAPI_SOCKET, or $XYMONVAR/xymonapi/api.sock; set empty, none.
+sock=${XYMONAPI_SOCKET-${XYMONVAR:+$XYMONVAR/xymonapi/api.sock}}
+
 # TLS, with xymond's own certificate and key (xymon-tls(7)) unless others
 # are named: when both files are there the API speaks HTTPS, when neither is
 # it speaks HTTP, and one without the other is a mistake to report. A key
@@ -77,4 +81,4 @@ fi
 
 cd "$here" || exit 1
 # shellcheck disable=SC2086 # tls is two options and their files, or nothing
-exec "$PYTHON" -m uvicorn --host "$host" --port "$port" --no-access-log $tls app:app
+exec "$PYTHON" app.py --host "$host" --port "$port" ${sock:+--socket "$sock"} $tls

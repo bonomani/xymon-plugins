@@ -30,8 +30,9 @@ is updated on its own, on either side.
 \fBxymonapi-mcp register URL [NAME]\fR connects this machine to the API at
 URL with
 .I xymonapi-connect(1),
-installed beside it -- a password asked once when there is no working token
--- then registers the server with Claude Code and with Codex under NAME,
+installed beside it -- a password asked once when there is no working token;
+nothing, on the server itself, for the API's own socket, unix:PATH -- then
+registers the server with Claude Code and with Codex under NAME,
 xymon by default: this launcher as the command, with XYMONAPI_URL,
 XYMONAPI_TOKEN_FILE when there is a token, XYMONAPI_CA when a certificate is
 used, and XYMONAPI_PYTHON when it is set. A registration of that name is
@@ -72,7 +73,9 @@ there words meant to steer the client's model. Every tool here only reads,
 but an AI client that also has tools that change things should be watched
 when it acts on a history it found.
 
-The user and password are sent in the clear over http://: across a network,
+On the server, the socket sends no credential at all, and leaves the
+machine by no network. The user and password are sent in the clear over
+http://: across a network,
 give an https:// XYMONAPI_URL -- the API's own, when it has xymond's
 certificate, or the web server's in front of it, as xymonapi(8) says --
 and XYMONAPI_CA when the certificate is not one this machine trusts.
@@ -81,7 +84,11 @@ nowhere else.
 
 .SH ENVIRONMENT
 .IP "\fBXYMONAPI_URL\fR"
-Where xymonapi(8) is. The default is http://127.0.0.1:1986.
+Where xymonapi(8) is: http://, https://, or unix:PATH, the API's own
+socket on the server, where no token is needed (xymonapi(8),
+XYMONAPI_SOCKET). The default is that socket when XYMONAPI_SOCKET, or
+XYMONVAR, says where it is and it is there, and http://127.0.0.1:1986
+otherwise.
 .IP "\fBXYMONAPI_TOKEN_FILE\fR, \fBXYMONAPI_TOKEN\fR"
 A client token, from the first line of the file XYMONAPI_TOKEN_FILE names,
 or XYMONAPI_TOKEN itself: this machine's own credential (xymonapi(8),

@@ -89,7 +89,7 @@ class _Lock:
     """One writer at a time: two machines asking at once must not lose one."""
 
     def __enter__(self):
-        os.makedirs(os.path.dirname(TOKENS_FILE), mode=0o700, exist_ok=True)
+        os.makedirs(os.path.dirname(TOKENS_FILE), mode=0o750, exist_ok=True)
         self.fd = os.open(TOKENS_FILE + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
         fcntl.flock(self.fd, fcntl.LOCK_EX)
         return self

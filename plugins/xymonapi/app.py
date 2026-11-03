@@ -9,6 +9,9 @@ Started by xymonapi.sh, which checks Python and the modules first.
 """
 from __future__ import annotations
 
+import argparse
+import asyncio
+import contextlib
 import contextvars
 import io
 import logging
@@ -16,6 +19,9 @@ import os
 import re
 import secrets
 import shutil
+import signal
+import socket
+import stat
 import sys
 import tarfile
 from pathlib import Path
@@ -368,6 +374,16 @@ def build_app() -> FastAPI:
             # and a machine fetches it before it has a token to send.
             if request.url.path == base + "/client":
                 return await call_next(request)
+            # A request through the Unix socket (XYMONAPI_SOCKET) is from a
+            # user the socket's permissions let in -- the kernel checked
+            # that, which no header could -- so it needs no password. Not
+            # for the token operations, which say who the caller is: those
+            # take the password, as a token does not either.
+            if request.scope.get("xymonapi_local"):
+                if request.url.path.startswith(base + "/tokens"):
+                    return refuse("tokens are managed with the user's password, not through the socket")
+                request.state.user, request.state.client = "local", None
+                return await call_next(request)
             header = request.headers.get("authorization") or ""
             if header.startswith("Bearer "):
                 # A token opens every path but the token operations: it may
@@ -429,3 +445,82 @@ def build_app() -> FastAPI:
 
 
 app = build_app()
+
+
+async def _local_app(scope, receive, send):
+    """The app as the Unix socket serves it: each request marked as local, which
+    the password check above reads. The mark is put here, by the listener, so
+    that nothing a client sends can carry it."""
+    if scope["type"] == "http":
+        scope = dict(scope, xymonapi_local=True)
+    await app(scope, receive, send)
+
+
+def main(argv: list[str]) -> int:
+    """Serve the app on the address given and, with --socket, on a Unix socket
+    too: one process, two listeners, so that the socket's requests are told
+    apart by where they came in, and TLS, when on, is the port's alone."""
+    import uvicorn
+
+    ap = argparse.ArgumentParser(prog="xymonapi")
+    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=1986)
+    ap.add_argument("--socket", default="")
+    ap.add_argument("--ssl-certfile")
+    ap.add_argument("--ssl-keyfile")
+    args = ap.parse_args(argv)
+
+    class Server(uvicorn.Server):
+        # uvicorn's serve() takes the process's signals for itself and gives
+        # them back when done; with two servers in one loop the second would
+        # take them from the first. Neither takes them: one handler, below,
+        # stops both.
+        @contextlib.contextmanager
+        def capture_signals(self):
+            yield
+
+    servers: list[tuple[Server, socket.socket]] = []
+    try:
+        tcp = socket.create_server((args.host, args.port),
+                                   family=socket.AF_INET6 if ":" in args.host else socket.AF_INET)
+    except OSError as e:
+        sys.exit(f"xymonapi: cannot listen on {args.host}:{args.port}: {(e.strerror or str(e)).lower()}")
+    servers.append((Server(uvicorn.Config(app, access_log=False, ssl_certfile=args.ssl_certfile,
+                                          ssl_keyfile=args.ssl_keyfile)), tcp))
+    if args.socket:
+        # Mode 660 in a directory of 750: the Xymon user and its group reach
+        # it, and nobody else (xymonapi(8), XYMONAPI_SOCKET). A file left by
+        # an earlier run is replaced; another live server there is not
+        # checked for, as the port's "address in use" is: the task runs one.
+        d = os.path.dirname(args.socket)
+        if d:
+            os.makedirs(d, mode=0o750, exist_ok=True)
+        with contextlib.suppress(FileNotFoundError):
+            if stat.S_ISSOCK(os.lstat(args.socket).st_mode):
+                os.unlink(args.socket)
+        uds = socket.socket(socket.AF_UNIX)
+        uds.bind(args.socket)
+        os.chmod(args.socket, 0o660)
+        uds.listen(128)
+        servers.append((Server(uvicorn.Config(_local_app, access_log=False)), uds))
+        log.info("listening on the socket %s too, with no password asked there", args.socket)
+
+    def stop(sig, frame):
+        for server, _ in servers:
+            server.handle_exit(sig, frame)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, stop)
+
+    async def serve():
+        await asyncio.gather(*(server.serve(sockets=[sock]) for server, sock in servers))
+    try:
+        asyncio.run(serve())
+    finally:
+        if args.socket:
+            with contextlib.suppress(OSError):
+                os.unlink(args.socket)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

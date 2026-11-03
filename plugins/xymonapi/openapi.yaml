@@ -19,7 +19,9 @@ info:
         listed path does not take answers method_not_allowed.
     C3. With XYMONAPI_PASSWD set, every path but /client answers unauthorized
         without a user and password from that file or a valid client token,
-        before anything else is checked; a token is refused on /tokens.
+        before anything else is checked; a token is refused on /tokens. A
+        request through the API's own Unix socket (xymonapi(8),
+        XYMONAPI_SOCKET) needs neither, except on /tokens.
     C4. /client answers without a user, XYMONAPI_PASSWD set or not, and holds
         the code of the plugins staged on this server and nothing else: no
         user, password, token or setting.

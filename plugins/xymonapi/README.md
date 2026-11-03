@@ -82,7 +82,16 @@ curl http://127.0.0.1:1986/xymon/api/v1/health
 ```
 
 A `401` means it runs and asks for a user: add `-u` with one of its users
-(see [Users](#users)).
+(see [Users](#users)). The programs of the server itself have a door that
+asks none, the API's Unix socket, `$XYMONVAR/xymonapi/api.sock`, which the
+Xymon user and its group reach:
+
+```sh
+curl --unix-socket "$XYMONVAR/xymonapi/api.sock" http://localhost/xymon/api/v1/health
+```
+
+The plugins' own clients take it by default there, as `xymonapi.8` says
+under `XYMONAPI_SOCKET`.
 
 ## Users
 
@@ -130,7 +139,8 @@ file, `$XYMONAPI_TOKENS`.
 
 ## Reaching it from another machine
 
-It listens on 127.0.0.1 unless told otherwise. From another machine, use
+Its port listens on 127.0.0.1 unless told otherwise, and asks the password
+there whatever the address; the socket above never leaves the machine. From another machine, use
 HTTPS, one of:
 
 - **Its own HTTPS.** Where xymond has a certificate for TLS (`xymon-tls(7)`,
