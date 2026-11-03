@@ -8,6 +8,10 @@
 # metric name that could leave that directory or reach rrdtool as syntax:
 # "../" in a host, ":" in a test. A time it cannot read is refused too, and an
 # RRD file that does not exist is a 404. /graphs refuses the same names.
+# A range reaching into xymond_rrd's 30 minutes of cached updates first asks
+# it to write that host's -- /HOST/ to its control socket, as showgraph
+# does -- an older range does not; a left-over rrdctl file, or no XYMONTMP,
+# leaves /series answering as before.
 #
 # The RRD is made here, with three known values at fixed times, so the answer
 # is known in advance. Skips where the API cannot run (tests/lib/xymonapi.sh).
@@ -26,6 +30,7 @@ command -v rrdtool >/dev/null 2>&1 || skip "rrdtool is not installed"
 
 work=$(mktempdir)
 register_cleanup 'stop_process "$API_PID"'
+register_cleanup 'stop_process "$RRDCTL_PID"'
 
 # Three five-minute steps, from a time that is a multiple of the step, so
 # each update lands on a step of its own and is stored as given.
@@ -35,8 +40,17 @@ rrd="$work/rrd/host.example.com/la.rrd"
 rrdtool create "$rrd" --start "$t0" --step 300 DS:la:GAUGE:600:U:U RRA:AVERAGE:0.5:1:100
 rrdtool update "$rrd" "$((t0 + 300)):1" "$((t0 + 600)):2" "$((t0 + 900)):3"
 
+# xymond_rrd's control socket, a stand-in recording what it is sent, and
+# beside it a left-over rrdctl file, of a process long gone.
+mkdir -p "$work/tmp"
+"${XYMONAPI_PYTHON:-python3}" "$ROOT/tests/lib/fake-rrdctl.py" "$work/tmp/rrdctl.1" "$work/rrdctl.req" &
+RRDCTL_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ -e "$work/rrdctl.req" ] && break; sleep 0.2; done
+[ -e "$work/rrdctl.req" ] || fail "the stand-in control socket did not start"
+: > "$work/tmp/rrdctl.999"
+
 # /series needs no xymond, but the launcher refuses to start without XYMSRV.
-export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONRRDS="$work/rrd"
+export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONRRDS="$work/rrd" XYMONTMP="$work/tmp"
 start_api
 
 body=$(api_get "/series?entity=host.example.com&test=la&metric=la&from=$t0&to=$((t0 + 900))")
@@ -44,6 +58,13 @@ for v in 1.0 2.0 3.0; do
 	assert_contains "\"v\":$v" "$body" "/series returns the value $v stored in the RRD"
 done
 assert_contains '"metric":"la"' "$body" "/series names the dataset it read"
+assert_equal "" "$(cat "$work/rrdctl.req")" "a range long past asks xymond_rrd for nothing"
+
+# A range up to now: xymond_rrd is asked to write the host's cached updates
+# first; the left-over file beside its socket does not get in the way.
+body=$(api_get "/series?entity=host.example.com&test=la&metric=la&from=-1h")
+assert_contains '"metric":"la"' "$body" "/series up to now answers"
+assert_contains "/host.example.com/" "$(cat "$work/rrdctl.req")" "and first asks xymond_rrd to write that host's cached updates"
 
 # An HTTP test's file is named after its URL, colon and all; rrdtool reads
 # the colon as its separator unless it is escaped.
@@ -86,4 +107,9 @@ assert_contains 'xymonapi.log' "$(api_get '/series?entity=host.example.com&test=
 assert_not_contains "$work" "$(api_get '/series?entity=host.example.com&test=la&metric=la')" "and holds no path of the server's"
 assert_contains 'rrdtool' "$(cat "$work/api.log")" "which says what was missing"
 
-pass "/series reads the RRD values asked for, answers 404 for a missing file or dataset, 400 for bad times, and refuses names that leave XYMONRRDS"
+# No XYMONTMP: nothing to ask, and /series answers as before.
+stop_process "$API_PID"; API_PID=""
+unset XYMONTMP
+start_api
+assert_contains '"metric":"la"' "$(api_get "/series?entity=host.example.com&test=la&metric=la&from=-1h")" "without XYMONTMP, /series up to now answers"
+pass "/series reads the RRD values asked for, first asking xymond_rrd to write the host's cached updates when the range reaches them, answers 404 for a missing file or dataset, 400 for bad times, and refuses names that leave XYMONRRDS"

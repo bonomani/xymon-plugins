@@ -18,6 +18,7 @@ import binascii
 import json
 import os
 import re
+import socket
 import subprocess
 import time
 import urllib.request
@@ -266,6 +267,39 @@ def epoch(value: str, now: int | None = None) -> int:
     raise BadRequest(f"time '{value}' must be now, seconds since the epoch, or like -24h")
 
 
+def _flush(host: str) -> None:
+    """Ask xymond_rrd to write HOST's cached updates now, as showgraph does
+    before drawing a graph: the text /HOST/ to each of its control sockets,
+    rrdctl.<pid> in XYMONTMP -- in XYMONRUNDIR too, where a newer Xymon puts
+    them -- then 0.3 s for the write. It only makes an answer fresher: a
+    directory missing, a left-over file nobody listens on, a send refused or
+    a path too long for a socket, and the file is read as it stands."""
+    req = f"/{host}/".encode()
+    dirs = {d for d in (os.environ.get("XYMONTMP", ""), os.environ.get("XYMONRUNDIR", "")) if d}
+    sent = False
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
+        s.setblocking(False)
+        for d in dirs:
+            try:
+                names = os.listdir(d)
+            except OSError:
+                continue
+            for n in names:
+                if n.startswith("rrdctl."):
+                    try:
+                        s.sendto(req, os.path.join(d, n))
+                        sent = True
+                    except OSError:
+                        pass
+    if sent:
+        time.sleep(0.3)
+
+
+# xymond_rrd holds updates for up to 30 minutes before writing them: a range
+# that ends earlier than that is on disk already, and needs no flush.
+CACHE_SECONDS = 1800
+
+
 def series(entity: str | None, test: str | None, metric: str | None,
            frm: str, to: str) -> dict:
     """The values of one dataset of HOST/TEST.rrd over a time range."""
@@ -281,6 +315,8 @@ def series(entity: str | None, test: str | None, metric: str | None,
     rrd = os.path.join(XYMONRRDS, host, f"{tst}.rrd")
     if not os.path.isfile(rrd):
         raise NotFound(f"no RRD file for {host} {tst}")
+    if end >= time.time() - CACHE_SECONDS:
+        _flush(host)
     # xport keeps to 400 rows unless told otherwise (--maxrows), so a span of
     # years comes back consolidated, not as every step: the answer is bounded.
     out = subprocess.run(["rrdtool", "xport", "--json", "--start", str(start),
