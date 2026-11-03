@@ -37,8 +37,8 @@ xymon by default: this launcher as the command, with XYMONAPI_URL,
 XYMONAPI_TOKEN_FILE when there is a token, XYMONAPI_CA when a certificate is
 used, and XYMONAPI_PYTHON when it is set. A registration of that name is
 replaced. For a client that is not installed, it prints the command to run
-later. It exits 1, registering
-nothing, when the connection fails.
+later. When the connection fails it registers nothing and exits with
+xymonapi-connect's status; when a client refuses the registration, with 1.
 
 .SH TOOLS
 .IP "\fBhealth\fR"
@@ -106,4 +106,4 @@ confirmation when a terminal is there to ask, with a line on stderr when
 none is.
 
 .SH "SEE ALSO"
-xymonapi(8), xymonapi-connect(1)
+xymonapi(8), xymonapi-connect(1), xymonapi-rag(1)

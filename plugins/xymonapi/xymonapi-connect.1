@@ -36,6 +36,7 @@ certificate is used.
 Given the API's own socket, unix:PATH, on the server, it asks nothing and
 keeps nothing: the socket's permissions decided already who connects, and
 the settings printed name the socket alone.
+.PP
 Running it again changes nothing while the token works, and replaces one
 that was revoked. Messages go to stderr. A password file an earlier setup
 kept, ~/.config/xymon-api/NAME.password, is removed.
@@ -71,7 +72,8 @@ Where xymon-api/ is, ~/.config by default.
 .SH "EXIT STATUS"
 0 when this machine is connected; 1 when the API cannot be reached, its
 certificate is not trusted, or it refused the password; 2 for a wrong
-argument; 130 when interrupted; 77 without Python 3.9.
+argument; 130 when interrupted; 77 without Python 3.9, or when the run with
+the python3 on PATH is declined.
 
 .SH "SEE ALSO"
-xymonapi(8)
+xymonapi(8), xymonapi-mcp(1), xymonapi-rag(1)
