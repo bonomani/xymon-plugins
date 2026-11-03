@@ -111,11 +111,18 @@ assert_equal "400" "$(api_code '/graphs?entity=../host.example.com&test=la')" "/
 # answer does not say what went wrong; the log does.
 stop_process "$API_PID"; API_PID=""
 # A PATH with everything the launcher and this test use, and no rrdtool.
+# The Python is named by its file rather than linked in: the python3 on PATH
+# may be a shim, pyenv's for one, a script that needs tools this PATH lacks
+# and so fails as "too old". The launcher's choice (xymonapi.sh), resolved by
+# the interpreter itself, which keeps a virtualenv's python3 its own.
 mkdir -p "$work/nobin"
-for t in sh bash dirname sed cat tail head grep curl date sleep od tr python3; do
+for t in sh bash dirname sed cat tail head grep curl date sleep od tr; do
 	p=$(command -v "$t") && ln -s "$p" "$work/nobin/$t"
 done
-PATH="$work/nobin" start_api
+python=${XYMONAPI_PYTHON:-python3}
+[ -n "${XYMONAPI_PYTHON:-}" ] || [ ! -x "$ROOT/plugins/venv/bin/python3" ] || python=$ROOT/plugins/venv/bin/python3
+python=$("$python" -c 'import sys; print(sys.executable)')
+XYMONAPI_PYTHON="$python" PATH="$work/nobin" start_api
 assert_equal "502" "$(api_code '/series?entity=host.example.com&test=la&metric=la')" "/series with no rrdtool on PATH"
 assert_contains 'xymonapi.log' "$(api_get '/series?entity=host.example.com&test=la&metric=la')" "and the answer points at the log"
 assert_not_contains "$work" "$(api_get '/series?entity=host.example.com&test=la&metric=la')" "and holds no path of the server's"
