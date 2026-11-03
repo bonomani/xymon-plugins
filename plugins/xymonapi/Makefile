@@ -12,6 +12,8 @@ PLUGIN = xymonapi
 include ../../build/plugin.mk
 
 FILES = app.py xymon.py xymonapi_client.py tokens.py openapi.yaml requirements.txt xymonapi.sh
+# The modules of requirements.txt, by import name, as xymonapi.sh checks them.
+MODULES = fastapi uvicorn yaml
 
 all:
 
@@ -35,7 +37,7 @@ install:
 	@echo "  $(ETC)/xymonapi-{apache,nginx,lighttpd}.conf in the web server, or give the API xymond's certificate: see xymonapi(8)."
 	@echo "Updating one that runs: it keeps the old code until restarted. Stop it, and xymonlaunch starts the new:"
 	@echo "  pkill -f '$(XYMONHOME)/ext/xymonapi/'"
-	$(call venv_add,$(EXTROOT))
+	$(call venv_auto,$(EXTROOT))
 
 # An isolated Python for the plugins installed here, with their modules.
 venv:

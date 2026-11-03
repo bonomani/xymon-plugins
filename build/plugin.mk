@@ -24,8 +24,12 @@
 
 MANDIR = /usr/share/man
 PREFIX = $(HOME)/.local
-# The Python make venv makes the virtualenv with: 3.9 or later.
+# The Python make venv makes the virtualenv with: 3.9 or later. Given on the
+# command line, it is also the one an install makes the virtualenv from
+# (venv_auto), in place of the search there.
 PYTHON = python3
+# Where an install looks for a Python beyond PATH: Homebrew's and pyenv's.
+PYTHON_DIRS = /opt/homebrew/bin /usr/local/bin /opt/homebrew/opt/python@3.*/bin $(HOME)/.pyenv/versions/*/bin
 EXTROOT = $(DESTDIR)$(XYMONHOME)/ext
 EXT = $(EXTROOT)/$(PLUGIN)
 ETC = $(DESTDIR)$(XYMONHOME)/etc
@@ -85,16 +89,38 @@ define venv
 	@echo "The plugins in $(1) run with $(1)/venv/bin/python3 (`"$(1)/venv/bin/python3" -V`)."
 endef
 
-# venv_add DIR -- the last step of installing a plugin that needs modules:
-# into the virtualenv at DIR/venv, when there is one, the modules of this
-# plugin's requirements.txt, so that it runs as installed, alone or after
-# the others; when there is none yet, how to make one.
-define venv_add
+# venv_auto DIR -- the last step of installing a plugin that needs the
+# modules MODULES names (their import names), and downloads nothing. With no
+# virtualenv at DIR/venv yet: the newest Python 3.9 or later on this machine
+# that has them already -- PYTHON when given on the command line, else
+# python3.14 down to python3.9 and python3, on PATH and in PYTHON_DIRS -- is
+# made the virtualenv's, with --system-site-packages, so that it is only
+# pinned beside the plugins and nothing is copied or fetched; with no such
+# Python, the hint says which make venv would use. With a virtualenv there,
+# the modules it lacks are named, for make venv to install.
+PYTHON_GIVEN = $(if $(filter command line environment,$(origin PYTHON)),$(PYTHON))
+define venv_auto
 	@if [ -x "$(1)/venv/bin/python3" ]; then \
-		echo "installing the modules of requirements.txt in $(1)/venv"; \
-		"$(1)/venv/bin/python3" -m pip install -q -r requirements.txt || exit 1; \
+		missing=`"$(1)/venv/bin/python3" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $(MODULES)`; \
+		[ -z "$$missing" ] || echo "The virtualenv $(1)/venv lacks $$missing, which this plugin needs: make venv (venv-client elsewhere) installs them."; \
 	else \
-		echo "No virtualenv at $(1)/venv: make venv (venv-client elsewhere) [PYTHON=python3.x] makes one with the modules this plugin needs; without it, the python3 on PATH must have them."; \
+		py=""; newest=""; \
+		for c in $(if $(PYTHON_GIVEN),$(PYTHON_GIVEN),python3.14 python3.13 python3.12 python3.11 python3.10 python3.9 python3); do \
+			for d in "" $(PYTHON_DIRS); do \
+				case $$c in /*) p=$$c ;; *) if [ -n "$$d" ]; then p=$$d/$$c; else p=`command -v "$$c" 2>/dev/null`; fi ;; esac; \
+				[ -n "$$p" ] && [ -x "$$p" ] || continue; \
+				"$$p" -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null || continue; \
+				[ -n "$$newest" ] || newest=$$p; \
+				"$$p" -c 'import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in sys.argv[1:]))' $(MODULES) 2>/dev/null || continue; \
+				py=$$p; break 2; \
+			done; \
+		done; \
+		if [ -n "$$py" ]; then \
+			"$$py" -m venv --system-site-packages "$(1)/venv" || exit 1; \
+			echo "Made $(1)/venv from $$py (`"$$py" -V 2>&1`), which has the modules this plugin needs ($(MODULES)): the plugins there run with it."; \
+		else \
+			echo "No virtualenv at $(1)/venv, and no Python with the modules this plugin needs ($(MODULES)): make venv (venv-client elsewhere)$${newest:+ PYTHON=$$newest} makes one and installs them; without it, the python3 on PATH must have them."; \
+		fi; \
 	fi
 endef
 

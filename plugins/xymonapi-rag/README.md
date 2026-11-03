@@ -27,10 +27,10 @@ setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 written `DISABLED`; it also stages this directory for other machines, in
 what the server's `/client` serves. To enable it:
 
-1. install the modules in [`requirements.txt`](requirements.txt): `make venv
-   XYMONHOME=...` here puts them in a virtualenv beside the plugins, which
-   the launchers prefer to the `python3` on PATH; where that virtualenv is
-   there already, `make install` has put them in it;
+1. have the modules in [`requirements.txt`](requirements.txt): when a Python
+   on the machine has them, `make install` has made the virtualenv beside the
+   plugins from it, and there is nothing to do; otherwise `make venv
+   XYMONHOME=...` makes it and installs them;
 2. put `XYMONAPI_RAG_DOCS` -- a directory with Xymon's manual pages;
    `/usr/share/man` will do -- in a file under `xymonserver.d/`;
 3. remove `DISABLED` from the task.

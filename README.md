@@ -58,9 +58,11 @@ the uninstall there removes the virtualenv below too.
 
 The launchers run with the Python `XYMONAPI_PYTHON` names, else with the
 virtualenv beside the installed plugins when there is one, else with the
-`python3` on PATH, asking first when a person is at the terminal. `make venv`
-(on the server) or `make venv-client` makes that virtualenv, with the modules
-of the plugins installed there; a plugin installed afterwards adds its own.
+`python3` on PATH, asking first when a person is at the terminal. Installing
+a plugin that needs modules makes that virtualenv when the machine already
+has a Python with them, the newest, and downloads nothing; otherwise
+`make venv` (on the server) or `make venv-client` makes it and installs the
+modules of the plugins installed there.
 
 ## Versions
 

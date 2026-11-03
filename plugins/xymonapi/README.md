@@ -62,14 +62,18 @@ those really are -- `/etc/xymon` on many installations -- so the files land
 there. With `DESTDIR`, the staged directories are plain ones: a package built
 from that stage should check how its tool installs a directory over a link.
 
-The Python modules are not installed with it. `make venv XYMONHOME=...`
-(`PYTHON=python3.x` for one other than `python3`) makes a virtualenv beside
-the plugins, `$XYMONHOME/ext/venv`, with the modules of every plugin
-installed there; a plugin installed later adds its own. The launchers run
-with it unless `XYMONAPI_PYTHON` names another Python, and without one fall
-back to the `python3` on PATH, which must then have the modules, importable
-by the user Xymon runs as: from your distribution's packages, for instance.
-`pip install --user` run as root puts them where that user does not look.
+The Python modules are not downloaded by the install. When the machine has
+a Python 3.9 or later with them already -- the newest of `python3.14` down to
+`python3`, on PATH and in Homebrew's and pyenv's directories, or the one
+`PYTHON=` names -- the install makes a virtualenv beside the plugins,
+`$XYMONHOME/ext/venv`, from it, pinning that interpreter and fetching
+nothing. When no Python has them, it says so and names the newest found:
+`make venv XYMONHOME=... PYTHON=...` then makes the virtualenv and installs
+the modules of every plugin there, from PyPI. The launchers run with the
+virtualenv unless `XYMONAPI_PYTHON` names another Python, and without one
+fall back to the `python3` on PATH, which must then have the modules,
+importable by the user Xymon runs as. `pip install --user` run as root puts
+them where that user does not look.
 
 Then remove `DISABLED` from the task, and check, with the default address:
 
