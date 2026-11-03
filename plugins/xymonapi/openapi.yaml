@@ -130,7 +130,7 @@ paths:
       parameters:
         - { name: entity, in: query, required: true, schema: { type: string }, description: "The host." }
         - { name: test,   in: query, required: true, schema: { type: string }, description: "The RRD file, without .rrd, named after the data, not the board column: la (cpu load), memory, tcp.conn, tcp.ssh, tcp.http.<host>:<port>, (an HTTP test), disk,<mount>..." }
-        - { name: metric, in: query, schema: { type: string, default: lambda }, description: "The dataset in that file." }
+        - { name: metric, in: query, schema: { type: string }, description: "The dataset in that file: la in la.rrd, sec in a tcp.*.rrd. Left out: the file's only dataset; lambda when it is among several; otherwise bad_request, naming the file's datasets." }
         - { name: from,   in: query, schema: { $ref: "#/components/schemas/Time" } }
         - { name: to,     in: query, schema: { $ref: "#/components/schemas/Time" } }
       responses:

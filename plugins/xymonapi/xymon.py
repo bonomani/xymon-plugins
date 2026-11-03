@@ -300,12 +300,30 @@ def _flush(host: str) -> None:
 CACHE_SECONDS = 1800
 
 
+_DSINFO = re.compile(r"^ds\[([^\]]+)\]\.index = ", re.M)
+
+
+def _dataset(rrd: str, host: str, tst: str) -> str:
+    """The dataset to read when none is named: the file's only one -- la in
+    la.rrd, sec in a tcp.*.rrd, as most of Xymon's files hold one -- else
+    lambda when it is among several, the default before there was a choice;
+    else none can be picked for the caller, who is told the names."""
+    out = subprocess.run(["rrdtool", "info", rrd], capture_output=True, text=True, timeout=30)
+    if out.returncode != 0:
+        raise Upstream(out.stderr.strip() or "rrdtool info failed")
+    names = _DSINFO.findall(out.stdout)
+    if len(names) == 1:
+        return names[0]
+    if "lambda" in names:
+        return "lambda"
+    raise BadRequest(f"metric is needed: {tst}.rrd of {host} holds {', '.join(names) or 'no dataset'}")
+
+
 def series(entity: str | None, test: str | None, metric: str | None,
            frm: str, to: str) -> dict:
     """The values of one dataset of HOST/TEST.rrd over a time range."""
     host, tst = _name(entity, "entity"), _name(test, "test")
-    ds = metric or "lambda"
-    if not _DSNAME.fullmatch(ds):
+    if metric and not _DSNAME.fullmatch(metric):
         raise BadRequest("metric must be an RRD dataset name")
     start, end = epoch(frm), epoch(to)
     if start > end:
@@ -315,6 +333,7 @@ def series(entity: str | None, test: str | None, metric: str | None,
     rrd = os.path.join(XYMONRRDS, host, f"{tst}.rrd")
     if not os.path.isfile(rrd):
         raise NotFound(f"no RRD file for {host} {tst}")
+    ds = metric or _dataset(rrd, host, tst)
     if end >= time.time() - CACHE_SECONDS:
         _flush(host)
     # xport keeps to 400 rows unless told otherwise (--maxrows), so a span of

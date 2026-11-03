@@ -107,10 +107,13 @@ $XYMONRRDS, read with rrdtool. TEST is the file's name, not the column on
 the status board: xymond_rrd names the files after the data it keeps, so
 the conn test is in tcp.conn.rrd and the ssh test in tcp.ssh.rrd, cpu load
 is in la.rrd and memory in memory.rrd, and a disk is in disk,<mount with
-commas for slashes>.rrd. DATASET is a column in that file: lambda is the
-load average in la.rrd, sec the response time in a tcp.*.rrd. DATASET
-defaults to lambda, and a missing file or dataset is answered 404; from
-after to is a 400. xymond_rrd keeps updates for up to 30 minutes before
+commas for slashes>.rrd. DATASET is a column in that file: la is the
+load average in la.rrd, sec the response time in a tcp.*.rrd, lambda the
+value in the files xymond_rrd makes from a status text's NAME : value
+lines. Left out, it is the file's only dataset -- as most files hold one
+-- or lambda among several; with several and no lambda, the answer is a
+400 that names them. A missing file or dataset is answered 404; from after
+to is a 400. xymond_rrd keeps updates for up to 30 minutes before
 writing them, unless run with --no-cache; when the range reaches into that
 time, /series first asks it to write HOST's, as a graph shown on the web
 pages does, through its control sockets, rrdctl.* in XYMONTMP (or

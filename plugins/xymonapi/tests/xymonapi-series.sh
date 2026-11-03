@@ -58,6 +58,18 @@ for v in 1.0 2.0 3.0; do
 	assert_contains "\"v\":$v" "$body" "/series returns the value $v stored in the RRD"
 done
 assert_contains '"metric":"la"' "$body" "/series names the dataset it read"
+
+# With no metric: the file's only dataset, la here, not a lambda it has not.
+body=$(api_get "/series?entity=host.example.com&test=la&from=$t0&to=$((t0 + 900))")
+assert_contains '"metric":"la"' "$body" "with no metric, /series reads the file's only dataset"
+assert_contains '"v":3.0' "$body" "and its values"
+# Several datasets: lambda when it is among them, as before there was a
+# choice; otherwise a 400 that names them.
+rrdtool create "$work/rrd/host.example.com/two.rrd" --start "$t0" --step 300 DS:used:GAUGE:600:U:U DS:pct:GAUGE:600:U:U RRA:AVERAGE:0.5:1:100
+assert_equal "400" "$(api_code "/series?entity=host.example.com&test=two&from=$t0&to=$((t0 + 900))")" "two datasets and no metric: a 400"
+assert_contains "two.rrd of host.example.com holds used, pct" "$(api_get "/series?entity=host.example.com&test=two&from=$t0&to=$((t0 + 900))")" "which names them"
+rrdtool create "$work/rrd/host.example.com/ncv.rrd" --start "$t0" --step 300 DS:count:GAUGE:600:U:U DS:lambda:GAUGE:600:U:U RRA:AVERAGE:0.5:1:100
+assert_contains '"metric":"lambda"' "$(api_get "/series?entity=host.example.com&test=ncv&from=$t0&to=$((t0 + 900))")" "with lambda among several, lambda"
 assert_equal "" "$(cat "$work/rrdctl.req")" "a range long past asks xymond_rrd for nothing"
 
 # A range up to now: xymond_rrd is asked to write the host's cached updates
@@ -73,6 +85,8 @@ rrdtool create "$http" --start "$t0" --step 300 DS:sec:GAUGE:600:U:U RRA:AVERAGE
 rrdtool update "$http" "$((t0 + 300)):0.5"
 body=$(api_get "/series?entity=host.example.com&test=tcp.http.host.example.com:8080,&metric=sec&from=$t0&to=$((t0 + 300))")
 assert_contains '"v":0.5' "$body" "/series reads an HTTP test's RRD, whose name holds a colon"
+body=$(api_get "/series?entity=host.example.com&test=tcp.http.host.example.com:8080,&from=$t0&to=$((t0 + 300))")
+assert_contains '"metric":"sec"' "$body" "and with no metric, its only dataset, sec"
 
 assert_equal "400" "$(api_code '/series?entity=../host.example.com&test=la&metric=la')" "a host name with ../"
 assert_equal "400" "$(api_code '/series?entity=host:example.com&test=la&metric=la')" "a host name with a colon"
