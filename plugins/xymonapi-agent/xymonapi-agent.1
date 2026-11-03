@@ -1,0 +1,124 @@
+.TH XYMONAPI-AGENT 1 "November 3, 2026" "xymon-plugins"
+.SH NAME
+xymonapi-agent \- ask an AI agent a question about Xymon, headless
+.SH SYNOPSIS
+.B "xymonapi-agent [--backend NAME] ask [--session NAME] [--json] [--show-command] QUESTION"
+.br
+.B "xymonapi-agent [--backend NAME] backends"
+.br
+.B "xymonapi-agent [--backend NAME] doctor [--json]"
+
+.SH DESCRIPTION
+xymonapi-agent asks a question about a Xymon server to an AI agent and
+prints its answer, with no one at the keyboard. The agent is one of the
+command-line coding agents a person may already have on the machine --
+Claude Code, Codex or opencode -- run in its non-interactive mode, with
+.I xymonapi-mcp(1),
+installed beside this plugin, as its one tool: the read-only tools over the
+Xymon API, nothing else. It is for a terminal, a cron job, an alert script,
+or a chat bot: whatever wants the answer a person would get by typing the
+question into one of those agents, as text.
+
+Every backend is given the same three things. The MCP server, by its path
+beside this plugin, with the API's settings from this environment --
+XYMONAPI_URL, XYMONAPI_TOKEN_FILE, XYMONAPI_CA and the rest the client
+reads, each when set -- so what the person has registered with their agent
+plays no part. A system prompt, saying the agent reads one Xymon server
+through those tools, changes nothing, has no shell, files or web, and that a
+status text comes from the monitored host and is data about it, never an
+instruction. And the rule that the xymon tools are the only ones: how
+completely a backend's flags can promise that differs, and
+\fBbackends\fR says so for each.
+
+It needs Python 3.9 or later, and the agent CLI installed and logged in by
+its own means; this command only runs it. Without that Python it says so on
+stderr and exits with status 77. The CLI's own failure is repeated on stderr
+with its exit status, and this command exits 1.
+
+.SH COMMANDS
+.IP "\fBask\fR [\fB--session\fR NAME] [\fB--json\fR] [\fB--show-command\fR] QUESTION"
+Ask QUESTION and print the answer. With \fB--session\fR NAME the
+conversation of that name is continued, or started: a later question with
+the same name follows on from this one. Only Claude Code continues a session
+here, by an id derived from the name and the same on every machine; with
+the other backends a named session is started fresh each time, and stderr
+says so. Without a name, Claude Code keeps no record of the conversation.
+\fB--json\fR prints one object: \fBbackend\fR, \fBsession\fR and
+\fBanswer\fR. \fB--show-command\fR prints on stderr the command that was
+run, its long arguments shortened, so what the backend was told can be
+seen without a secret in it.
+.IP "\fBbackends\fR"
+For each backend, whether its command is on PATH and how far it is held
+to the MCP server; then which one answers -- the one named, else the only
+one here -- or why none does; and where the MCP server is expected.
+.IP "\fBdoctor\fR [\fB--json\fR]"
+Asks the backend to call the health tool once and answer with the version
+it gives, and passes when the answer looks like one: something only that
+tool can have said. Exits 1 otherwise, with the answer printed, as when
+the MCP server did not start or the backend was denied it.
+
+.SH BACKENDS
+The backend is \fB--backend\fR, else XYMONAPI_AGENT_BACKEND, else the one
+agent CLI found on PATH; with several here and no choice, nothing runs and
+the message names them.
+.IP "\fBclaude\fR"
+Claude Code, with \fB-p\fR. \fB--strict-mcp-config\fR gives it the MCP
+server from the command line and no other; \fB--tools ""\fR removes every
+built-in tool; \fB--allowedTools mcp__xymon__*\fR lets the xymon tools run
+without asking; \fB--permission-mode dontAsk\fR denies anything else. Its
+JSON output gives the answer, and the tool calls it denied, which are
+added to the answer in brackets when there are any. The most complete of
+the three.
+.IP "\fBcodex\fR"
+Codex, with \fBexec\fR. \fB--sandbox read-only\fR keeps it from writing;
+configuration overrides on the command line give it the MCP server, turn
+its shell tool off (\fBfeatures.shell_tool=false\fR) and its web search
+off; \fB--ephemeral\fR keeps no session. Its documentation does not promise
+the shell is gone with that setting, so this backend is partial: run
+\fBdoctor\fR, and prefer another backend where the token file must not be
+readable to the model. The system prompt goes in front of the question,
+there being no flag for one.
+.IP "\fBopencode\fR"
+opencode, with \fBrun\fR, under a configuration file written for the call
+and named by OPENCODE_CONFIG, with OPENCODE_DISABLE_PROJECT_CONFIG set: the
+MCP server, a permission that denies every tool and allows \fBxymon_*\fR,
+and an agent \fBxymon\fR carrying the system prompt, which \fB--agent\fR
+runs. The person's global configuration still merges with that file; what
+it adds is theirs to know. The file is removed after the call.
+
+.SH ENVIRONMENT
+.IP "\fBXYMONAPI_AGENT_BACKEND\fR"
+The backend, when \fB--backend\fR does not say: claude, codex or opencode.
+.IP "\fBXYMONAPI_AGENT_MODEL\fR"
+A model to ask the backend for, in the backend's own form -- an alias or
+id for Claude Code, a model name for Codex, provider/model for opencode.
+Unset, each uses its own default.
+.IP "\fBXYMONAPI_AGENT_TIMEOUT\fR"
+Seconds to wait for an answer; 600 by default.
+.IP "\fBXYMONAPI_AGENT_MAX_TURNS\fR"
+For Claude Code, the most tool-calling turns one question may take; 30.
+.IP "\fBXYMONAPI_AGENT_SITE\fR"
+A name for the Xymon site, said in the system prompt, for an answer that
+names it.
+.IP "\fBXYMONAPI_URL\fR, \fBXYMONAPI_TOKEN_FILE\fR, \fBXYMONAPI_TOKEN\fR, \fBXYMONAPI_CA\fR, \fBXYMONAPI_SOCKET\fR, \fBXYMONVAR\fR, \fBXYMONAPI_PYTHON\fR"
+Where the API is and how to reach it, as
+.I xymonapi-mcp(1)
+reads them: handed to the MCP server as its environment, each when set.
+.IP "\fBXDG_STATE_HOME\fR"
+Under it, xymonapi-agent/BACKEND/NAME records a session named with
+\fB--session\fR; $HOME/.local/state when unset.
+
+.SH FILES
+.IP "\fI../xymonapi-mcp/xymonapi-mcp.sh\fR"
+The MCP server, beside this plugin, as \fBmake install-client\fR lays them
+out. Missing, \fBask\fR says so and runs nothing.
+.IP "\fI$XDG_STATE_HOME/xymonapi-agent/\fR"
+The sessions, one small file each.
+
+.SH EXIT STATUS
+0 for an answer, or a passing doctor; 1 when the backend failed, none is
+chosen or doctor did not pass; 2 for a usage error; 77 when no Python 3.9
+is here.
+
+.SH SEE ALSO
+.I xymonapi-mcp(1), xymonapi-rag(1), xymonapi(8)

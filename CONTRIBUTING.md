@@ -47,7 +47,7 @@ without it, checked by reverting what makes it true.
 - **Python, not C.** See [Python](#python) below; Xymon's C section does not
   apply.
 - **Components, for titles and commit subjects:** a plugin's name
-  (`xymonapi:`, `xymonapi-mcp:`, `xymonapi-rag:`), or one of `tests:`,
+  (`xymonapi:`, `xymonapi-mcp:`, `xymonapi-rag:`, `xymonapi-agent:`), or one of `tests:`,
   `build:`, `README:`, `ci:`.
 - **Surfaces**, in the sense of Xymon's table of who reads what:
 

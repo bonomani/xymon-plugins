@@ -30,7 +30,9 @@ and which you inferred.
 
 - `plugins/xymonapi/` the API, server side, and `xymonapi_client.py`, its
   client, both sides; `plugins/xymonapi-mcp/` the MCP server, laptop side,
-  with a link to that client; `plugins/xymonapi-rag/` the search, both sides.
+  with a link to that client; `plugins/xymonapi-rag/` the search, both sides;
+  `plugins/xymonapi-agent/` the agent command, laptop side, over the MCP
+  server beside it.
 - `plugins/xymonapi/openapi.yaml` the contract, with its numbered rules.
 - `plugins/<name>/tests/` each plugin's tests, `tests/compat/` those of how
   the plugins fit together, `tests/lib/` their helpers, `tests/eval/` the
