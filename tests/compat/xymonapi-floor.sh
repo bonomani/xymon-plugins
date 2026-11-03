@@ -39,6 +39,13 @@ API_ROOT=$work/inst/ext/xymonapi
 export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONAPI_PASSWD="$work/htpasswd" \
 	XYMONAPI_TOKENS="$work/tokens/tokens"
 start_api
+# The API reads its version when it starts: each is a restart with another
+# VERSION beside it, and the tokens file, with the token, stays.
+api_at() {
+	printf '%s\n' "$1" > "$work/inst/ext/xymonapi/VERSION"
+	stop_process "$API_PID"; API_PID=""
+	start_api
+}
 
 "${MAKE:-make}" -C "$ROOT" install-client PREFIX="$work/client" >"$work/client.log" 2>&1 \
 	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
@@ -47,7 +54,7 @@ floor=$(sed -n 's/^requires: xymonapi >= \([0-9.]*\).*/\1/p' "$ROOT/plugins/xymo
 [ -n "$floor" ] || fail "xymonapi-mcp's PLUGIN names no xymonapi version it needs"
 assert_contains "API_FLOOR = \"$floor\"" "$(cat "$ROOT/plugins/xymonapi/xymonapi_client.py")" "xymonapi_client.py repeats the floor of its PLUGIN file"
 assert_contains "xymonapi >= $floor" "$(cat "$ROOT/plugins/xymonapi-rag/PLUGIN")" "and xymonapi-rag, which reads the API through it, names the same floor"
-printf '%s\n' xymonapi/v0.0.1 > "$work/inst/ext/xymonapi/VERSION"
+api_at xymonapi/v0.0.1
 mine=$(curl -s -u alice:secret -X POST -H 'Content-Type: application/json' -d '{"client":"mcptest"}' "http://127.0.0.1:$API_PORT/xymon/api/v1/tokens" \
 	| sed -n 's/.*"token": *"\(xat_[A-Za-z0-9_-]*\)".*/\1/p')
 [ -n "$mine" ] || fail "the API gave alice no token"
@@ -57,18 +64,18 @@ answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $
 assert_contains 'alive' "$answer" "the MCP server's health tool gives /health's answer"
 assert_contains "is xymonapi xymonapi/v0.0.1; this client needs $floor or later" "$answer" "and says the API is older than the client needs"
 assert_contains "this client needs $floor" "$(cat "$work/mcp.err")" "and on stderr"
-printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
+api_at "$version"
 XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymon-plugins" \
 	mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
 answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $(tail -n 5 "$work/mcp.err")"
 assert_not_contains 'warning' "$answer" "an API past the floor: no warning"
 # xymonapi-rag reads the API through the same xymonapi_client.py: with no index here
 # its search asks the API, and an old API is said on stderr before that.
-printf '%s\n' xymonapi/v0.0.1 > "$work/inst/ext/xymonapi/VERSION"
+api_at xymonapi/v0.0.1
 XYMONAPI_URL="http://127.0.0.1:$API_PORT" XYMONAPI_TOKEN="$mine" XYMONAPI_RAG_INDEX="$work/none.npz" \
 	"$work/client/libexec/xymon-plugins/xymonapi-rag/xymonapi-rag.sh" search -k 1 'anything' > /dev/null 2> "$work/rag.err" || true
 assert_contains "this client needs $floor" "$(cat "$work/rag.err")" "xymonapi-rag says on stderr when the API is older than it needs"
-printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
+api_at "$version"
 XYMONAPI_URL="http://127.0.0.1:$API_PORT" XYMONAPI_TOKEN="$mine" XYMONAPI_RAG_INDEX="$work/none.npz" \
 	"$work/client/libexec/xymon-plugins/xymonapi-rag/xymonapi-rag.sh" search -k 1 'anything' > /dev/null 2> "$work/rag.err" || true
 assert_not_contains 'this client needs' "$(cat "$work/rag.err")" "and nothing when it is not"

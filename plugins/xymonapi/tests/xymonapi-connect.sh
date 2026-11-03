@@ -105,14 +105,22 @@ assert_equal "$second" "$(cat "$tok")" "and writes no token"
 
 # The versions: an older API is the server admin's to update, an older
 # client this machine's. The token above is revoked: a fresh one first.
+# The API reads its version when it starts: each is a restart with another
+# VERSION beside it, and the tokens file, with the token, stays.
+api_at() {
+	printf '%s\n' "$1" > "$apiver"
+	stop_process "$API_PID"; API_PID=""
+	start_api
+	url=http://127.0.0.1:$API_PORT
+}
 printf 'carol\n%s\n' "$hard" > "$work/in"; run < "$work/in"
-printf '0.0.1\n' > "$apiver"
+api_at 0.0.1
 run < /dev/null
 assert_contains "the API runs xymonapi 0.0.1, this machine's client $mine: the server's admin" "$(cat "$work/err")" "an older API: the server's admin updates it"
-printf '99.0.0\n' > "$apiver"
+api_at 99.0.0
 run < /dev/null
 assert_contains "the API runs xymonapi 99.0.0, this machine's client $mine: update here" "$(cat "$work/err")" "an older client: this machine updates"
-printf '%s\n' "$mine" > "$apiver"
+api_at "$mine"
 
 # A Ctrl-C at the password prompt, on a terminal: echo back on, no token.
 # No virtualenv and no XYMONAPI_PYTHON: the python3 on PATH runs it, and the
