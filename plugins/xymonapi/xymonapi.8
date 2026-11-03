@@ -37,11 +37,11 @@ itself: none is needed there, because only the Xymon user and its group
 may open it (XYMONAPI_SOCKET under ENVIRONMENT).
 
 .SH OPERATIONS
-Every path is under /xymon/api/v1. Only GET is accepted, but for POST and
-DELETE on /tokens: another method answers 405, and any other path 404. A
-failure is answered with JSON, {"error": E, "detail": D}, where E is one of
-bad_request (400), unauthorized (401), not_found (404),
-method_not_allowed (405) and upstream (502), and D says why. Those, and
+Every path is under /xymon/api/v1. Only GET is accepted, but for POST on
+/ask and POST and DELETE on /tokens: another method answers 405, and any
+other path 404. A failure is answered with JSON, {"error": E, "detail": D},
+where E is one of bad_request (400), unauthorized (401), not_found (404),
+method_not_allowed (405), too_many (429) and upstream (502), and D says why. Those, and
 each path's answers, are openapi.yaml's, installed beside the API.
 .IP "\fB/health\fR"
 Whether xymond answers a ping: {"alive":true,"server_version":"xymond ..."}
@@ -146,6 +146,33 @@ or a time it cannot read, is answered with 400. A test name may hold a
 colon, as an HTTP test's RRD file does (tcp.http.www.example.com:8080,);
 a host name may not.
 
+.IP "\fBPOST /ask\fR {"question": Q, "session": NAME, "agent": NAME}"
+A question in words, answered in words by
+.I xymonapi-agent(1)
+installed beside the API: it runs an agent CLI the admin installed as the
+Xymon user -- Claude Code, Codex or opencode -- with the Xymon MCP server,
+.I xymonapi-mcp(1),
+as its only tool, reading this API through its own socket. The answer is
+{"answer": A, "agent": NAME, "backend": NAME}, with "session" as sent when
+one was. Not there -- 404 as any unknown path -- unless XYMONAPI_ASK is set;
+set with no xymonapi-agent beside the API, 404 saying so. Nothing in Xymon
+changes: the agent is read-only, as every path here.
+
+"session", letters, digits, dots, underscores or hyphens, continues a
+conversation: it is the caller's, prefixed with USER@CLIENT -- the token's
+user and machine, the user and "password", or "local@local" through the
+socket -- before the agent sees it, so no other caller continues it.
+"agent", xymon by default, names one of the server's agents, as the Xymon
+user's profiles for xymonapi-agent(1) define them.
+
+A question costs time and money where a GET does not, so a caller asks one
+at a time, and at most XYMONAPI_ASK_PER_HOUR in an hour; another answers
+too_many (429) with a Retry-After header in seconds. A question longer than
+XYMONAPI_ASK_MAX characters is bad_request. The agent failing, or giving
+no answer in XYMONAPI_ASK_TIMEOUT seconds, is upstream (502), the detail
+its last line. Each question is logged with the caller, agent, backend and
+how long it took; the question itself is not.
+
 .SH TOKENS
 With XYMONAPI_PASSWD set, a user may get a token for one machine and send it
 instead of the password: Authorization: Bearer TOKEN.
@@ -193,7 +220,7 @@ Where xymond_history keeps the events and the saved status texts, for
 The index /search reads, and the embedding model, as for xymonapi-rag(1),
 which writes the index with the same settings from the same file.
 .LP
-Eight settings are its own. Put them in a file under
+Twelve settings are its own. Put them in a file under
 \fBxymonserver.d/\fR beside xymonserver.cfg, which reads its files, for
 instance xymonapi.cfg:
 .IP "\fBXYMONAPI_LISTEN\fR"
@@ -244,6 +271,18 @@ a command line; a line such as \fBpassword=\\S+\fR keeps it off the API,
 whatever the web page shows. Read at start: an expression that is not one,
 or a file that cannot be read, stops the API from starting, since running
 without the hiding asked for would be worse than not running.
+.IP "\fBXYMONAPI_ASK\fR"
+Set to 1, /ask is there; unset, empty, 0, no, off or false, it is not.
+It needs xymonapi-agent installed beside the API (its \fBmake install\fR),
+an agent CLI installed and logged in as the Xymon user, and the socket
+(XYMONAPI_SOCKET), through which the agent reads this API. Which CLI,
+model and agent answer are xymonapi-agent(1)'s own settings,
+XYMONAPI_AGENT_BACKEND and the rest, which go in the same file and reach
+it through the API's environment; its profiles are the Xymon user's. Check
+it as that user: \fBxymonapi-agent doctor\fR.
+.IP "\fBXYMONAPI_ASK_PER_HOUR\fR, \fBXYMONAPI_ASK_TIMEOUT\fR, \fBXYMONAPI_ASK_MAX\fR"
+For /ask: questions a caller may ask in an hour, 60, 0 for no limit; seconds
+to wait for the agent, 300; the longest question, 2000 characters.
 .IP "\fBXYMONAPI_PYTHON\fR"
 The Python to run the API with. Unset, the launcher takes the python3 of
 the virtualenv beside the plugins, $XYMONHOME/ext/venv, which \fBmake
