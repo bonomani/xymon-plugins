@@ -287,7 +287,8 @@ to wait for the agent, 300; the longest question, 2000 characters.
 The Python to run the API with. Unset, the launcher takes the python3 of
 the virtualenv beside the plugins, $XYMONHOME/ext/venv, which \fBmake
 venv\fR makes with the modules the installed plugins need; without one, the
-python3 found on PATH. When that one lacks a module, the API says which on
+first of python3, python3.14 down to python3.9, found on PATH. When that
+one lacks a module, the API says which on
 stderr, the task's log, names \fBmake venv\fR, and exits with 77.
 
 .SH FILES
