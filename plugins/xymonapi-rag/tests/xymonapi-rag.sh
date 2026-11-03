@@ -97,7 +97,7 @@ XYMONAPI_RAG_OFFLINE=1 rag search -k 1 'anything' > /dev/null \
 # top QUESTION [ARGS] -- the title of the passage nearest QUESTION.
 top() {
 	local q=$1; shift
-	rag search -k 1 "$@" "$q" | grep '"title"' | head -n 1
+	first_line "$(rag search -k 1 "$@" "$q" | grep '"title"')"
 }
 assert_contains 'alerts.cfg.5 -- RULES' "$(top 'how long must a problem last before an alert is sent' --kind docs)" "a question about alert delay"
 assert_contains 'analysis.cfg.5 -- DISK' "$(top 'warn when a filesystem is 90 percent full' --kind docs)" "a question about a full disk"
@@ -136,7 +136,7 @@ assert_match '"built":"20[0-9][0-9]-' "$health" "and when it was built"
 
 # A search where there is no index asks the API instead: a laptop needs
 # neither fastembed nor the manual pages.
-assert_contains 'alerts.cfg.5 -- RULES' "$(XYMONAPI_RAG_INDEX="$work/none.npz" rag search -k 1 --kind docs 'how long must a problem last before an alert is sent' | grep '"title"' | head -n 1)" "search with no index here uses the API's"
+assert_contains 'alerts.cfg.5 -- RULES' "$(first_line "$(XYMONAPI_RAG_INDEX="$work/none.npz" rag search -k 1 --kind docs 'how long must a problem last before an alert is sent' | grep '"title"')")" "search with no index here uses the API's"
 rc=0
 XYMONAPI_RAG_INDEX="$work/none.npz" XYMONAPI_URL="http://127.0.0.1:1" rag search 'x' > /dev/null || rc=$?
 [ "$rc" -ne 0 ] || fail "a search with no index and no API succeeded"
@@ -147,7 +147,7 @@ assert_contains 'could not search either' "$(cat "$work/rag.err")" "naming both"
 # before -- asks the API too. A numpy that will not import stands in.
 mkdir -p "$work/nonumpy/numpy"
 printf 'raise ImportError("no numpy here", name="numpy")\n' > "$work/nonumpy/numpy/__init__.py"
-assert_contains 'alerts.cfg.5 -- RULES' "$(PYTHONPATH="$work/nonumpy" rag search -k 1 --kind docs 'how long must a problem last before an alert is sent' | grep '"title"' | head -n 1)" "search with an index but no numpy uses the API's"
+assert_contains 'alerts.cfg.5 -- RULES' "$(first_line "$(PYTHONPATH="$work/nonumpy" rag search -k 1 --kind docs 'how long must a problem last before an alert is sent' | grep '"title"')")" "search with an index but no numpy uses the API's"
 rc=0
 PYTHONPATH="$work/nonumpy" rag index > /dev/null || rc=$?
 assert_equal "77" "$rc" "index without numpy exits 77"

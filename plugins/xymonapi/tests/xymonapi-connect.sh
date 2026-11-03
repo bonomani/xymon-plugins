@@ -78,7 +78,7 @@ assert_contains "XYMONAPI_TOKEN_FILE=$tok" "$(cat "$work/out")" "and the token f
 assert_not_contains "XYMONAPI_CA" "$(cat "$work/out")" "and no certificate, over http"
 assert_not_contains "differ" "$(cat "$work/err")" "the same version on both sides is not remarked on"
 assert_not_contains "runs xymonapi" "$(cat "$work/err")" "nor said at all"
-h=$(hostname 2>/dev/null || uname -n)
+h=$(hostname)
 assert_contains "\"client\":\"${h%%.*}\"" "$(curl -s -u "carol:$hard" "$url/xymon/api/v1/tokens")" "the token is for this machine's short name"
 
 # Again: the token works, so it is kept and nothing is asked.

@@ -150,7 +150,10 @@ the server's `/plugins`, the floors agreeing -- goes under `tests/compat/`. Help
 shared by several tests are under `tests/lib/`. Each test says at its top
 what it checks and what it needs.
 Unlike Xymon's, a test here may use Python: a helper written in Python goes
-under `tests/lib/`, as `fake-llm.py` and `ctrl-c.py` do. A test that cannot
+under `tests/lib/`, as `fake-llm.py` and `ctrl-c.py` do. Otherwise the test
+scripts keep to Xymon's portability rules -- bash 3.2, portable tool flags,
+no early-exit pipes -- which `tests/compat/xymonapi-portability.sh` checks
+with Xymon's own check, read from `XYMON_SRC`. A test that cannot
 run where something it needs is missing skips, with exit 77, and says what.
 
 ## Copyright and licensing

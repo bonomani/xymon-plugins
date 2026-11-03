@@ -106,11 +106,11 @@ printf 'last.example.com conn 1700030000 1700029940 60 re gr 0' >> "$work/long/a
 XYMONHISTDIR="$work/long" start_api
 page=$(api_get '/events?limit=1000')
 assert_equal "1000" "$(printf '%s' "$page" | grep -o '"epoch":' | wc -l | tr -d ' ')" "limit=1000 gives a thousand"
-assert_contains '"entity":"last.example.com"' "$(printf '%s' "$page" | head -c 200)" "the newest first: the last line, which ends without a newline"
+assert_contains '"entity":"last.example.com"' "${page:0:200}" "the newest first: the last line, which ends without a newline"
 assert_contains '"epoch":1700015020' "$page" "down to the thousandth-newest"
 assert_not_contains '"epoch":1700015010' "$page" "and not the one before it"
 page2=$(api_get '/events?limit=1000&before=1700015020')
-assert_contains '"epoch":1700015010' "$(printf '%s' "$page2" | head -c 200)" "before= continues where the page ended"
+assert_contains '"epoch":1700015010' "${page2:0:200}" "before= continues where the page ended"
 assert_not_contains '"epoch":1700015020' "$page2" "without repeating its last change"
 third=$(api_get '/events?limit=1000&before=1700005020')
 assert_equal "501" "$(printf '%s' "$third" | grep -o '"epoch":' | wc -l | tr -d ' ')" "the last page holds the rest"
