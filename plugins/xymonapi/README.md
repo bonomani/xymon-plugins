@@ -69,6 +69,29 @@ on with the code it loaded, and says so; xymonlaunch starts the new.
 of your web server's configuration before deleting them -- and the tokens
 file, `$XYMONAPI_TOKENS`.
 
+## Asking in words: /ask
+
+With [`xymonapi-agent`](../xymonapi-agent/README.md) installed beside the
+API (`make install` in its directory, which brings `xymonapi-mcp`), the API
+can answer a question in words: `POST /ask` with `{"question": "..."}`
+runs the agent as the Xymon user, with an agent CLI that user has
+installed and logged in -- Claude Code, Codex or opencode -- and the Xymon
+MCP server as its only tool, and answers `{"answer": ..., "agent": ...,
+"backend": ...}`. Phones, bots and web pages then need only the API's URL
+and a token. It is off until `XYMONAPI_ASK=1` is in the file under
+`xymonserver.d/`, with `XYMONAPI_AGENT_BACKEND` and the rest of
+`xymonapi-agent`'s settings beside it; a caller asks one question at a
+time and `XYMONAPI_ASK_PER_HOUR` an hour. Sessions are per caller. Check it
+as the Xymon user with `xymonapi-agent doctor`, then:
+
+```sh
+curl -s -H "Authorization: Bearer $(cat ~/.config/xymon-api/xymon.token)" \
+  -H 'Content-Type: application/json' -d '{"question":"anything red, and since when?"}' \
+  https://xymon.example.ch/xymon/api/v1/ask
+```
+
+Every setting and limit is in [`xymonapi.8`](xymonapi.8), under /ask.
+
 ## Users
 
 The API's users are those of Xymon's own web password file,

@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import collections
 import contextlib
 import contextvars
 import io
+import json
 import logging
 import os
 import re
@@ -22,8 +24,10 @@ import shutil
 import signal
 import socket
 import stat
+import subprocess
 import sys
 import tarfile
+import time
 from pathlib import Path
 
 import yaml
@@ -315,6 +319,122 @@ async def _token(request):
     return Response(status_code=204)
 
 
+# /ask: a question for xymonapi-agent, installed beside the API, which runs
+# an agent CLI with the Xymon MCP server as its tool and answers in words
+# (openapi.yaml, C6 to C8). Off unless XYMONAPI_ASK is set: a question costs
+# money and time where a GET does not, and the agent CLI is the admin's to
+# install and log in, as the Xymon user.
+ASK = os.environ.get("XYMONAPI_ASK", "") not in ("", "0", "no", "off", "false")
+ASK_PER_HOUR = int(os.environ.get("XYMONAPI_ASK_PER_HOUR", "60") or 0)
+ASK_TIMEOUT = float(os.environ.get("XYMONAPI_ASK_TIMEOUT", "300"))
+ASK_MAX = int(os.environ.get("XYMONAPI_ASK_MAX", "2000"))
+AGENT = HERE.parent / "xymonapi-agent" / "xymonapi-agent.sh"
+_ASK_NAME = re.compile(r"[A-Za-z0-9._-]{1,64}")
+# Per caller: the lock that makes it one question at a time, and when the
+# last hour's questions were asked (C8). In this process only; the task
+# runs one.
+_ask_locks: dict[str, asyncio.Lock] = {}
+_ask_times: dict[str, collections.deque] = collections.defaultdict(collections.deque)
+
+
+def _ask_agent(question: str, agent: str, session: str) -> dict:
+    """Run xymonapi-agent for one question, as this process's user, with
+    this environment: on the server, the client finds the API's own socket
+    from it (XYMONAPI_SOCKET, XYMONVAR), so nothing crosses the network.
+    The agent's JSON, or RuntimeError with the agent's last line."""
+    argv = [str(AGENT), "--agent", agent, "ask", "--json", question]
+    if session:
+        argv += ["--session", session]
+    env = {k: v for k, v in os.environ.items() if k != "XYMONAPI_URL"}
+    env["XYMONAPI_AGENT_TIMEOUT"] = str(ASK_TIMEOUT)
+    try:
+        r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=ASK_TIMEOUT + 5)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"the agent gave no answer in {ASK_TIMEOUT:g} seconds "
+                           "(XYMONAPI_ASK_TIMEOUT)") from None
+    if r.returncode != 0:
+        lines = (r.stderr or r.stdout).strip().splitlines() or ["no message"]
+        raise RuntimeError(lines[-1].replace("xymonapi-agent: ", "", 1))
+    try:
+        out = json.loads(r.stdout)
+        return {"answer": str(out["answer"]), "agent": str(out["agent"]),
+                "backend": str(out["backend"])}
+    except (ValueError, KeyError, TypeError):
+        raise RuntimeError("the agent gave no readable answer") from None
+
+
+async def _ask(request):
+    """POST {"question": Q, "session": NAME?, "agent": NAME?}: the agent's
+    answer, in words, with which agent and backend gave it."""
+    if not ASK:
+        # As a path this server does not have (C2): a server that has not
+        # opted in shows nothing of the feature.
+        return JSONResponse({"error": "not_found", "detail": "Not Found"}, status_code=404)
+    if not AGENT.is_file():
+        return JSONResponse({"error": "not_found", "detail": "XYMONAPI_ASK is set, but "
+                             "xymonapi-agent is not installed beside the API: make install "
+                             "in plugins/xymonapi-agent"}, status_code=404)
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "bad_request", "detail": "the body is a JSON object with "
+                             "question, and session and agent if wanted"}, status_code=400)
+    question = body.get("question")
+    if not isinstance(question, str) or not question.strip():
+        return JSONResponse({"error": "bad_request", "detail": "question, in words, is needed"},
+                            status_code=400)
+    if len(question) > ASK_MAX:
+        return JSONResponse({"error": "bad_request", "detail": f"question is longer than "
+                             f"{ASK_MAX} characters (XYMONAPI_ASK_MAX)"}, status_code=400)
+    session, agent = body.get("session", ""), body.get("agent", "xymon")
+    for what, v in (("session", session), ("agent", agent)):
+        if not isinstance(v, str) or (v and not _ASK_NAME.fullmatch(v)):
+            return JSONResponse({"error": "bad_request", "detail": f"{what} is 1 to 64 letters, "
+                                 "digits, dots, underscores or hyphens"}, status_code=400)
+    if not agent:
+        agent = "xymon"
+    # Who asks: user and machine from the token, user alone from a password,
+    # local from the socket. A session is theirs: prefixed with it, so that
+    # no other caller can continue it (C7).
+    user = getattr(request.state, "user", "") or "local"
+    client = getattr(request.state, "client", None) or ("local" if user == "local" else "password")
+    caller = f"{user}@{client}"
+    if session:
+        session = f"{caller}:{session}"
+
+    lock = _ask_locks.setdefault(caller, asyncio.Lock())
+    if lock.locked():
+        return JSONResponse({"error": "too_many", "detail": f"{caller} has a question being "
+                             "answered; one at a time"}, status_code=429,
+                            headers={"Retry-After": "10"})
+    times = _ask_times[caller]
+    now = time.monotonic()
+    while times and times[0] <= now - 3600:
+        times.popleft()
+    if ASK_PER_HOUR and len(times) >= ASK_PER_HOUR:
+        wait = int(times[0] + 3600 - now) + 1
+        return JSONResponse({"error": "too_many", "detail": f"{caller} has asked {ASK_PER_HOUR} "
+                             "questions this hour, the most allowed (XYMONAPI_ASK_PER_HOUR)"},
+                            status_code=429, headers={"Retry-After": str(wait)})
+    times.append(now)
+    async with lock:
+        log.info("ask by %s: agent %s%s", caller, agent, f", session {session}" if session else "")
+        started = time.monotonic()
+        try:
+            out = await run_in_threadpool(_ask_agent, question, agent, session)
+        except RuntimeError as exc:
+            log.warning("ask by %s failed after %.0fs: %s", caller, time.monotonic() - started, exc)
+            return JSONResponse({"error": "upstream", "detail": f"xymonapi-agent: {exc}"},
+                                status_code=502)
+        log.info("ask by %s answered by %s/%s in %.0fs", caller, out["agent"], out["backend"],
+                 time.monotonic() - started)
+    if session:
+        out["session"] = body.get("session")
+    return JSONResponse(out)
+
+
 ROUTES = {
     "/health": _health,
     "/states": _states,
@@ -356,6 +476,12 @@ def build_app() -> FastAPI:
         sys.exit(f"xymonapi: XYMONAPI_HIDE: {exc} is not a regular expression")
     if n:
         log.info("hiding what %d expression(s) of %s match", n, xymon.HIDE_FILE)
+    if ASK:
+        if AGENT.is_file():
+            log.info("/ask is on: xymonapi-agent at %s, %d an hour per caller, %gs each",
+                     AGENT, ASK_PER_HOUR, ASK_TIMEOUT)
+        else:
+            log.warning("XYMONAPI_ASK is set, but xymonapi-agent is not at %s: /ask will say so", AGENT)
 
     if xymon.XYMONAPI_PASSWD:
         # Refuse to start rather than answer 401 to everyone, which looks
@@ -423,6 +549,7 @@ def build_app() -> FastAPI:
 
     for path, handler in ROUTES.items():
         app.add_route(base + path, handler, methods=["GET"])
+    app.add_route(base + "/ask", _ask, methods=["POST"])
     app.add_route(base + "/tokens", _tokens, methods=["GET", "POST"])
     app.add_route(base + "/tokens/{client}", _token, methods=["DELETE"])
     app.openapi = lambda: spec                      # type: ignore[assignment]
