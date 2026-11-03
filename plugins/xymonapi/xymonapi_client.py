@@ -304,13 +304,17 @@ def connect(argv: list[str]) -> int:
     conf = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "xymon-api"
     token_file, ca_file = conf / f"{name}.token", conf / f"{name}-ca.pem"
     URL, TOKEN, _opener = url, "", None
+    local = urlsplit(URL).scheme == "unix"
     # The server's certificate, or its CA, when this machine does not trust
     # it already: copied here first, by hand, over a channel already trusted.
-    CA = os.environ.get("XYMONAPI_CA") or (str(ca_file) if ca_file.is_file() else "")
+    # Neither it nor a token kept from before has a part over the socket,
+    # whose permissions are the credential: the settings printed then name
+    # the socket alone.
+    CA = "" if local else os.environ.get("XYMONAPI_CA") or (str(ca_file) if ca_file.is_file() else "")
     try:
         # Reached and trusted before anything is asked. A token kept from
         # before is used while it works.
-        TOKEN_FILE = str(token_file) if token_file.is_file() else ""
+        TOKEN_FILE = str(token_file) if token_file.is_file() and not local else ""
         try:
             health = api("/health")
         except APIError as e:
