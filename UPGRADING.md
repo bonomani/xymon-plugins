@@ -8,10 +8,10 @@ that breaks the API's contract without a line here.
 ## xymonapi 2.0.0
 
 An API started before its launcher named it by its full path -- one whose
-`pgrep -lf app.py` line shows a bare `app.py` -- is not matched by the
-restart the README gives, `pkill -f "$XYMONHOME/ext/xymonapi/"`, and keeps
-running the old code. Stop it once by its number, `kill PID`; xymonlaunch
-starts the new one, which the `pkill` then finds.
+`pgrep -lf app.py` line shows a bare `app.py` -- is not found by the install,
+which from now on stops the running API itself, and keeps running the old
+code. Stop it once by its number, `kill PID`; xymonlaunch starts the new
+one, which the next install finds.
 
 `/client` is now `/plugins`, what it gives unchanged: the plugins installed
 on the server, as a `.tar.gz`. Machines already installed need nothing; one

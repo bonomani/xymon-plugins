@@ -63,8 +63,8 @@ the server itself and asks none: its permissions let the Xymon user and its
 group in, and nobody else. The plugins' own clients take it by default
 there (`xymonapi.8`, `XYMONAPI_SOCKET`).
 
-Updating: install again, then `pkill -f "$XYMONHOME/ext/xymonapi/"`; the
-running API keeps the old code until then, and xymonlaunch starts the new.
+Updating: install again. The install stops the running API, which would go
+on with the code it loaded, and says so; xymonlaunch starts the new.
 `make uninstall XYMONHOME=...` keeps the snippets -- take the `Include` out
 of your web server's configuration before deleting them -- and the tokens
 file, `$XYMONAPI_TOKENS`.

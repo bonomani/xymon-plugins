@@ -78,7 +78,10 @@ echo 'stale' > "$home/ext/xymonapi-rag/gone.py"
 [ -e "$home/ext/xymonapi/gone.py" ] && fail "a file no longer shipped stayed in ext/xymonapi after an update"
 [ -e "$home/ext/xymonapi-rag/gone.py" ] && fail "a file no longer shipped stayed in ext/xymonapi-rag after an update"
 assert_file_exists "$home/ext/xymonapi/app.py"
-assert_contains "pkill -f '$home/ext/xymonapi/'" "$(cat "$work/update.log")" "the install says how to restart the API"
+# The install stops a running API itself (xymonapi-auth.sh): with none
+# running here it stops nothing, and asks no step of the admin.
+assert_not_contains "Stopped" "$(cat "$work/update.log")" "with no API running, the install stops nothing"
+assert_not_contains "pkill" "$(cat "$work/update.log")" "and asks no pkill of the admin"
 
 # The admin enables the API, and the next install must not undo it.
 grep -v '^[[:space:]]*DISABLED$' "$task" > "$work/enabled"

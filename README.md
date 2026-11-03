@@ -97,8 +97,10 @@ it.
 
 **Updating.** Run the same install again, from an updated checkout or a
 fresh `/plugins` download. The server install replaces the plugin's code and
-keeps your task file, snippets and settings; a task that is running keeps
-the old code until it is stopped, and xymonlaunch starts the new.
+keeps your task file, snippets and settings. A task that runs on keeps the
+code it loaded: the API's install stops the API, saying so, and xymonlaunch
+starts the new; a task that runs from time to time, as the index, takes the
+new code at its next run.
 
 **Uninstalling.** `make uninstall XYMONHOME=...` or `make uninstall-client`
 in a plugin's directory removes that plugin alone, and refuses while another

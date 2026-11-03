@@ -35,8 +35,7 @@ install:
 	$(call conf,xymonapi-lighttpd.conf)
 	@echo "Installed. Enable the API: remove DISABLED from $(TASKDIR)/xymonapi. For other machines, include one of"
 	@echo "  $(ETC)/xymonapi-{apache,nginx,lighttpd}.conf in the web server, or give the API xymond's certificate: see xymonapi(8)."
-	@echo "Updating one that runs: it keeps the old code until restarted. Stop it, and xymonlaunch starts the new:"
-	@echo "  pkill -f '$(XYMONHOME)/ext/xymonapi/'"
+	$(stop_running)
 	$(call venv_auto,$(EXTROOT),venv)
 
 # An isolated Python for the plugins installed here, with their modules.
@@ -46,6 +45,28 @@ venv:
 
 venv-client:
 	$(call venv,$(CLIENTROOT))
+
+# stop_running -- an API that runs from this install keeps the code it
+# loaded: stop it, and xymonlaunch starts the new. Found by its command
+# line, which names app.py by its full path (xymonapi.sh), escaped for
+# pgrep's regular expressions, as a directory may hold a | or a dot. The
+# path is assembled at run time, so that this shell's own command line,
+# which pgrep -f also reads, never holds it whole. With DESTDIR the path is
+# the staging one, which nothing runs from: nothing is stopped.
+define stop_running
+	@if ! command -v pgrep >/dev/null 2>&1; then \
+		echo "An API that runs keeps the old code until it is stopped; xymonlaunch then starts the new."; exit 0; \
+	fi; \
+	dir="$(EXT)"; file=app.py; \
+	pat=$$(printf '%s/%s' "$$dir" "$$file" | sed -e 's/[][\\.*^$$|+?(){}]/\\&/g'); \
+	pids=$$(echo $$(pgrep -f "$$pat" | grep -vx "$$$$")); \
+	[ -n "$$pids" ] || exit 0; \
+	if kill $$pids 2>/dev/null; then \
+		echo "Stopped the API that ran the old code (PID $$pids): xymonlaunch starts the new one."; \
+	else \
+		echo "Could not stop the API that runs the old code (PID $$pids): stop it with kill $$pids, and xymonlaunch starts the new one." >&2; \
+	fi
+endef
 
 # The client alone, for the plugins that read the API from elsewhere.
 install-client:

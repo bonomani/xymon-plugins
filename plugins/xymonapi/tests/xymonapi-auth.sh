@@ -85,6 +85,23 @@ assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "
 # restart finds it by: pkill -f "$XYMONHOME/ext/xymonapi/".
 pgrep -f "$work/inst/ext/xymonapi/" | grep -qx "$API_PID" \
 	|| fail "pgrep -f on the API's directory does not find it, so the documented pkill would not stop it: $(ps -o command= -p "$API_PID")"
+# An install over it stops it, saying so, since it would go on with the
+# code it loaded; xymonlaunch, not run here, would start the new. With
+# DESTDIR, a package's staging, nothing runs from there: it is left alone.
+"${MAKE:-make}" -C "$ROOT/plugins/xymonapi" install XYMONHOME="$work/inst" MANDIR="$work/man" DESTDIR="$work/stage" >"$work/stage.log" 2>&1 \
+	|| fail "make install with DESTDIR failed: $(tail -n 5 "$work/stage.log")"
+kill -0 "$API_PID" 2>/dev/null || fail "an install with DESTDIR stopped the running API"
+assert_not_contains "Stopped" "$(cat "$work/stage.log")" "and says nothing of it"
+rc=0
+"${MAKE:-make}" -C "$ROOT/plugins/xymonapi" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/reinstall.log" 2>&1 || rc=$?
+assert_equal "0" "$rc" "an install over a running API succeeds, not stopping itself ($(tail -n 3 "$work/reinstall.log"))"
+assert_contains "Stopped the API that ran the old code (PID $API_PID)" "$(cat "$work/reinstall.log")" "and stops the API, saying which"
+for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$API_PID" 2>/dev/null || break; sleep 0.5; done
+kill -0 "$API_PID" 2>/dev/null && fail "the API still runs after an install over it"
+API_PID=""
+printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"   # the test's own, which the install replaced
+start_api
+url="http://127.0.0.1:$API_PORT/xymon/api/v1/health"
 assert_not_contains "$version" "$(curl -s "$url")" "and not to a stranger"
 # The version of the code that runs: an install the API was not restarted
 # for, which writes a new VERSION beside it, does not change it.
