@@ -16,9 +16,8 @@ import sys
 import traceback
 from pathlib import Path
 
-# xymonapi_client.py is xymonapi's, the API's own client. Here it is a link to
-# it, which a marketplace install copies as a file, this plugin's directory
-# alone; where make installs the plugins side by side, it is in xymonapi's.
+# xymonapi_client.py is xymonapi's, the API's own client, in its directory
+# beside this one: make installs the plugins side by side.
 sys.path.append(str(Path(__file__).resolve().parent.parent / "xymonapi"))
 import xymonapi_client as client  # noqa: E402
 

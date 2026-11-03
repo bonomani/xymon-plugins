@@ -6,8 +6,7 @@
 #                                               for other machines, not run
 #
 # It reads the API through xymonapi's client, beside it, which either target
-# installs first; the API itself runs on the server. xymonapi_client.py here
-# is a link to that client, for a marketplace install of this directory alone.
+# installs first; the API itself runs on the server.
 
 PLUGIN = xymonapi-mcp
 include ../../build/plugin.mk

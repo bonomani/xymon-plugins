@@ -67,9 +67,7 @@ Each plugin is a directory under `plugins/` with a `Makefile` that installs
 it alone and a `PLUGIN` file. A plugin that needs another names it there and
 installs it first. Code shared by two plugins lives in one of them, the one
 it belongs to, and the other installs that one: the API's client,
-`xymonapi_client.py`, is `xymonapi`'s. A plugin that a Claude Code
-marketplace installs alone carries a symbolic link to such a file, which the
-marketplace copies as a file. A plugin's README and manual page name the
+`xymonapi_client.py`, is `xymonapi`'s. A plugin's README and manual page name the
 plugins it uses, never those that use it: a new plugin built on another
 changes nothing of that one.
 

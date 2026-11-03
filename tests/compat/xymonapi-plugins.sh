@@ -51,7 +51,6 @@ grep -q '__pycache__' "$work/list" && fail "the archive holds __pycache__"
 # A machine installs the MCP server from it, as its README says.
 mkdir -p "$work/laptop"
 tar -xzf "$work/plugins.tgz" -C "$work/laptop"
-[ -L "$work/laptop/xymon-plugins/plugins/xymonapi-mcp/xymonapi_client.py" ] || fail "the MCP server's link to the client did not come through as a link"
 "$make" -C "$work/laptop/xymon-plugins/plugins/xymonapi-mcp" install-client PREFIX="$work/prefix" >"$work/client.log" 2>&1 \
 	|| fail "make install-client from the archive failed: $(tail -n 5 "$work/client.log")"
 for c in xymonapi-mcp xymonapi-connect; do
