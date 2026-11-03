@@ -3,7 +3,7 @@
 #
 # plugins/xymonapi-agent/tests/xymonapi-agent.sh
 #
-# xymonapi-agent ask, as make install-client lays it out, runs the agent CLI
+# xymonapi-agent ask, as ./install.sh install-client lays it out, runs the agent CLI
 # it is told, or the one installed, with xymonapi-mcp beside it as the
 # agent's only tool: Claude Code with --strict-mcp-config, no built-in tools,
 # the xymon tools allowed and the rest denied; opencode with a config of its

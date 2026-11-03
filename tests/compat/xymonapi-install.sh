@@ -3,20 +3,20 @@
 #
 # tests/compat/xymonapi-install.sh
 #
-# make install puts the API, with its client, in $XYMONHOME/ext/xymonapi/,
+# ./install.sh install puts the API, with its client, in $XYMONHOME/ext/xymonapi/,
 # the search beside it, its manual page in man8/, and its task in
 # $XYMONHOME/etc/tasks.d/xymonapi -- disabled, with ENVFILE naming that
 # server's xymonserver.cfg. An install over one where the admin enabled the
 # task leaves that file alone: putting DISABLED back would stop the API at
 # the next upgrade, with nothing to say why. Without XYMONHOME it installs
 # nothing and says so. The Apache snippet goes to $XYMONHOME/etc, kept too
-# once there. make install-client puts the MCP server and the search commands
+# once there. ./install.sh install-client puts the MCP server and the search commands
 # under PREFIX, with two commands in bin that run them from there, and
 # xymonapi's client alone beside them, not the API. Installing
 # again replaces each plugin's directory, so a file no longer shipped is
 # gone, and says to restart the API; the client's virtualenv beside the
 # plugins is kept. A plugin installed alone brings the plugins it needs
-# beside it: xymonapi-rag on the server, the API with its client. make
+# beside it: xymonapi-rag on the server, the API with its client. The
 # uninstall refuses a plugin another installed one needs, removes each
 # plugin's files, manual page and task, and keeps the web server snippets
 # and the data, saying so; on a laptop it says what to undo by hand.
@@ -106,7 +106,7 @@ assert_file_exists "$home/etc/xymonapi-apache.conf"
 grep -q 'ProxyPass ' "$home/etc/xymonapi-apache.conf" || fail "the Apache snippet has no ProxyPass"
 grep -q 'proxy_pass ' "$home/etc/xymonapi-nginx.conf" || fail "the nginx snippet has no proxy_pass"
 grep -q 'proxy.server' "$home/etc/xymonapi-lighttpd.conf" || fail "the lighttpd snippet has no proxy.server"
-assert_contains 'Installed. Enable the API' "$(cat "$work/install.log")" "make install says what to do next"
+assert_contains 'Installed. Enable the API' "$(cat "$work/install.log")" "the install says what to do next"
 echo "# mine" > "$home/etc/xymonapi-apache.conf"
 "$ROOT/install.sh" install XYMONHOME="$home" MANDIR="$work/man" >/dev/null 2>&1 || fail "a third install failed"
 assert_equal "# mine" "$(cat "$home/etc/xymonapi-apache.conf")" "an edited Apache snippet is kept"

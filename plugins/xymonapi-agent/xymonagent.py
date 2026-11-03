@@ -41,7 +41,7 @@ import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-# xymonapi-mcp, beside this plugin wherever make installed them side by side.
+# xymonapi-mcp, beside this plugin wherever install.sh installed them side by side.
 MCP = HERE.parent / "xymonapi-mcp" / "xymonapi-mcp.sh"
 # What the Xymon MCP server reads to find the API: handed to it as its
 # environment, each when set, so a backend's own configuration plays no part.

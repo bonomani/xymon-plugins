@@ -20,7 +20,7 @@
 #
 # The search for a Python when PYTHON= is not given is not run: what it
 # finds depends on the machine.
-# Needs make and a Python 3.9 or later with the venv module in
+# Needs a Python 3.9 or later with the venv module in
 # XYMONAPI_PYTHON, or python3.
 
 set -euo pipefail
@@ -50,7 +50,7 @@ mkdir -p "$work/lacks"
 printf '#!/bin/sh\ncase "$*" in *"print("*) echo "fastembed numpy" ;; *find_spec*) exit 1 ;; esac\nexit 0\n' > "$work/lacks/python3"
 chmod 755 "$work/lacks/python3"
 
-# The three client-side plugins, as make install-client lays them out, on a
+# The three client-side plugins, as ./install.sh install-client lays them out, on a
 # machine whose Python lacks the modules: no virtualenv is made, and the
 # install says what ./install.sh venv would use.
 prefix=$work/prefix

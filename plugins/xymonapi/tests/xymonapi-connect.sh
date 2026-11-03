@@ -3,7 +3,7 @@
 #
 # plugins/xymonapi/tests/xymonapi-connect.sh
 #
-# xymonapi-connect, as make install-client lays it out, connects a machine to
+# xymonapi-connect, as ./install.sh install-client lays it out, connects a machine to
 # the API: it reads a user and a password holding a space, a quote, a
 # backslash and a glob character, gets the API to take them as they are, and
 # keeps the token it gets for this machine's short hostname -- mode 600, not
@@ -31,8 +31,8 @@ command -v openssl >/dev/null 2>&1 || skip "openssl is not installed"
 work=$(mktempdir)
 register_cleanup 'stop_process "$API_PID"'
 
-# The API as make install lays it out, its VERSION the client's, and the
-# client as make install-client does.
+# The API as ./install.sh install lays it out, its VERSION the client's, and the
+# client as ./install.sh install-client does.
 "$ROOT/install.sh" install xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
 	|| fail "install.sh install failed: $(tail -n 5 "$work/install.log")"
 "$ROOT/install.sh" install-client xymonapi PREFIX="$work/client" >"$work/client.log" 2>&1 \

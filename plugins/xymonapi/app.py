@@ -227,9 +227,8 @@ def _histlog(request):
 
 HERE = Path(__file__).resolve().parent
 _VERSION_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")
-# What each plugin's make install stages for other machines to install
-# from: its directory, as in the repository, beside build/ and the top
-# Makefile. Not under this plugin's own directory, which an install empties.
+# What each plugin's install stages for other machines to install from:
+# its directory, as in the repository, beside install.sh and LICENSE. Not under this plugin's own directory, which an install empties.
 DIST = HERE.parent / "xymon-plugins-client"
 
 
@@ -249,8 +248,8 @@ VERSION = installed_version()
 
 def _plugins(request):
     """The code of the plugins installed here, as staged for other machines,
-    in a .tar.gz rooted at xymon-plugins/: what a machine runs make
-    install-client in, at this server's versions. Open to anyone, as the
+    in a .tar.gz rooted at xymon-plugins/: what a machine runs
+    ./install.sh install-client in, at this server's versions. Open to anyone, as the
     repository is: it holds no setting and nothing secret. Which plugins it
     holds is whatever is staged; this API names none."""
     plugins = DIST / "plugins"
@@ -372,8 +371,8 @@ async def _ask(request):
         return JSONResponse({"error": "not_found", "detail": "Not Found"}, status_code=404)
     if not AGENT.is_file():
         return JSONResponse({"error": "not_found", "detail": "XYMONAPI_ASK is set, but "
-                             "xymonapi-agent is not installed beside the API: make install "
-                             "in plugins/xymonapi-agent"}, status_code=404)
+                             "xymonapi-agent is not installed beside the API: "
+                             "./install.sh install xymonapi-agent"}, status_code=404)
     try:
         body = await request.json()
     except ValueError:

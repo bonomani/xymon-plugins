@@ -20,7 +20,7 @@ setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 ## On the server
 
 ```sh
-make install XYMONHOME=/usr/lib/xymon/server
+XYMONHOME=/usr/lib/xymon/server ./install.sh install xymonapi-rag
 ```
 
 It installs the daily index task, `$XYMONHOME/etc/tasks.d/xymonapi-rag`,
@@ -48,13 +48,13 @@ xymoncmd /usr/lib/xymon/server/ext/xymonapi-rag/xymonapi-rag.sh search "what doe
 
 Without `xymoncmd`, set `XYMONAPI_URL=unix:` followed by the socket's path.
 
-`make uninstall XYMONHOME=...` keeps the index, `$XYMONAPI_RAG_INDEX`.
+`./install.sh uninstall xymonapi-rag` keeps the index, `$XYMONAPI_RAG_INDEX`.
 
 ## On another machine
 
 ```sh
-cd xymon-plugins/plugins/xymonapi-rag    # the code: top README, Getting the code
-make install-client                      # under ~/.local; PREFIX=... for elsewhere
+cd xymon-plugins                             # the code: top README, Getting the code
+./install.sh install-client xymonapi-rag     # under ~/.local; PREFIX=... for elsewhere
 set -a; eval "$(xymonapi-connect https://xymon.example.ch)"; set +a
 xymonapi-rag search "what does purple mean"
 xymonapi-rag ask "has /boot filled up before, and where?"
@@ -74,7 +74,7 @@ Ollama by default, LM Studio with two settings. Pick the model with care: a
 small one such as `llama3.2` answers in a second but makes things up, where a
 larger one says when the passages do not hold the answer.
 
-`make uninstall-client` keeps any index here, `$XYMONAPI_RAG_INDEX`.
+`./install.sh uninstall-client xymonapi-rag` keeps any index here, `$XYMONAPI_RAG_INDEX`.
 
 `eval` scores the search against a file of questions;
 [`tests/eval/docs.json`](../../tests/eval/docs.json) is the one CI runs.

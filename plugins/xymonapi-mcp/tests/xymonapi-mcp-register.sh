@@ -3,7 +3,7 @@
 #
 # plugins/xymonapi-mcp/tests/xymonapi-mcp-register.sh
 #
-# xymonapi-mcp register, as make install-client lays it out, connects this
+# xymonapi-mcp register, as ./install.sh install-client lays it out, connects this
 # machine to the API through xymonapi-connect -- a password asked once, a
 # token kept -- and registers the MCP server with Claude Code and Codex: the
 # installed launcher as the command, with the API's address and the token

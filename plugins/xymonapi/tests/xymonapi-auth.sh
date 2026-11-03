@@ -37,7 +37,7 @@ htpasswd -bB "$work/htpasswd" bob s3cret 2>/dev/null
 grep -q '^alice:\$apr1\$' "$work/htpasswd" || fail "htpasswd did not write alice in its \$apr1\$ format"
 grep -q '^bob:\$2y\$' "$work/htpasswd" || fail "htpasswd did not write bob as bcrypt"
 
-# The API as make install lays it out, with a release's VERSION beside it,
+# The API as ./install.sh install lays it out, with a release's VERSION beside it,
 # so that /health has one to give and the script one to install.
 "$ROOT/install.sh" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
 	|| fail "install.sh install failed: $(tail -n 5 "$work/install.log")"

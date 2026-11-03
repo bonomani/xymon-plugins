@@ -51,7 +51,7 @@ the port without a user, or a client token, when XYMONAPI_PASSWD is set.
 Its "version" field is the version of the code this process runs, read
 when it started -- an install it was not restarted for does not change it:
 the version it was installed from, its
-release tag, xymonapi/vX.Y.Z, when make install ran on one, else the X.Y.Z
+release tag, xymonapi/vX.Y.Z, when the install ran on one, else the X.Y.Z
 of its PLUGIN file; it is absent when the API was not installed.
 xymonapi-connect(1) compares it with the client's own.
 Its "search" field describes the index /search reads -- how many passages
@@ -92,9 +92,9 @@ install from at this server's versions: a gzipped tar rooted at
 xymon-plugins/, laid out as the repository is -- plugins/NAME for each
 plugin installed here, without its tests, with install.sh and LICENSE.
 \fB./install.sh install-client NAME\fR there installs that plugin.
-Each plugin's \fBmake install\fR stages its directory in
+Each plugin's \fB./install.sh install\fR stages its directory in
 $XYMONHOME/ext/xymon-plugins-client/, which is what /plugins packs, and its
-\fBmake uninstall\fR takes it out; this API names no plugin. It is the one
+\fB./install.sh uninstall\fR takes it out; this API names no plugin. It is the one
 path open without a user when XYMONAPI_PASSWD is set: it holds the
 plugins' code and nothing else -- no user, password, token or setting --
 though a stranger learns from it which plugins, at which versions, run
@@ -273,7 +273,7 @@ or a file that cannot be read, stops the API from starting, since running
 without the hiding asked for would be worse than not running.
 .IP "\fBXYMONAPI_ASK\fR"
 Set to 1, /ask is there; unset, empty, 0, no, off or false, it is not.
-It needs xymonapi-agent installed beside the API (its \fBmake install\fR),
+It needs xymonapi-agent installed beside the API (\fB./install.sh install xymonapi-agent\fR),
 an agent CLI installed and logged in as the Xymon user, and the socket
 (XYMONAPI_SOCKET), through which the agent reads this API. Which CLI,
 model and agent answer are xymonapi-agent(1)'s own settings,
@@ -285,11 +285,11 @@ For /ask: questions a caller may ask in an hour, 60, 0 for no limit; seconds
 to wait for the agent, 300; the longest question, 2000 characters.
 .IP "\fBXYMONAPI_PYTHON\fR"
 The Python to run the API with. Unset, the launcher takes the python3 of
-the virtualenv beside the plugins, $XYMONHOME/ext/venv, which \fBmake
+the virtualenv beside the plugins, $XYMONHOME/ext/venv, which \fB./install.sh
 venv\fR makes with the modules the installed plugins need; without one, the
 first of python3, python3.14 down to python3.9, found on PATH. When that
 one lacks a module, the API says which on
-stderr, the task's log, names \fBmake venv\fR, and exits with 77.
+stderr, the task's log, names \fB./install.sh venv\fR, and exits with 77.
 
 .SH FILES
 .IP "\fB$XYMONHOME/ext/xymonapi/\fR"

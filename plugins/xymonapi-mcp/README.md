@@ -12,17 +12,17 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
 - **A running [`xymonapi`](../xymonapi/README.md)** on the Xymon server,
   reached through its socket from that machine and over the network from
-  any other. `make install-client` installs `xymonapi`'s client beside this
+  any other. `./install.sh install-client xymonapi-mcp` installs `xymonapi`'s client beside this
   plugin; the API itself is installed and enabled on the server, by its
-  own README or by this plugin's `make install` there.
+  own README or by this plugin's server install there.
 - Python 3.9 or later, and nothing else: it speaks the protocol with the
   standard library.
 
 ## On the machine where the AI client runs
 
 ```sh
-cd xymon-plugins/plugins/xymonapi-mcp    # the code: top README, Getting the code
-make install-client                      # under ~/.local; PREFIX=... for elsewhere
+cd xymon-plugins                             # the code: top README, Getting the code
+./install.sh install-client xymonapi-mcp     # under ~/.local; PREFIX=... for elsewhere
 xymonapi-mcp register https://xymon.example.ch
 ```
 
@@ -42,19 +42,19 @@ URL: `unix:$XYMONVAR/xymonapi/api.sock`. Nothing is asked and no token is
 kept, since the socket's permissions already say who may read the API
 (`xymonapi.8`, `XYMONAPI_SOCKET`).
 
-`make uninstall-client` removes this plugin and says what `register` did
+`./install.sh uninstall-client xymonapi-mcp` removes this plugin and says what `register` did
 besides, to undo by hand: the registrations in Claude Code and Codex, and
 this machine's token.
 
 ## On the Xymon server
 
-`make install XYMONHOME=...` installs the API first, when it is not there,
+`XYMONHOME=... ./install.sh install xymonapi-mcp` installs the API first, when it is not there,
 and stages this plugin in what the API serves at `/plugins`, for the
 machines above to install it from, at the server's version. It installs no
 command on the server: an MCP server runs where the AI client runs.
 
 An AI client that runs on the server machine itself is one of those
-machines: run `make install-client` there as well, as yourself, and
+machines: run `./install.sh install-client xymonapi-mcp` there as well, as yourself, and
 `register` with the API's socket, as above.
 
 ## Registering it by hand
@@ -99,7 +99,7 @@ as a list, and `environment` for `env`.
   credential sent. Leave it out when the API asks for no password.
 - Add `XYMONAPI_CA` when the server's certificate is its own, and
   `XYMONAPI_PYTHON` when the `python3` on `PATH` is older than 3.9 and no
-  virtualenv sits beside the plugins (`make venv-client` makes one).
+  virtualenv sits beside the plugins (`./install.sh venv-client` makes one).
 - For two Xymon servers, register twice, as `xymon-prod` and `xymon-lab`,
   each with its own URL and token file.
 
