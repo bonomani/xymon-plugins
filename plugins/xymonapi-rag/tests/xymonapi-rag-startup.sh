@@ -69,6 +69,10 @@ until curl -s --max-time 5 -o /dev/null "$XYMONAPI_URL/xymon/api/v1/health"; do
 done
 rc=0
 wait "$RAG_PID" || rc=$?
+# 77, a module index needs and this machine lacks -- fastembed, which some
+# platforms package nowhere. The check above runs search, which with no index
+# here asks the API and needs none of them, so it cannot catch it.
+[ "$rc" -eq 77 ] && skip "$(cat "$work/rag.err")"
 [ "$rc" -eq 0 ] || fail "index exited with $rc once the API was up: $(tail -n 5 "$work/rag.err")"
 assert_contains "indexed" "$(cat "$work/index.out")" "index built the index after waiting for the API"
 assert_contains 'web.example.com http' \
