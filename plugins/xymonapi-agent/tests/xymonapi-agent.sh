@@ -63,7 +63,7 @@ echo "an answer"
 STUB
 chmod 755 "$work/stub/"*
 path="$work/stub:/usr/bin:/bin"
-export XDG_STATE_HOME="$work/state" XYMONAPI_URL="http://127.0.0.1:1" XYMONAPI_TOKEN_FILE="$work/token"
+export XDG_STATE_HOME="$work/state" XDG_CONFIG_HOME="$work/cfg" XYMONAPI_URL="http://127.0.0.1:1" XYMONAPI_TOKEN_FILE="$work/token"
 unset XYMONAPI_AGENT_BACKEND
 
 run() { PATH="$path" "$agent" "$@"; }
@@ -145,7 +145,6 @@ out=$(XYMONAPI_AGENT_BACKEND=opencode run backends)
 assert_contains "answers for xymon: opencode" "$out" "or the one chosen"
 
 # Profiles: another Xymon server, another tool set, a bad file.
-export XDG_CONFIG_HOME="$work/cfg"
 mkdir -p "$work/cfg/xymonapi-agent/agents"
 cat > "$work/cfg/xymonapi-agent/agents/lab.toml" <<'PROF'
 description = "the lab Xymon"      # tried in order
