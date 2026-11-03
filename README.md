@@ -10,7 +10,7 @@ history.
 | plugin | side | what it is | needs |
 |---|---|---|---|
 | [`xymonapi`](plugins/xymonapi/README.md) | server, client | a read-only HTTP and JSON interface to a Xymon server, as one of its xymonlaunch tasks, and its client | on the server, xymon >= 4.3.31 (main); python >= 3.9 |
-| [`xymonapi-mcp`](plugins/xymonapi-mcp/README.md) | client | an MCP server that gives an AI client read-only tools over the Xymon API | xymonapi >= 0.1.0 (its client beside it, the API over the network); python >= 3.9 |
+| [`xymonapi-mcp`](plugins/xymonapi-mcp/README.md) | client | an MCP server that gives an AI client read-only tools over the Xymon API | xymonapi >= 0.1.0 (its client beside it; the API's socket on the server, or the API over the network); python >= 3.9 |
 | [`xymonapi-rag`](plugins/xymonapi-rag/README.md) | server, client | a search of Xymon's manual pages and history by meaning; the index task on the server, search and ask anywhere | xymonapi >= 0.1.0 (its client beside it); python >= 3.9 |
 
 Each row summarises the plugin's `PLUGIN` file. Its README says how to

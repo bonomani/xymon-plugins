@@ -49,6 +49,11 @@ xymonapi-rag search "what does purple mean"
 xymonapi-rag ask "has /boot filled up before, and where?"
 ```
 
+On the server itself nothing is asked: run through `xymoncmd`, or with
+`XYMONAPI_URL=unix:$XYMONVAR/xymonapi/api.sock`, the search reads the API's
+own socket, which the Xymon user and its group reach with no token
+(`xymonapi.8`, `XYMONAPI_SOCKET`).
+
 On another machine, `make install-client` here -- from a clone, or from the
 code the server's `/client` gives, as [`xymonapi`'s
 README](../xymonapi/README.md#setting-up-another-machine) shows -- installs it

@@ -140,8 +140,8 @@ file, `$XYMONAPI_TOKENS`.
 ## Reaching it from another machine
 
 Its port listens on 127.0.0.1 unless told otherwise, and asks the password
-there whatever the address; the socket above never leaves the machine. From another machine, use
-HTTPS, one of:
+there whatever the address; the socket above never leaves the machine. From
+another machine, use HTTPS, one of:
 
 - **Its own HTTPS.** Where xymond has a certificate for TLS (`xymon-tls(7)`,
   from Xymon pull requests #617–#623, not yet merged), the API finds it in
