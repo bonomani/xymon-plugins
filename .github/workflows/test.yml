@@ -1,0 +1,117 @@
+name: test
+
+# The tests run against Xymon's main branch, built here: the API reads what a
+# real xymond answers, so that is what it is tested with. The weekly run
+# catches a change in Xymon that breaks the API when nothing here changed.
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout xymon-plugins
+        uses: actions/checkout@v7
+        with:
+          path: plugins-repo
+
+      - name: Checkout Xymon (main)
+        uses: actions/checkout@v7
+        with:
+          repository: xymon-monitoring/xymon
+          ref: main
+          path: xymon
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libc-ares-dev libldap-dev libpcre2-dev \
+            librrd-dev libssl-dev libtirpc-dev \
+            rrdtool apache2-utils openssl curl python3 python3-venv
+          # The system Python takes no pip installs (PEP 668); the launcher
+          # uses whichever Python XYMONAPI_PYTHON names.
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install -r plugins-repo/plugins/xymonapi/requirements.txt -r plugins-repo/plugins/xymonapi-rag/requirements.txt
+
+      # The non-interactive configure recipe of Xymon's own build.yml.
+      - name: Build Xymon
+        working-directory: xymon
+        run: |
+          USEXYMONPING=y ENABLESSL=y ENABLELDAP=y ENABLELDAPSSL=y \
+          XYMONUSER=xymon XYMONTOPDIR=/usr/lib/xymon XYMONVAR=/var/lib/xymon \
+          XYMONHOSTURL=/xymon CGIDIR=/usr/lib/xymon/cgi-bin XYMONCGIURL=/xymon-cgi \
+          SECURECGIDIR=/usr/lib/xymon/cgi-secure SECUREXYMONCGIURL=/xymon-seccgi \
+          HTTPDGID=www-data XYMONLOGDIR=/var/log/xymon \
+          XYMONHOSTNAME=localhost XYMONHOSTIP=127.0.0.1 MANROOT=/usr/share/man \
+          INSTALLBINDIR=/usr/lib/xymon/server/bin INSTALLETCDIR=/etc/xymon \
+          INSTALLWEBDIR=/etc/xymon/web INSTALLEXTDIR=/usr/lib/xymon/server/ext \
+          INSTALLTMPDIR=/var/lib/xymon/tmp INSTALLWWWDIR=/var/lib/xymon/www \
+          ./configure --server
+          make -j"$(nproc)"
+
+      - name: Test
+        env:
+          XYMON_SRC: ${{ github.workspace }}/xymon
+          XYMONAPI_PYTHON: ${{ runner.temp }}/venv/bin/python3
+          XYMONAPI_NO_SKIP: "1"
+        run: plugins-repo/tests/run.sh
+
+  # The API's contract changes only with its version: build/contract-check.sh
+  # compares it with stable's, oasdiff saying which changes break clients.
+  # oasdiff is fetched pinned, and checked against its published checksum.
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      OASDIFF_VERSION: "1.35.0"
+      OASDIFF_SHA256: a8023002fcb2eaa7f5758148a9303cb63d33b939886df312268bc0fc7b939140
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Fetch oasdiff
+        run: |
+          f=oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz
+          curl -sSfL -o "$RUNNER_TEMP/$f" "https://github.com/oasdiff/oasdiff/releases/download/v$OASDIFF_VERSION/$f"
+          echo "$OASDIFF_SHA256  $RUNNER_TEMP/$f" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP" oasdiff
+
+      - name: The contract and its version
+        run: |
+          git fetch -q origin stable || true
+          OASDIFF="$RUNNER_TEMP/oasdiff" build/contract-check.sh origin/stable | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # stable: the newest commit of main every check passed, which outside users
+  # install. Moved forward only, never back nor forced; a run that finishes
+  # after a newer one leaves it where it is.
+  stable:
+    needs: [test, contract]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Move stable to this commit
+        run: |
+          if git fetch -q origin stable; then
+            if git merge-base --is-ancestor "$GITHUB_SHA" origin/stable; then
+              echo "stable already holds $GITHUB_SHA"; exit 0
+            fi
+            git merge-base --is-ancestor origin/stable "$GITHUB_SHA" \
+              || { echo "stable is not behind $GITHUB_SHA: left as it is" >&2; exit 1; }
+          fi
+          git push origin "$GITHUB_SHA:refs/heads/stable"

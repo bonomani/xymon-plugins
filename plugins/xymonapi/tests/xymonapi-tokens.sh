@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# plugins/xymonapi/tests/xymonapi-tokens.sh
+#
+# A user who gives the password gets a token for one machine, and that token
+# opens the API on its own; the token file holds its SHA-256, never the
+# token. A second token for the same user and machine replaces the first,
+# which stops working at once; a revoked one stops working too. A user sees
+# and revokes only their own tokens; a token cannot make, list or revoke
+# tokens, so a stolen one cannot renew itself; a token that is not valid, or
+# altered by one character, is refused. A user removed from the password file
+# has every token refused and deleted, so that put back, or a new user of the
+# name, they need new ones; a password file that cannot be read refuses a
+# token without deleting it. With
+# no XYMONAPI_PASSWD there are no users and no tokens. The MCP client
+# sending a token is xymonapi-mcp-access's.
+#
+# Skips where the API cannot run (tests/lib/xymonapi.sh). Needs the xymon
+# client of the Xymon tree in XYMON_SRC (for a free port), Apache's htpasswd
+# and curl.
+
+set -euo pipefail
+# shellcheck source=tests/lib/xymonapi.sh
+. "$(dirname "$0")/../../../tests/lib/xymonapi.sh"
+
+ROOT=$(find_root)
+
+require_bin XYMONCLIENT "$XYMON_SRC/common/xymon"
+command -v curl >/dev/null 2>&1 || skip "curl is not installed"
+command -v htpasswd >/dev/null 2>&1 || skip "Apache's htpasswd is not installed"
+
+work=$(mktempdir)
+register_cleanup 'stop_process "$API_PID"'
+
+htpasswd -cbB "$work/htpasswd" alice secret 2>/dev/null
+htpasswd -bB "$work/htpasswd" bob s3cret 2>/dev/null
+
+export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONAPI_PASSWD="$work/htpasswd" \
+	XYMONAPI_TOKENS="$work/var/tokens"
+start_api
+
+api=http://127.0.0.1:$API_PORT/xymon/api/v1
+# as WHO ARGS... -- curl with a user and password ("alice:secret") or a token.
+as() {
+	local who=$1; shift
+	case $who in
+		xat_*) curl -s --max-time 30 -H "Authorization: Bearer $who" "$@" ;;
+		*)     curl -s --max-time 30 -u "$who" "$@" ;;
+	esac
+}
+code() { local who=$1; shift; as "$who" -o /dev/null -w '%{http_code}' "$@"; }
+issue() {
+	as "$1" -X POST -H 'Content-Type: application/json' -d "{\"client\":\"$2\"}" "$api/tokens" \
+		| sed -n 's/.*"token": *"\(xat_[A-Za-z0-9_-]*\)".*/\1/p'
+}
+
+t1=$(issue alice:secret laptop)
+[ -n "$t1" ] || fail "POST /tokens gave alice no token"
+assert_equal "200" "$(code "$t1" "$api/health")" "the token opens the API"
+assert_equal "201" "$(code alice:secret -X POST -H 'Content-Type: application/json' -d '{"client":"desktop"}' "$api/tokens")" "a new token is 201"
+
+assert_file_exists "$work/var/tokens"
+grep -q "$t1" "$work/var/tokens" && fail "the token file holds the token itself"
+assert_equal "-rw-------" "$(ls -l "$work/var/tokens" | cut -c1-10)" "the token file is the API's alone"
+
+# One per user and machine: a second token for laptop stops the first.
+t2=$(issue alice:secret laptop)
+[ -n "$t2" ] && [ "$t2" != "$t1" ] || fail "a second token for laptop was not a new one"
+assert_equal "401" "$(code "$t1" "$api/health")" "the replaced token is refused"
+assert_equal "200" "$(code "$t2" "$api/health")" "its replacement works"
+
+# A token cannot manage tokens.
+assert_equal "401" "$(code "$t2" "$api/tokens")" "[C3] a token may not list tokens"
+assert_equal "401" "$(code "$t2" -X POST -H 'Content-Type: application/json' -d '{"client":"other"}' "$api/tokens")" "[C3] nor make one"
+assert_equal "401" "$(code "$t2" -X DELETE "$api/tokens/laptop")" "[C3] nor revoke one"
+
+# Altered by one character, or not a token at all.
+last=${t2: -1}; [ "$last" = A ] && other=B || other=A
+assert_equal "401" "$(code "${t2%?}$other" "$api/health")" "a token altered by one character"
+assert_equal "401" "$(code xat_nonsense "$api/health")" "something that is not a token"
+
+# A user's own tokens, and only those.
+list=$(as alice:secret "$api/tokens")
+assert_contains '"client":"laptop"' "$list" "alice lists her laptop"
+assert_contains '"client":"desktop"' "$list" "and her desktop"
+assert_not_contains 'sha256' "$list" "without the digests"
+t3=$(issue bob:s3cret laptop)
+issue bob:s3cret bobbox > /dev/null
+assert_not_contains 'bobbox' "$(as alice:secret "$api/tokens")" "alice does not see bob's tokens"
+assert_equal "204" "$(code alice:secret -X DELETE "$api/tokens/laptop")" "alice revokes her laptop"
+assert_equal "401" "$(code "$t2" "$api/health")" "and its token is refused"
+assert_equal "200" "$(code "$t3" "$api/health")" "bob's laptop, of the same name, still works"
+assert_equal "404" "$(code alice:secret -X DELETE "$api/tokens/laptop")" "revoking what is not there is 404"
+assert_equal "400" "$(code alice:secret -X POST -H 'Content-Type: application/json' -d '{"client":"../x"}' "$api/tokens")" "a machine name that is not one"
+
+# A password file that cannot be read says nothing of the user: the token is
+# refused and kept. Moved away and back, which changes nothing in it.
+mv "$work/htpasswd" "$work/htpasswd.away"
+assert_contains 'cannot be read' "$(as "$t3" "$api/health")" "an unreadable password file refuses the token"
+mv "$work/htpasswd.away" "$work/htpasswd"
+assert_contains 'bobbox' "$(cat "$work/var/tokens")" "and deletes nothing"
+assert_equal "200" "$(code "$t3" "$api/health")" "the file back, the token works"
+
+# A user removed from the password file: refused, and every token of theirs
+# deleted, without an admin touching the token file; put back, the old
+# tokens stay dead and a new one works. Each htpasswd write changes the
+# file's size, which the cached user list is keyed on.
+htpasswd -D "$work/htpasswd" bob 2>/dev/null || fail "htpasswd could not remove bob"
+assert_equal "401" "$(code "$t3" "$api/health")" "bob removed from the password file: his token is refused"
+grep -q 'bobbox' "$work/var/tokens" && fail "bob's tokens were kept after his removal: $(cat "$work/var/tokens")"
+assert_contains 'desktop' "$(cat "$work/var/tokens")" "alice's are not touched"
+htpasswd -bB "$work/htpasswd" bob s3cret 2>/dev/null || fail "htpasswd could not put bob back"
+assert_equal "401" "$(code "$t3" "$api/health")" "bob put back: his old token stays revoked"
+t3=$(issue bob:s3cret laptop)
+assert_equal "200" "$(code "$t3" "$api/health")" "and a new one works"
+
+# No password, no users: no tokens either.
+stop_process "$API_PID"
+API_PID=""
+XYMONAPI_PASSWD="" start_api
+assert_equal "400" "$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"client":"laptop"}' "http://127.0.0.1:$API_PORT/xymon/api/v1/tokens")" "tokens without XYMONAPI_PASSWD"
+
+pass "a token per user and machine opens the API, replaces the last, is revoked on its own and deleted with its user's removal, and cannot manage tokens"

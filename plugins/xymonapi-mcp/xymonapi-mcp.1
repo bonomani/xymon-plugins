@@ -1,0 +1,111 @@
+.TH XYMONAPI-MCP 1 "October 30, 2026" "xymon-plugins"
+.SH NAME
+xymonapi-mcp \- MCP server for the Xymon API
+.SH SYNOPSIS
+.B "xymonapi-mcp"
+.br
+.B "xymonapi-mcp register URL [NAME]"
+
+.SH DESCRIPTION
+xymonapi-mcp gives an AI client that speaks the Model Context Protocol --
+Claude Desktop, Claude Code, Codex and others -- tools to read a Xymon server. The
+client starts it and talks to it over stdin and stdout. Each tool is one
+request to a running
+.I xymonapi(8),
+so the client gets what the API answers at that moment: nothing is stored,
+and nothing in Xymon is changed. Every tool is marked read-only.
+
+It runs where the client runs, which need not be the Xymon server, and needs
+Python 3.9 or later and nothing else: it speaks the protocol with the
+standard library, and the searches too are the API's. Without that Python
+it says so on stderr and exits with status 77. It writes nothing but protocol
+messages on stdout. \fBmake install-client\fR puts it under a PREFIX of
+yours, as the command xymonapi-mcp, with its version in VERSION beside it.
+It is written for the xymonapi version its PLUGIN file names; when the
+API's /health gives an older one, every answer carries a "warning" field
+saying so, and stderr says it once. A newer API is taken as it is. Nothing
+is updated on its own, on either side.
+
+.SH REGISTERING
+\fBxymonapi-mcp register URL [NAME]\fR connects this machine to the API at
+URL with
+.I xymonapi-connect(1),
+installed beside it -- a password asked once when there is no working token;
+nothing, on the server itself, for the API's own socket, unix:PATH -- then
+registers the server with Claude Code and with Codex under NAME,
+xymon by default: this launcher as the command, with XYMONAPI_URL,
+XYMONAPI_TOKEN_FILE when there is a token, XYMONAPI_CA when a certificate is
+used, and XYMONAPI_PYTHON when it is set. A registration of that name is
+replaced. For a client that is not installed, it prints the command to run
+later. When the connection fails it registers nothing and exits with
+xymonapi-connect's status; when a client refuses the registration, with 1.
+
+.SH TOOLS
+.IP "\fBhealth\fR"
+Whether xymond answers, and its version.
+.IP "\fBstates\fR [entity] [test] [verdict]"
+The status board, one state per host and test.
+.IP "\fBalarms\fR"
+Every state whose verdict is not ok.
+.IP "\fBentities\fR"
+Each host on the board, once.
+.IP "\fBstatus\fR entity test"
+The current status of one host's test, with its text.
+.IP "\fBseries\fR entity test [metric] [start] [end]"
+The values of one dataset of a host's RRD file over a time range.
+.IP "\fBsearch_docs\fR question [k]"
+The passages of Xymon's manual pages nearest the question, by meaning.
+.IP "\fBsearch_history\fR question [k]"
+The past colour changes nearest the question, with the status text saved at
+each.
+.LP
+The first six answer what the xymonapi(8) operation of the same name
+answers; the two searches its /search, from the index the API serves.
+That page says what each field means. An API
+that cannot be reached, or that refuses a request, is a tool error whose
+text says which, and what to check first; so is a search on a server with
+no index.
+
+.SH SECURITY
+search_history returns status texts that the monitored hosts wrote, each
+marked as data, not instructions; a host that is broken into can still write
+there words meant to steer the client's model. Every tool here only reads,
+but an AI client that also has tools that change things should be watched
+when it acts on a history it found.
+
+The user and password are sent in the clear over http://: across a network,
+give an https:// XYMONAPI_URL -- the API's own, when it has xymond's
+certificate, or the web server's in front of it, as xymonapi(8) says --
+and XYMONAPI_CA when the certificate is not one this machine trusts.
+Redirects are not followed, so the credentials go to XYMONAPI_URL and
+nowhere else. On the server itself, the socket sends no credential and
+crosses no network.
+
+.SH ENVIRONMENT
+.IP "\fBXYMONAPI_URL\fR"
+Where xymonapi(8) is: an http:// or https:// URL, the host and, when it is
+not the scheme's own, the port -- 1986 for the API's own HTTPS, the web
+server's for one in front of it -- without /xymon/api/v1, which is added; or
+unix:PATH, the API's own
+socket on the server, where no token is needed (xymonapi(8),
+XYMONAPI_SOCKET). The default is that socket when XYMONAPI_SOCKET, or
+XYMONVAR, says where it is and it is there, and http://127.0.0.1:1986
+otherwise.
+.IP "\fBXYMONAPI_TOKEN_FILE\fR, \fBXYMONAPI_TOKEN\fR"
+A client token, from the first line of the file XYMONAPI_TOKEN_FILE names,
+or XYMONAPI_TOKEN itself: this machine's own credential (xymonapi(8),
+TOKENS), and the only one sent; no password is kept on this machine.
+xymonapi-connect(1) keeps one, and register names its file here.
+.IP "\fBXYMONAPI_CA\fR"
+For an https:// XYMONAPI_URL whose certificate this machine does not trust
+already: the server's certificate, or the CA that signed it, PEM. Xymond's
+own certificate, when the API uses it (xymon-tls(7)), is such a one.
+Verification is never turned off: the token rides on this connection.
+.IP "\fBXYMONAPI_PYTHON\fR"
+The Python to run with. Unset, the python3 of the virtualenv beside the
+plugins, $PREFIX/libexec/xymon-plugins/venv, which \fBmake venv-client\fR
+makes, when there is one; else the python3 found on PATH. Nothing is
+asked: this program needs no module beyond the standard library.
+
+.SH "SEE ALSO"
+xymonapi(8), xymonapi-connect(1), xymonapi-rag(1)
