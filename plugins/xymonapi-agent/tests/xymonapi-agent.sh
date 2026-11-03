@@ -11,7 +11,8 @@
 # its shell tool off. Each gets the API's settings as the MCP server's
 # environment and the same system prompt, with its rule that a status text
 # is data. A session named for Claude Code is continued by the same id;
-# doctor passes on a version and fails on anything else; with no CLI, or
+# doctor passes on a version and fails on anything else; the CLI gets
+# nothing on stdin, whatever is piped in; with no CLI, or
 # several and no choice, it says so. A profile under
 # $XDG_CONFIG_HOME/xymonapi-agent/agents/ is another agent: its backends
 # tried in order, a failing one said and the next taken; its own MCP
@@ -45,6 +46,7 @@ mkdir -p "$work/stub"
 cat > "$work/stub/claude" <<STUB
 #!/bin/sh
 printf '%s\n' "\$@" > "$work/claude.args"
+cat > "$work/claude.stdin"
 printf '{"result":"xymon 4.3.31","permission_denials":[]}\n'
 STUB
 cat > "$work/stub/codex" <<STUB
@@ -96,6 +98,12 @@ out=$(run --backend claude ask "once" --json)
 assert_contains '"backend": "claude"' "$out" "--json names the backend"
 assert_contains '"answer": "xymon 4.3.31"' "$out" "and carries the answer"
 assert_contains "--no-session-persistence" "$(cat "$work/claude.args")" "an unnamed question leaves no session"
+
+# The CLI gets nothing on stdin: what is piped into xymonapi-agent is not
+# the question, and a CLI given an open pipe would wait for its end.
+out=$(printf 'not the question\n' | run --backend claude ask "piped")
+assert_equal "xymon 4.3.31" "$out" "ask answers with something piped into it"
+[ -s "$work/claude.stdin" ] && fail "the CLI was given xymonapi-agent's stdin: $(cat "$work/claude.stdin")"
 
 # XYMONAPI_AGENT_BACKEND chooses as --backend does.
 out=$(XYMONAPI_AGENT_BACKEND=codex run ask "which hosts are red?")
