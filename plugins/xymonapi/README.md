@@ -88,19 +88,23 @@ another file, as `xymonapi.8` says.
 
 Its port listens on 127.0.0.1 unless told otherwise, and asks the password
 there whatever the address; the socket above never leaves the machine. From
-another machine, use HTTPS, one of:
+another machine, use HTTPS, one of -- each with the URL a client is then
+given, in `xymonapi-connect`, `register` or `XYMONAPI_URL`: the scheme, the
+host and the port, without `/xymon/api/v1`, which the client adds:
 
 - **Its own HTTPS.** Where xymond has a certificate for TLS (`xymon-tls(7)`,
   from Xymon pull requests #617–#623, not yet merged), the API finds it in
   `etc/tls/` and speaks HTTPS by itself; or name any certificate and key in
   `XYMONAPI_TLS_CERT` and `_KEY`. Open the port with
-  `XYMONAPI_LISTEN="0.0.0.0:1986"`.
+  `XYMONAPI_LISTEN="0.0.0.0:1986"`. The URL: `https://xymon.example.ch:1986`.
 - **The web server in front of it.** Include the snippet `make install` wrote
   for your web server, `$XYMONHOME/etc/xymonapi-*.conf`, in its HTTPS part:
-  one hostname for the pages and the API.
+  one hostname for the pages and the API. The URL: the web server's,
+  `https://xymon.example.ch`, with its port when that is not 443, as in
+  `https://xymon.example.ch:8443`.
 - **An SSH tunnel**, for one person:
-  `ssh -L 1986:127.0.0.1:1986 xymon-server`, then the API is at
-  `http://127.0.0.1:1986` as if local.
+  `ssh -L 1986:127.0.0.1:1986 xymon-server`. The URL:
+  `http://127.0.0.1:1986`, as if local.
 
 Plain HTTP across a network carries the password, the tokens and the status
 texts readable, as port 1984 does: keep it to a network where the Xymon pages
@@ -122,7 +126,7 @@ scp xymon.example.ch:/etc/xymon/tls/xymond.pem ~/.config/xymon-api/xymon-ca.pem
 
 cd xymon-plugins/plugins/xymonapi        # the code: top README, Getting the code
 make install-client                      # under ~/.local; PREFIX=... for elsewhere
-xymonapi-connect https://xymon.example.ch
+xymonapi-connect https://xymon.example.ch   # the URL: as reached, above
 ```
 
 `xymonapi-connect` asks for your user and password once -- one of the API's

@@ -26,12 +26,15 @@ make install-client                      # under ~/.local; PREFIX=... for elsewh
 xymonapi-mcp register https://xymon.example.ch
 ```
 
-`register` connects this machine to the API with `xymonapi-connect` --
-your password once, for a token of its own, as [`xymonapi`'s
-README](../xymonapi/README.md#on-another-machine) says -- then registers
-the server with Claude Code and Codex as `xymon`. Then ask your AI client
-"which hosts are red?". `register URL xymon-lab` names a second server; a
-client that is neither of those two is [registered by
+The URL is the API's as this machine reaches it, port included when it is
+not 443 -- [`xymonapi`'s
+README](../xymonapi/README.md#reaching-it-from-another-machine) gives it for
+each way of reaching it. `register` connects this machine to the API with
+`xymonapi-connect` -- your password once, for a token of its own, as
+[`xymonapi`'s README](../xymonapi/README.md#on-another-machine) says -- then
+registers the server with Claude Code and Codex as `xymon`. Then ask your AI
+client "which hosts are red?". `register URL xymon-lab` names a second
+server; a client that is neither of those two is [registered by
 hand](#registering-it-by-hand).
 
 On the Xymon server itself, give `register` the API's socket instead of a

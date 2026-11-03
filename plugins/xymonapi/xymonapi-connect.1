@@ -46,7 +46,10 @@ file. The API's /tokens lists this user's machines and revokes one.
 
 .SH OPTIONS
 .IP URL
-The API's address: http:// or https://, as other machines reach it; or
+The API's address as other machines reach it: http:// or https://, the
+host, and the port when it is not the scheme's own -- 1986 for the API's own
+HTTPS, the web server's for one in front of it -- without /xymon/api/v1,
+which the client adds; or
 unix:PATH, the API's own socket on the server, $XYMONVAR/xymonapi/api.sock
 unless xymonapi(8) was told otherwise, for a program on that machine.
 .IP NAME

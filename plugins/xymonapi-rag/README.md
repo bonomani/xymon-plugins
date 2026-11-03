@@ -60,6 +60,9 @@ xymonapi-rag search "what does purple mean"
 xymonapi-rag ask "has /boot filled up before, and where?"
 ```
 
+The URL is the API's as this machine reaches it, port included when it is
+not 443, as [`xymonapi`'s
+README](../xymonapi/README.md#reaching-it-from-another-machine) gives it.
 `xymonapi-connect`, installed with the client, gets this machine its token
 with your password once, as [`xymonapi`'s
 README](../xymonapi/README.md#on-another-machine) says, and prints the
