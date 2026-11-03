@@ -46,7 +46,7 @@ answer() {
 	assert_equal "$status" "$code" "$rule [C1] $method $path: the status"
 	grep -qi '^x-request-id: [A-Za-z0-9._-]' "$work/headers" || fail "$rule [C5] $method $path: no X-Request-Id in the answer"
 	got=$(sed -n 's/.*"error": *"\([a-z_]*\)".*/\1/p' "$body")
-	assert_equal "$error" "$got" "$rule [C1] $method $path: the error ($(head -c 200 "$body"))"
+	assert_equal "$error" "$got" "$rule [C1] $method $path: the error ($(b=$(cat "$body"); printf '%s' "${b:0:200}"))"
 	case ",$errors," in
 		*",$got,"*) ;;
 		*) fail "$rule [C1] $method $path: error '$got' is not in openapi.yaml's list ($errors)" ;;

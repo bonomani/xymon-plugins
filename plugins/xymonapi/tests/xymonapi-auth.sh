@@ -78,12 +78,12 @@ curl -s -o "$work/plugins.tgz" "http://127.0.0.1:$API_PORT/xymon/api/v1/plugins"
 mkdir -p "$work/unpacked"
 tar -xzf "$work/plugins.tgz" -C "$work/unpacked" || fail "/plugins' answer is not a gzipped tar"
 assert_equal "xymon-plugins" "$(ls "$work/unpacked")" "rooted at xymon-plugins/"
-grep -rqF "$(cut -d: -f2 "$work/htpasswd" | head -n 1)" "$work/unpacked" && fail "[C4] /plugins gave the password file's contents"
-find "$work/unpacked" -type f -name tokens | grep -q . && fail "[C4] /plugins gave a tokens file"
+grep -rqF "$(first_line "$(cut -d: -f2 "$work/htpasswd")")" "$work/unpacked" && fail "[C4] /plugins gave the password file's contents"
+[ -n "$(find "$work/unpacked" -type f -name tokens)" ] && fail "[C4] /plugins gave a tokens file"
 assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user"
 # The process names its directory in its command line, which is what a
 # restart finds it by: pkill -f "$XYMONHOME/ext/xymonapi/".
-pgrep -f "$work/inst/ext/xymonapi/" | grep -qx "$API_PID" \
+grep -qx "$API_PID" <<<"$(pgrep -f "$work/inst/ext/xymonapi/" || true)" \
 	|| fail "pgrep -f on the API's directory does not find it, so the documented pkill would not stop it: $(ps -o command= -p "$API_PID")"
 # An install over it stops it, saying so, since it would go on with the
 # code it loaded; xymonlaunch, not run here, would start the new. With
@@ -112,7 +112,7 @@ printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
 # the code and not in openapi.yaml is a contract the API does not keep.
 spec_fields=$(sed -n '/^    Health:/,/^    [A-Z]/p' "$ROOT/plugins/xymonapi/openapi.yaml" | sed -n 's/^        \([a-z_]*\):.*/\1/p')
 for f in $(curl -s -u alice:secret "$url" | "${XYMONAPI_PYTHON:-python3}" -c 'import json, sys; print(" ".join(json.load(sys.stdin)))'); do
-	printf '%s\n' "$spec_fields" | grep -qx "$f" || fail "/health gives \"$f\", which openapi.yaml's Health does not list ($(echo $spec_fields))"
+	grep -qx "$f" <<<"$spec_fields" || fail "/health gives \"$f\", which openapi.yaml's Health does not list ($(echo $spec_fields))"
 done
 
 # Xymon's own password file is the default: with XYMONHOME set and
