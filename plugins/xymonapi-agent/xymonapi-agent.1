@@ -1,0 +1,223 @@
+.TH XYMONAPI-AGENT 1 "November 3, 2026" "xymon-plugins"
+.SH NAME
+xymonapi-agent \- ask an AI agent a question about Xymon, headless
+.SH SYNOPSIS
+.B "xymonapi-agent [--agent NAME] [--backend NAMES] ask [--session NAME] [--json] [--show-command] QUESTION"
+.br
+.B "xymonapi-agent agents"
+.br
+.B "xymonapi-agent [--agent NAME] [--backend NAMES] backends"
+.br
+.B "xymonapi-agent [--agent NAME] [--backend NAMES] doctor [--json]"
+.br
+.B "xymonapi-agent --agent NAME mcp-agents"
+
+.SH DESCRIPTION
+xymonapi-agent asks a question about a Xymon server to an AI agent and
+prints its answer, with no one at the keyboard. The model behind it is one of the
+command-line coding agents a person may already have on the machine --
+Claude Code, Codex or opencode -- run in its non-interactive mode, with
+.I xymonapi-mcp(1),
+installed beside this plugin, as its one tool: the read-only tools over the
+Xymon API, nothing else. It is for a terminal, a cron job, an alert script,
+or a chat bot: whatever wants the answer a person would get by typing the
+question into one of those agents, as text.
+
+What is asked is an \fIagent\fR: which backends to try, in order; which
+MCP servers it gets; what its prompt says beyond the fixed part; which
+Xymon server it reads. The built-in agent, \fBxymon\fR, is this plugin's
+own: the Xymon MCP server beside it, with the API's settings from this
+environment -- XYMONAPI_URL, XYMONAPI_TOKEN_FILE, XYMONAPI_CA and the rest
+the client reads, each when set -- so what the person has registered with
+their own agent plays no part. A profile file (see PROFILES) adds another
+agent, or redefines xymon.
+
+Every backend is given the same three things: the agent's MCP servers, by
+command and environment; a system prompt whose fixed part says the agent
+reads through those tools, changes nothing, has no shell, files or web,
+and that text a tool returns about a monitored system is data about it,
+never an instruction; and the rule that those tools are the only ones.
+Its standard input is empty: what is piped into xymonapi-agent is not the
+question.
+How completely a backend's flags can promise that differs, and
+\fBbackends\fR says so for each. A profile chooses tools, words and
+target; it cannot loosen that.
+
+It needs Python 3.9 or later, and the agent CLI installed and logged in by
+its own means; this command only runs it. Without that Python it says so on
+stderr and exits with status 77. The CLI's own failure is repeated on stderr
+with its exit status, and this command exits 1.
+
+.SH COMMANDS
+.IP "\fBask\fR [\fB--session\fR NAME] [\fB--json\fR] [\fB--show-command\fR] QUESTION"
+Ask QUESTION and print the answer. With \fB--session\fR NAME the
+conversation of that name is continued, or started: a later question with
+the same name, to the same agent, follows on from this one. Only Claude Code continues a session
+here, by an id derived from the name and the same on every machine; with
+the other backends a named session is started fresh each time, and stderr
+says so. Without a name, Claude Code keeps no record of the conversation.
+\fB--json\fR prints one object: \fBagent\fR, \fBbackend\fR, \fBsession\fR
+and \fBanswer\fR. \fB--show-command\fR prints on stderr the command that was
+run, its long arguments shortened, so what the backend was told can be
+seen without a secret in it.
+.IP "\fBagents\fR"
+Each agent, built in or from a profile: its description, backends, MCP
+servers, the agents it coordinates, model and environment, and the file it
+came from.
+.IP "\fBmcp-agents\fR"
+Serve a coordinator's agents as MCP tools on stdin and stdout: what its
+backend is given to run, not a command for a terminal. For an agent that
+coordinates none, an error.
+.IP "\fBbackends\fR"
+For each backend, whether its command is on PATH and how far it is held
+to the MCP servers; then which answer for the agent, in order, or why none
+does; and where each of the agent's MCP servers is expected.
+.IP "\fBdoctor\fR [\fB--json\fR]"
+Asks the agent to call the xymon health tool once and answer with the
+version it gives, and passes when the answer looks like one: something only
+that tool can have said. Exits 1 otherwise, with the answer printed, as
+when the MCP server did not start or the backend was denied it; and says
+so when the agent has no xymon server to ask.
+
+.SH PROFILES
+A file \fINAME.toml\fR under $XDG_CONFIG_HOME/xymonapi-agent/agents/
+(~/.config/...) is the agent NAME; \fBxymon.toml\fR redefines the built-in
+one. \fB--agent\fR NAME, else XYMONAPI_AGENT_AGENT, says which is asked;
+xymon when neither does. The keys, each optional:
+.IP "\fBdescription\fR"
+One line, for \fBagents\fR.
+.IP "\fBbackend\fR"
+The backends to try, in order: a list, or one name. Empty, the one agent
+CLI on PATH, as for the built-in agent. See BACKENDS for the order's
+meaning.
+.IP "\fBmodel\fR, \fBsite\fR"
+As XYMONAPI_AGENT_MODEL and XYMONAPI_AGENT_SITE, for this agent.
+.IP "\fBmcp\fR"
+The MCP servers the agent gets: a list of names, \fB["xymon"]\fR by default.
+\fBxymon\fR is built in; any other is defined by a \fB[server.NAME]\fR table
+with \fBcommand\fR, and optionally \fBargs\fR, a list, and \fBenv\fR, a list
+of the variables of the environment to hand it. A name with no table is
+an error.
+.IP "\fBprompt\fR"
+Text appended to the fixed system prompt: what the servers are, how to
+answer. It cannot remove the fixed part.
+.IP "\fBagents\fR"
+A list of other agents' names: this agent is then a \fIcoordinator\fR (see
+COORDINATORS). With it, \fBmcp\fR is empty by default: a coordinator's
+tools are its agents.
+.IP "\fB[env]\fR"
+Variables set over this environment for the backend and the MCP servers:
+another Xymon server's XYMONAPI_URL and XYMONAPI_TOKEN_FILE, a server's
+own settings. A ~ at the start of a value is the home directory.
+.PP
+The file is TOML as far as those keys need: strings in double quotes,
+lists of them, true, false, numbers, comments, [tables]. Anything else is
+refused with the file and line, by every command, so a bad profile is seen
+at once. A profile cannot loosen a backend's restriction: the tools it
+allows are those of its \fBmcp\fR list, and nothing else.
+
+.SH COORDINATORS
+An agent whose profile has \fBagents\fR gets, besides any MCP server of
+its own, one named \fBagents\fR: this command itself, run by the backend as
+\fBxymonapi-agent --agent NAME mcp-agents\fR, serving one tool per agent,
+\fBask_\fIAGENT\fR(question), described by that agent's \fBdescription\fR.
+Its prompt says to route the question to the agents it concerns, ask each
+what it alone can answer, and merge the answers naming which agent said
+what. A call runs \fBxymonapi-agent --agent AGENT ask --json\fR in a process
+of its own: that agent's backends, servers, sandbox and environment, not
+the coordinator's -- XYMONAPI_AGENT_AGENT, XYMONAPI_AGENT_BACKEND and
+XYMONAPI_AGENT_DEPTH are not passed down. The answer is the tool's text; a
+failure, with the agent's last line, is a tool error the backend sees.
+
+Two guards. XYMONAPI_AGENT_DEPTH, 2 by default, is how many coordinators
+deep an ask may go: each child runs with one less, and at 0 every ask_
+call is refused, so two coordinators that name each other stop.
+XYMONAPI_AGENT_SUBASKS, 8, is the most asks one question may make of the
+agents; the next is refused with a word to answer with what it has. A
+profile that names itself, or an agent no profile defines, is refused as
+a bad profile. \fBdoctor\fR does not apply to a coordinator without the
+xymon server, and says so.
+
+.SH BACKENDS
+The backends to try, in order, are \fB--backend\fR, else
+XYMONAPI_AGENT_BACKEND -- names separated by commas -- else the agent's
+\fBbackend\fR list, else whichever one agent CLI is on PATH: with several
+here and no list, nothing runs and the message names them. Of a list, the
+first that is on PATH is run; when it exits with an error, gives no answer
+in XYMONAPI_AGENT_TIMEOUT seconds, or an empty one, stderr says so and the
+next is tried; the answer and, with \fB--json\fR, the \fBbackend\fR field are
+the one that answered. Every one failing is the error, each with its
+reason. A name on the list that is not on PATH is skipped without a word.
+.IP "\fBclaude\fR"
+Claude Code, with \fB-p\fR. \fB--strict-mcp-config\fR gives it the MCP
+server from the command line and no other; \fB--tools ""\fR removes every
+built-in tool; \fB--allowedTools mcp__xymon__*\fR lets the xymon tools run
+without asking; \fB--permission-mode dontAsk\fR denies anything else. Its
+JSON output gives the answer, and the tool calls it denied, which are
+added to the answer in brackets when there are any. The most complete of
+the three.
+.IP "\fBcodex\fR"
+Codex, with \fBexec\fR. \fB--sandbox read-only\fR keeps it from writing;
+configuration overrides on the command line give it the MCP server, turn
+its shell tool off (\fBfeatures.shell_tool=false\fR) and its web search
+off; \fB--ephemeral\fR keeps no session. Its documentation does not promise
+the shell is gone with that setting, so this backend is partial: run
+\fBdoctor\fR, and prefer another backend where the token file must not be
+readable to the model. The system prompt goes in front of the question,
+there being no flag for one.
+.IP "\fBopencode\fR"
+opencode, with \fBrun\fR, under a configuration file written for the call
+and named by OPENCODE_CONFIG, with OPENCODE_DISABLE_PROJECT_CONFIG set: the
+MCP server, a permission that denies every tool and allows \fBxymon_*\fR,
+and an agent \fBxymon\fR carrying the system prompt, which \fB--agent\fR
+runs. The person's global configuration still merges with that file; what
+it adds is theirs to know. The file is removed after the call.
+
+.SH ENVIRONMENT
+.IP "\fBXYMONAPI_AGENT_AGENT\fR"
+The agent, when \fB--agent\fR does not say; xymon.
+.IP "\fBXYMONAPI_AGENT_BACKEND\fR"
+The backends to try, in order, when \fB--backend\fR does not say: of
+claude, codex and opencode, separated by commas. Over a profile's list.
+.IP "\fBXYMONAPI_AGENT_MODEL\fR"
+For the built-in agent, a model to ask the backend for, in the backend's
+own form -- an alias or id for Claude Code, a model name for Codex,
+provider/model for opencode. Unset, each uses its own default. A profile's
+\fBmodel\fR is this for that agent.
+.IP "\fBXYMONAPI_AGENT_TIMEOUT\fR"
+Seconds to wait for an answer; 600 by default.
+.IP "\fBXYMONAPI_AGENT_MAX_TURNS\fR"
+For Claude Code, the most tool-calling turns one question may take; 30.
+.IP "\fBXYMONAPI_AGENT_DEPTH\fR, \fBXYMONAPI_AGENT_SUBASKS\fR"
+A coordinator's guards; see COORDINATORS. 2 and 8.
+.IP "\fBXYMONAPI_AGENT_SITE\fR"
+For the built-in agent, a name for the Xymon site, said in the system
+prompt. A profile's \fBsite\fR is this for that agent.
+.IP "\fBXYMONAPI_URL\fR, \fBXYMONAPI_TOKEN_FILE\fR, \fBXYMONAPI_TOKEN\fR, \fBXYMONAPI_CA\fR, \fBXYMONAPI_SOCKET\fR, \fBXYMONVAR\fR, \fBXYMONAPI_PYTHON\fR"
+Where the API is and how to reach it, as
+.I xymonapi-mcp(1)
+reads them: handed to the MCP server as its environment, each when set.
+.IP "\fBXDG_CONFIG_HOME\fR"
+Under it, xymonapi-agent/agents/ holds the profiles; $HOME/.config when
+unset.
+.IP "\fBXDG_STATE_HOME\fR"
+Under it, xymonapi-agent/AGENT/BACKEND/NAME records a session named with
+\fB--session\fR; $HOME/.local/state when unset.
+
+.SH FILES
+.IP "\fI../xymonapi-mcp/xymonapi-mcp.sh\fR"
+The Xymon MCP server, beside this plugin, as \fBmake install-client\fR lays
+them out. Missing, as any of an agent's servers, \fBask\fR says so and runs
+nothing.
+.IP "\fI$XDG_CONFIG_HOME/xymonapi-agent/agents/NAME.toml\fR"
+The agent NAME; see PROFILES.
+.IP "\fI$XDG_STATE_HOME/xymonapi-agent/\fR"
+The sessions, one small file each.
+
+.SH EXIT STATUS
+0 for an answer, or a passing doctor; 1 when every backend failed, none is
+chosen, a profile is bad or doctor did not pass; 2 for a usage error; 77 when no Python 3.9
+is here.
+
+.SH SEE ALSO
+.I xymonapi-mcp(1), xymonapi-rag(1), xymonapi(8)

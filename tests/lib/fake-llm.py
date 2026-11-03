@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""A stand-in HTTP server for the tests: a language model that speaks the
+OpenAI-compatible API, for xymonapi-rag ask, or a server that redirects.
+
+    fake-llm.py PORTFILE RECORD [REDIRECT]
+
+Listens on a free port on 127.0.0.1 and writes it to PORTFILE. Every request
+is written to RECORD -- its Authorization header, then its body. A POST to
+/v1/chat/completions is answered with the fixed text FAKE ANSWER, unless it
+names the model no-such-model, which is answered 404 as Ollama answers for a
+model it has not pulled; thinking-model, answered with an empty content and
+reasoning only, as LM Studio answers for a reasoning model out of tokens; or
+slow-model, answered after three seconds -- by when a client with a shorter
+timeout has gone, which is not an error here. With REDIRECT, a URL, every
+request is answered 302 to it instead.
+"""
+import http.server
+import json
+import sys
+import time
+
+portfile, record = sys.argv[1], sys.argv[2]
+redirect = sys.argv[3] if len(sys.argv) > 3 else ""
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.do_POST()
+
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        with open(record, "w", encoding="utf-8") as fd:
+            fd.write(f'Authorization: {self.headers.get("Authorization", "")}\n')
+            fd.write(body.decode("utf-8"))
+        if redirect:
+            self.send_response(302)
+            self.send_header("Location", redirect)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self.path != "/v1/chat/completions" or b'"model": "no-such-model"' in body \
+                or b'"model":"no-such-model"' in body:
+            self.send_error(404)
+            return
+        if b'"model": "slow-model"' in body:
+            time.sleep(3)
+        content = "" if b'"model": "thinking-model"' in body else "FAKE ANSWER"
+        answer = json.dumps({"choices": [{"message": {"role": "assistant", "content": content,
+                                                      "reasoning_content": "Let me think..."},
+                                          "finish_reason": "length" if not content else "stop"}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(answer)))
+        try:
+            self.end_headers()
+            self.wfile.write(answer)
+        except (BrokenPipeError, ConnectionResetError):
+            pass                         # the client gave up waiting: what a timeout test does
+
+    def log_message(self, *args):
+        pass
+
+
+httpd = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+with open(portfile, "w") as fd:
+    fd.write(str(httpd.server_address[1]))
+httpd.serve_forever()

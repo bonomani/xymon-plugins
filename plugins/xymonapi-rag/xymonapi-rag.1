@@ -1,0 +1,145 @@
+.TH XYMONAPI-RAG 1 "October 30, 2026" "xymon-plugins"
+.SH NAME
+xymonapi-rag \- search Xymon's manual pages and history by meaning
+.SH SYNOPSIS
+.B "xymonapi-rag index [--no-history] [--full]"
+.br
+.B "xymonapi-rag search [--kind docs|history] [-k N] QUESTION"
+.br
+.B "xymonapi-rag ask [-k N] QUESTION"
+.br
+.B "xymonapi-rag eval [-k N] [--min HITS] FILE"
+.LP
+On the Xymon server the command is $XYMONHOME/ext/xymonapi-rag/xymonapi-rag.sh,
+run through xymoncmd(1) for Xymon's settings.
+
+.SH DESCRIPTION
+xymonapi-rag finds the passages of Xymon's manual pages, and of its history,
+that a question is about, by what they mean rather than by the words they
+share.
+.IP "\fBindex\fR"
+Reads the manual pages under $XYMONAPI_RAG_DOCS and the colour changes
+since $XYMONAPI_RAG_SINCE with the status text saved at each -- the newest
+$XYMONAPI_RAG_MAX_HISTORY of them at most. On the Xymon server, where
+$XYMONHISTDIR is set, the changes are read from xymond's own files, as
+.I xymonapi(8)
+reads them and with the same $XYMONAPI_HIDE: no API, user or token is
+needed. Anywhere else they are read through the API, page by page, with the
+token or user below; an API older than the xymonapi version the PLUGIN file
+names is said on stderr, once, and nothing is updated. It
+cuts them into passages, one per manual-page
+section or item and one per change; and stores a vector for each in
+$XYMONAPI_RAG_INDEX. A passage the index holds already keeps its vector, and
+a change it holds has its text not fetched again, so a run that adds a
+day's changes takes seconds; \fB--full\fR embeds everything again. Run it
+to take in what has changed: the task \fBtasks.d/xymonapi-rag\fR, which
+make install writes DISABLED, does so once a day, and
+.I xymonapi(8)
+reads the new index at once. To run it, remove that line and put
+XYMONAPI_RAG_DOCS in a file under xymonserver.d/. When
+the history cannot be read -- a saved status refused for another reason than
+one that was not saved -- it stops and leaves the index as it was. Through
+the API, one that does not answer yet, as when both are started by the same
+boot, is tried again for about a minute first.
+\fB--no-history\fR reads the manual pages only.
+.IP "\fBsearch\fR"
+Prints, as JSON, the N passages nearest QUESTION (5 by default, 20 at most),
+each with its kind, the page, section and item or the host, test and time it
+comes from, and its score. \fB--kind\fR keeps to manual pages or history.
+Where there is no index -- a laptop -- it asks the API's /search instead,
+which reads the index on the Xymon server: then neither the manual pages
+nor the embedding model are needed here.
+.IP "\fBask\fR"
+Gives the N passages nearest QUESTION, found as search finds them, and the
+question, to a language model that speaks the OpenAI-compatible API, and
+prints its answer.
+.IP "\fBeval\fR"
+Asks every question of FILE, a JSON list of objects with a "question", the
+"kind" to search and the text its "expect"ed passage's title holds, and
+prints one line per question and the score: how many found their passage
+among the first N (3 by default). With \fB--min\fR it exits 1 below that
+many hits, for a test. tests/eval/docs.json is such a file for Xymon's own
+manual pages.
+.LP
+The vectors come from a small embedding model, run on this machine by the
+Python module fastembed; it is downloaded once, about 65 MB, the first time
+it is used. Indexing and searching send nothing elsewhere. Only ask does,
+and only to $XYMONAPI_RAG_LLM_URL.
+
+The same search is offered to an AI client by the search_docs and
+search_history tools of
+.I xymonapi-mcp(1),
+whose own model then writes the answer: with a Claude subscription, ask is
+not needed.
+
+It needs Python 3.9 or later, and, to index or to search an index here,
+the modules in requirements.txt beside it; when one is missing it says so
+and exits with status 77. \fBmake install-client\fR puts it under a PREFIX of
+yours, as the command xymonapi-rag.
+
+.SH SECURITY
+A history passage holds a status text, which the monitored host wrote: a
+host that is broken into can write there words meant to steer a language
+model. Each such passage carries a "trust" field saying it is data, not
+instructions, and ask tells the model so; a model may still be misled. Give
+ask, and an AI client that uses search_history, no more than read access,
+as the tools of xymonapi-mcp(1) have.
+
+.SH ENVIRONMENT
+.IP "\fBXYMONAPI_RAG_DOCS\fR"
+A directory searched for manual pages: files ending in .1, .5, .7 or .8,
+gzipped or not, as in a Xymon source tree or under /usr/share/man. Only
+Xymon's pages are indexed -- those whose .TH line names Xymon -- so other
+programs' pages, and any other file there, are left out.
+.IP "\fBXYMONAPI_RAG_INDEX\fR"
+The index file. The default is ~/.cache/xymonapi-rag/index.npz.
+.IP "\fBXYMONAPI_RAG_SINCE\fR"
+How far back index reads the history, as a time /events takes: -30d by
+default.
+.IP "\fBXYMONAPI_RAG_MAX_HISTORY\fR"
+How many changes index takes at most, the newest first: 5000 by default.
+Each is a passage to embed, and a server where thousands of changes happen
+in a month would otherwise take long to index.
+.IP "\fBXYMONAPI_RAG_OFFLINE\fR"
+When set to anything but 0 or no, the embedding model is taken from
+fastembed's cache and never downloaded: for a server without a way to
+huggingface.co. Put the model there first, by running index or search once
+on a machine that has one and copying the cache -- $FASTEMBED_CACHE_PATH,
+or the system's temporary directory -- or by setting FASTEMBED_CACHE_PATH
+to a directory seeded that way.
+.IP "\fBXYMONAPI_RAG_MODEL\fR"
+The embedding model, BAAI/bge-small-en-v1.5 by default. The index records
+the model that built it, and a search with another is refused: run index
+again after changing it.
+.IP "\fBXYMONAPI_RAG_LLM_URL\fR"
+The OpenAI-compatible API ask uses, an http:// or https:// URL. The default,
+http://127.0.0.1:11434/v1, is a local Ollama: no key, no cost. A redirect
+from it is an error, not followed: the key below would go to the host it
+names.
+.IP "\fBXYMONAPI_RAG_LLM_MODEL\fR"
+The model ask names, llama3.1 by default. A server that has not got it
+answers 404, and ask says so, naming the model: with Ollama, \fBollama pull
+\fIMODEL\fR gets it.
+.IP "\fBXYMONAPI_RAG_LLM_KEY\fR"
+Sent as a bearer token when set, for a hosted model that needs a key.
+.IP "\fBXYMONAPI_RAG_LLM_MAX_TOKENS\fR, \fBXYMONAPI_RAG_LLM_TIMEOUT\fR"
+How many tokens the model may answer with, 2048 by default, and how many
+seconds ask waits for it, 300. A reasoning model counts its thinking in the
+tokens, and may spend them all on it: ask then says so. A plain model, such
+as llama3.2, is the better fit.
+.IP "\fBXYMONAPI_URL\fR, \fBXYMONAPI_TOKEN_FILE\fR, \fBXYMONAPI_TOKEN\fR"
+Where the API is, and the token to send it, as for xymonapi-mcp(1): for
+search and ask where there is no index here, and for index off the Xymon
+server. On the server, index reads the history from xymond's files and
+sends nothing, and search and ask take the API's socket by default, with
+no token (xymonapi(8), XYMONAPI_SOCKET).
+.IP "\fBXYMONAPI_PYTHON\fR"
+The Python to run with. Unset, the python3 of the virtualenv beside the
+plugins, $PREFIX/libexec/xymon-plugins/venv, which \fBmake venv-client\fR
+makes, when there is one; else the python3 found on PATH. Nothing is
+asked; a command that needs a module that Python lacks says which, and that
+\fBmake venv-client\fR installs it. On the server, $XYMONHOME/ext/venv,
+from \fBmake venv\fR.
+
+.SH "SEE ALSO"
+xymonapi(8), xymonapi-connect(1), xymonapi-mcp(1), xymoncmd(1)

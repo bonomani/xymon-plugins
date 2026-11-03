@@ -1,0 +1,81 @@
+.TH XYMONAPI-CONNECT 1 "November 2, 2026" "xymon-plugins"
+.SH NAME
+xymonapi-connect \- connect this machine to the Xymon API
+.SH SYNOPSIS
+.B "xymonapi-connect URL [NAME]"
+
+.SH DESCRIPTION
+xymonapi-connect gets this machine a token of its own for the
+.I xymonapi(8)
+at URL, so that the programs reading the API from here send that token and
+no password. It is installed with the API's client, by
+\fBmake install-client\fR in xymonapi/, and run once per machine and API.
+
+In order, it:
+.IP 1. 4
+reaches the API and checks its certificate, and stops there, asking
+nothing, when this machine does not trust it, saying where to copy the
+server's certificate;
+.IP 2. 4
+keeps a token from an earlier run while it still works;
+.IP 3. 4
+otherwise, when the API asks for a password, asks for a user of the API
+(XYMONAPI_USER when set) and the password once, on the terminal, or as two
+lines on stdin when stdin is not one; gets with them a token for this
+machine, named by its short hostname; and writes it to
+~/.config/xymon-api/NAME.token, mode 600. The password is not kept;
+.IP 4. 4
+says when the API and this client run different versions of xymonapi, and
+who can act on it: the server's admin when the API is the older, this
+machine when the client is;
+.IP 5. 4
+prints on stdout what a client needs, as shell settings: XYMONAPI_URL,
+XYMONAPI_TOKEN_FILE when there is a token, and XYMONAPI_CA when a
+certificate is used.
+.PP
+Given the API's own socket, unix:PATH, on the server, it asks nothing and
+keeps nothing: the socket's permissions decided already who connects, and
+the settings printed name the socket alone.
+.PP
+Running it again changes nothing while the token works, and replaces one
+that was revoked. Messages go to stderr. A password file an earlier setup
+kept, ~/.config/xymon-api/NAME.password, is removed.
+
+NAME, xymon by default, tells one API from another: each has its own token
+file. The API's /tokens lists this user's machines and revokes one.
+
+.SH OPTIONS
+.IP URL
+The API's address as other machines reach it: http:// or https://, the
+host, and the port when it is not the scheme's own -- 1986 for the API's own
+HTTPS, the web server's for one in front of it -- without /xymon/api/v1,
+which the client adds; or
+unix:PATH, the API's own socket on the server, $XYMONVAR/xymonapi/api.sock
+unless xymonapi(8) was told otherwise, for a program on that machine.
+.IP NAME
+Letters, digits, '.', '_' and '-', 64 at most.
+
+.SH ENVIRONMENT
+.IP "\fBXYMONAPI_USER\fR"
+The user of the API, not asked.
+.IP "\fBXYMONAPI_CA\fR"
+The certificate, or the CA, to trust for an https:// URL. The default is
+~/.config/xymon-api/NAME-ca.pem when that file exists: copy the server's
+certificate there, over a channel already trusted. Verification is never
+turned off.
+.IP "\fBXYMONAPI_PYTHON\fR"
+The Python to run with. Unset, the python3 of the virtualenv beside the
+plugins, $PREFIX/libexec/xymon-plugins/venv, which \fBmake venv-client\fR
+makes, when there is one; else the python3 found on PATH. Nothing is
+asked: this program needs no module beyond the standard library.
+.IP "\fBXDG_CONFIG_HOME\fR"
+Where xymon-api/ is, ~/.config by default.
+
+.SH "EXIT STATUS"
+0 when this machine is connected; 1 when the API cannot be reached, its
+certificate is not trusted, or it refused the password; 2 for a wrong
+argument; 130 when interrupted; 77 without Python 3.9, or when the run with
+the python3 on PATH is declined.
+
+.SH "SEE ALSO"
+xymonapi(8), xymonapi-mcp(1), xymonapi-rag(1)

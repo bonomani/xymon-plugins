@@ -1,0 +1,356 @@
+.TH XYMONAPI 8 "October 30, 2026" "xymon-plugins"
+.SH NAME
+xymonapi \- read-only HTTP and JSON interface to the Xymon server
+.SH SYNOPSIS
+.B "$XYMONHOME/ext/xymonapi/xymonapi.sh"
+
+.SH DESCRIPTION
+xymonapi answers HTTP requests with what the Xymon server knows: the status
+board, the alarms on it, its hosts, the values in its RRD files and the
+graphs drawn from them, and the history of colour changes with the status
+text saved at each. Answers are JSON, except for graphs, which are PNG.
+It changes nothing in Xymon: it only reads.
+
+It is optional, and shipped disabled. It is started by
+.I xymonlaunch(8)
+from the task file \fBtasks.d/xymonapi\fR beside tasks.cfg, which its
+installation creates with a DISABLED line. To run it, remove that line;
+xymonlaunch starts it once xymond is running, and restarts it if it stops.
+
+It needs a Xymon built from its current main branch: its settings go in
+xymonserver.d/, which no release of Xymon reads yet. On 4.3.30 a file there
+is ignored, password included, and xymonapi then answers anyone.
+
+Unlike the rest of Xymon, xymonapi needs Python 3.9 or later, with the
+modules fastapi, uvicorn and yaml (requirements.txt beside it lists them),
+importable by the user Xymon runs as. When one is missing it logs which, and
+exits with status 77.
+
+The OpenAPI description of every operation is served at /openapi.json, and
+is the file openapi.yaml beside the program.
+
+It has two doors. The port, 127.0.0.1:1986 by default, is for other
+machines, through the web server or an SSH tunnel: every request there
+needs a user's password or a client token (TOKENS). The Unix socket,
+$XYMONVAR/xymonapi/api.sock by default, is for the programs of the server
+itself: none is needed there, because only the Xymon user and its group
+may open it (XYMONAPI_SOCKET under ENVIRONMENT).
+
+.SH OPERATIONS
+Every path is under /xymon/api/v1. Only GET is accepted, but for POST on
+/ask and POST and DELETE on /tokens: another method answers 405, and any
+other path 404. A failure is answered with JSON, {"error": E, "detail": D},
+where E is one of bad_request (400), unauthorized (401), not_found (404),
+method_not_allowed (405), too_many (429) and upstream (502), and D says why. Those, and
+each path's answers, are openapi.yaml's, installed beside the API.
+.IP "\fB/health\fR"
+Whether xymond answers a ping: {"alive":true,"server_version":"xymond ..."}
+when it does, and {"alive":false} when the ping fails -- xymond is down, or
+XYMSRV or XYMON is wrong. Like every path but /plugins, it answers 401 on
+the port without a user, or a client token, when XYMONAPI_PASSWD is set.
+Its "version" field is the version of the code this process runs, read
+when it started -- an install it was not restarted for does not change it:
+the version it was installed from, its
+release tag, xymonapi/vX.Y.Z, when make install ran on one, else the X.Y.Z
+of its PLUGIN file; it is absent when the API was not installed.
+xymonapi-connect(1) compares it with the client's own.
+Its "search" field describes the index /search reads -- how many passages
+of manual pages and of history, when it was built -- and is null when there
+is none.
+.IP "\fB/states\fR [\fBentity\fR=HOST] [\fBtest\fR=TEST] [\fBverdict\fR=VERDICT]"
+The status board, one state per host and test. The colour is given as a
+verdict: green is ok, yellow warning, red critical, blue disabled, clear
+nodata and purple unknown.
+.IP "\fB/alarms\fR"
+Every state whose verdict is not ok.
+.IP "\fB/entities\fR"
+Each host on the board, once.
+.IP "\fB/status\fR \fBentity\fR=HOST \fBtest\fR=TEST"
+The current status of HOST's TEST, from xymondboard: its verdict, when it
+last changed (time) and was last reported (updated), and its text -- what
+the web page shows, written by the monitored host or the test. When it is
+acknowledged -- until the acknowledgement's end time -- or the test disabled
+-- by hand, or blue from a DOWNTIME tag in hosts.cfg -- that is said too,
+with the words given and until when. The command line that set the status
+is left out of the text, as the web page leaves it out. HOST and TEST are
+taken as given, not as patterns: 404 when the board has no such status. At
+most 1 MiB of text.
+.IP "\fB/search\fR \fBq\fR=QUESTION [\fBkind\fR=docs|history] [\fBk\fR=N]"
+The N passages (5 by default, 20 at most) of Xymon's manual pages and of
+its history nearest QUESTION by meaning, best first, from the index that
+.I xymonapi-rag(1)
+builds: the task tasks.d/xymonapi-rag, once a day. Each passage says where
+it comes from -- page, section and item, or host, test and time -- and a
+history passage carries the status text the monitored host sent, marked as
+data, not instructions. The index is read again when the file changes, so
+the task needs no restart of the API. 404, saying so, when there is no index
+or the modules xymonapi-rag needs are missing: search is optional, and the
+other operations need neither.
+.IP "\fB/plugins\fR"
+The code of the plugins installed on this server, for other machines to
+install from at this server's versions: a gzipped tar rooted at
+xymon-plugins/, laid out as the repository is -- plugins/NAME for each
+plugin installed here, without its tests, with build/plugin.mk and the top
+Makefile. \fBmake install-client\fR in plugins/NAME installs that plugin.
+Each plugin's \fBmake install\fR stages its directory in
+$XYMONHOME/ext/xymon-plugins-client/, which is what /plugins packs, and its
+\fBmake uninstall\fR takes it out; this API names no plugin. It is the one
+path open without a user when XYMONAPI_PASSWD is set: it holds the
+plugins' code and nothing else -- no user, password, token or setting --
+though a stranger learns from it which plugins, at which versions, run
+here. It answers not_found when nothing is staged. Whoever controls this
+server, or the certificate a machine trusts for it, controls the code that
+machine installs from here.
+.IP "\fB/series\fR \fBentity\fR=HOST \fBtest\fR=TEST [\fBmetric\fR=DATASET] [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
+The values of one dataset of the RRD file TEST.rrd of HOST, under
+$XYMONRRDS, read with rrdtool. TEST is the file's name, not the column on
+the status board: xymond_rrd names the files after the data it keeps, so
+the conn test is in tcp.conn.rrd and the ssh test in tcp.ssh.rrd, cpu load
+is in la.rrd and memory in memory.rrd, and a disk is in disk,<mount with
+commas for slashes>.rrd. DATASET is a column in that file: la is the
+load average in la.rrd, sec the response time in a tcp.*.rrd, lambda the
+value in the files xymond_rrd makes from a status text's NAME : value
+lines. Left out, it is the file's only dataset -- as most files hold one
+-- or lambda among several; with several and no lambda, the answer is a
+400 that names them. A missing file or dataset is answered 404; from after
+to is a 400. xymond_rrd keeps updates for up to 30 minutes before
+writing them, unless run with --no-cache; when the range reaches into that
+time, /series first asks it to write HOST's, as a graph shown on the web
+pages does, through its control sockets, rrdctl.* in XYMONTMP (or
+XYMONRUNDIR). The step in progress may still be null, which is not a test
+that stopped; without those sockets the file is read as it is. To see
+what a host has, list $XYMONRRDS/HOST/ there, or run rrdtool info on a file.
+.IP "\fB/graphs\fR \fBentity\fR=HOST \fBtest\fR=TEST [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
+The graph
+.I showgraph.cgi(1)
+draws for HOST and TEST, fetched from showgraph.sh, its wrapper, at
+$XYMONSERVERCGIURL -- prefixed with $XYMONWEBHOST when that is a path, as
+xymonserver.cfg ships it.
+.IP "\fB/events\fR [\fBentity\fR=HOST] [\fBtest\fR=TEST] [\fBsince\fR=TIME] [\fBlimit\fR=N] [\fBbefore\fR=SECONDS]"
+The colour changes xymond_history recorded in $XYMONHISTDIR/allevents, the
+newest first: when, the verdict before and after, and how long the one
+before had lasted. N is 1 to 1000, 100 by default. With before, only the
+changes older than that time: the epoch of an answer's last item asks for
+the page after it. The file is read from its end, so the newest changes
+cost the same however long the history. A server where nothing has changed
+colour yet has none.
+.IP "\fB/histlog\fR \fBentity\fR=HOST \fBtest\fR=TEST \fBtime\fR=SECONDS"
+The status text xymond_history saved under $XYMONHISTLOGS when HOST's TEST
+changed colour at that time, the epoch of an /events item; 404 when none was
+saved. At most 1 MiB of it.
+.LP
+A TIME is \fBnow\fR, seconds since the epoch, or a time relative to now such
+as \fB-30m\fR, \fB-24h\fR, \fB-7d\fR or \fB-2w\fR. \fBfrom\fR defaults to
+-24h and \fBto\fR to now. A host or test name that is not one Xymon uses,
+or a time it cannot read, is answered with 400. A test name may hold a
+colon, as an HTTP test's RRD file does (tcp.http.www.example.com:8080,);
+a host name may not.
+
+.IP "\fBPOST /ask\fR {"question": Q, "session": NAME, "agent": NAME}"
+A question in words, answered in words by
+.I xymonapi-agent(1)
+installed beside the API: it runs an agent CLI the admin installed as the
+Xymon user -- Claude Code, Codex or opencode -- with the Xymon MCP server,
+.I xymonapi-mcp(1),
+as its only tool, reading this API through its own socket. The answer is
+{"answer": A, "agent": NAME, "backend": NAME}, with "session" as sent when
+one was. Not there -- 404 as any unknown path -- unless XYMONAPI_ASK is set;
+set with no xymonapi-agent beside the API, 404 saying so. Nothing in Xymon
+changes: the agent is read-only, as every path here.
+
+"session", letters, digits, dots, underscores or hyphens, continues a
+conversation: it is the caller's, prefixed with USER@CLIENT -- the token's
+user and machine, the user and "password", or "local@local" through the
+socket -- before the agent sees it, so no other caller continues it.
+"agent", xymon by default, names one of the server's agents, as the Xymon
+user's profiles for xymonapi-agent(1) define them.
+
+A question costs time and money where a GET does not, so a caller asks one
+at a time, and at most XYMONAPI_ASK_PER_HOUR in an hour; another answers
+too_many (429) with a Retry-After header in seconds. A question longer than
+XYMONAPI_ASK_MAX characters is bad_request. The agent failing, or giving
+no answer in XYMONAPI_ASK_TIMEOUT seconds, is upstream (502), the detail
+its last line. Each question is logged with the caller, agent, backend and
+how long it took; the question itself is not.
+
+.SH TOKENS
+With XYMONAPI_PASSWD set, a user may get a token for one machine and send it
+instead of the password: Authorization: Bearer TOKEN.
+xymonapi-connect(1) gets one, naming the machine by its short hostname, so
+the password stays off the laptop. A token opens every path but /tokens, which
+takes the password: a stolen token cannot make others, or renew itself.
+.IP "\fBPOST /tokens\fR {"client": NAME}"
+A new token for the caller on NAME -- letters, digits, . _ or -, 64 at most
+-- replacing any the caller had there, which is refused from then on. It is
+shown this once: only its SHA-256 is kept, in $XYMONAPI_TOKENS.
+.IP "\fBGET /tokens\fR"
+The caller's tokens: each machine's name and when its token was made.
+.IP "\fBDELETE /tokens/\fRNAME"
+Revokes the caller's token on NAME.
+.LP
+Through the socket they are refused, as to a token: they say who the
+caller is, which the socket does not.
+A user sees and revokes only their own tokens. An admin revokes anyone's by
+removing that line from $XYMONAPI_TOKENS: one JSON object per token, with
+its user, machine and SHA-256. Removing the user from XYMONAPI_PASSWD
+revokes all of theirs: the first of their tokens used after that is refused
+and every line of that user deleted, so a user put back, or a new one of the
+same name, gets tokens anew by running xymonapi-connect(1). A token is refused,
+and nothing deleted, while the file cannot be read.
+The machine's name is the laptop's word, not
+proof: it names the token, and two machines of one name share one.
+
+.SH ENVIRONMENT
+The task file loads xymonserver.cfg, and xymonapi uses these settings from it:
+.IP "\fBXYMSRV\fR"
+The Xymon server to ask. It is required; xymonapi does not fall back to
+127.0.0.1.
+.IP "\fBXYMON\fR"
+The xymon client program.
+.IP "\fBXYMONRRDS\fR"
+Where the RRD files are, for /series.
+.IP "\fBXYMONSERVERCGIURL\fR, \fBXYMONWEBHOST\fR"
+Where showgraph.cgi is, for /graphs. The first is usually a path, /xymon-cgi;
+the second, http://$XYMONSERVERWWWNAME, then gives the host, and must carry
+the port when the web server is not on 80.
+.IP "\fBXYMONHISTDIR\fR, \fBXYMONHISTLOGS\fR"
+Where xymond_history keeps the events and the saved status texts, for
+/events and /histlog.
+.IP "\fBXYMONAPI_RAG_INDEX\fR, \fBXYMONAPI_RAG_MODEL\fR, \fBXYMONAPI_RAG_OFFLINE\fR"
+The index /search reads, and the embedding model, as for xymonapi-rag(1),
+which writes the index with the same settings from the same file.
+.LP
+Twelve settings are its own. Put them in a file under
+\fBxymonserver.d/\fR beside xymonserver.cfg, which reads its files, for
+instance xymonapi.cfg:
+.IP "\fBXYMONAPI_LISTEN\fR"
+The address and port to listen on, as HOST:PORT or [ADDRESS]:PORT for IPv6.
+The default is 127.0.0.1:1986, which only this machine reaches.
+.IP "\fBXYMONAPI_SOCKET\fR"
+The Unix socket for the programs of this machine: $XYMONVAR/xymonapi/api.sock
+by default, none when set to the empty string. A request through it needs
+no password and no token. The API makes it mode 660 in a directory of mode
+750, so that only the Xymon user and the members of its group can open it,
+and that is the whole check: the kernel's, which no header or address
+could stand in for. A person at a shell is one of that group, or runs the
+client as that user. The port is as it was: a request there, through the
+web server or not, needs the password or a token. The socket speaks plain
+HTTP whether or not the port speaks TLS, since nothing of it leaves the
+machine. The clients take it as \fBXYMONAPI_URL=unix:\fRPATH, and by
+default when XYMONVAR from xymonserver.cfg leads them to it, as the tasks
+have it: xymonapi-mcp(1), xymonapi-rag(1).
+.IP "\fBXYMONAPI_PASSWD\fR"
+An htpasswd file: every request on the port but /plugins needs a user and
+password from it, or a client token, and is answered 401 otherwise. The default is Xymon's own,
+$XYMONHOME/etc/xymonpasswd, when it exists -- the file the web pages use,
+whose users useradm.cgi and chpasswd.cgi manage -- so the API asks for
+what the pages ask for with nothing set. Set it to another file, or to the
+empty string for an API open to anyone who can reach it. The password is
+checked by Apache's htpasswd program, which must be on PATH; xymonapi does
+not start if it is not, or if it cannot read the file.
+.IP "\fBXYMONAPI_TOKENS\fR"
+The file of client tokens (TOKENS above), $XYMONVAR/xymonapi/tokens by
+default. The API creates it, mode 600, in a directory of mode 750: the
+socket's, whose group reads neither the file nor the lock.
+.IP "\fBXYMONAPI_TLS_CERT\fR, \fBXYMONAPI_TLS_KEY\fR"
+A certificate and its key, PEM: with them the API speaks HTTPS on its port,
+and plain HTTP gets no answer. The defaults are xymond's own,
+$XYMONHOME/etc/tls/xymond.pem and xymond.key as
+.I xymon-tls(7)
+sets them up, so a server with TLS for the Xymon protocol has it for the
+API too, one certificate for both. Without the files the API speaks plain
+HTTP. A certificate without its key, or a key that others can read, stops
+it from starting. Clients that do not trust the certificate must be given
+it, or the CA that signed it.
+.IP "\fBXYMONAPI_HIDE\fR"
+A file of regular expressions, one per line, # for a comment. Whatever
+they match is replaced by [hidden] in every text the API returns: a
+status, an acknowledgement or disabling, a saved status -- and so in the
+search index built from them. A process list can show a password typed on
+a command line; a line such as \fBpassword=\\S+\fR keeps it off the API,
+whatever the web page shows. Read at start: an expression that is not one,
+or a file that cannot be read, stops the API from starting, since running
+without the hiding asked for would be worse than not running.
+.IP "\fBXYMONAPI_ASK\fR"
+Set to 1, /ask is there; unset, empty, 0, no, off or false, it is not.
+It needs xymonapi-agent installed beside the API (its \fBmake install\fR),
+an agent CLI installed and logged in as the Xymon user, and the socket
+(XYMONAPI_SOCKET), through which the agent reads this API. Which CLI,
+model and agent answer are xymonapi-agent(1)'s own settings,
+XYMONAPI_AGENT_BACKEND and the rest, which go in the same file and reach
+it through the API's environment; its profiles are the Xymon user's. Check
+it as that user: \fBxymonapi-agent doctor\fR.
+.IP "\fBXYMONAPI_ASK_PER_HOUR\fR, \fBXYMONAPI_ASK_TIMEOUT\fR, \fBXYMONAPI_ASK_MAX\fR"
+For /ask: questions a caller may ask in an hour, 60, 0 for no limit; seconds
+to wait for the agent, 300; the longest question, 2000 characters.
+.IP "\fBXYMONAPI_PYTHON\fR"
+The Python to run the API with. Unset, the launcher takes the python3 of
+the virtualenv beside the plugins, $XYMONHOME/ext/venv, which \fBmake
+venv\fR makes with the modules the installed plugins need; without one, the
+python3 found on PATH. When that one lacks a module, the API says which on
+stderr, the task's log, names \fBmake venv\fR, and exits with 77.
+
+.SH FILES
+.IP "\fB$XYMONHOME/ext/xymonapi/\fR"
+The program: xymonapi.sh, the launcher the task runs; app.py, xymon.py and
+tokens.py, the server; xymonapi_client.py, the client the other plugins
+read it with; openapi.yaml, the description served at /openapi.json;
+requirements.txt, the Python modules it needs; and VERSION, what /health
+gives.
+.IP "\fB$XYMONHOME/etc/tasks.d/xymonapi\fR"
+The xymonlaunch task, installed with a DISABLED line. A later installation
+leaves it as it is.
+.IP "\fB$XYMONHOME/etc/xymonapi-apache.conf\fR, \fBxymonapi-nginx.conf\fR, \fBxymonapi-lighttpd.conf\fR"
+Snippets that serve the API through the web server, for other machines:
+/xymon/api/ passed to 127.0.0.1:1986, in the HTTPS part where the server
+has one. Include the one for your web server where its Xymon configuration
+is. Installed once; a later installation leaves them as they are.
+.IP "\fB$XYMONHOME/etc/xymonserver.d/\fR"
+A file of yours here holds the settings of its own listed under
+ENVIRONMENT. Nothing is installed there.
+.IP "\fB$XYMONVAR/xymonapi/tokens\fR"
+The client tokens' SHA-256s, one JSON line each (TOKENS above).
+.IP "\fB$XYMONVAR/xymonapi/api.sock\fR"
+The Unix socket (XYMONAPI_SOCKET above), while the API runs.
+.IP "\fB$XYMONSERVERLOGS/xymonapi.log\fR"
+The log, written through the task's LOGFILE. A missing Python or module is
+reported here, and so is each token made, revoked, or used: user@machine.
+Every answer carries an X-Request-Id header -- the client's own, when it
+sends a valid one, or one the API makes -- and every line about a request
+shows it in brackets; each failure is logged once, with its status. A
+client's error that names its request id is found here by it.
+.LP
+$XYMONHOME/etc and $XYMONHOME/ext are links to wherever an installation keeps
+those directories, /etc/xymon for instance.
+
+.SH NOTES
+A failure of the server's own -- xymond not answering, rrdtool missing --
+is a 502. Its answer names the reason when the text is xymonapi's own, as
+"XYMONRRDS is not set"; a program's error text, which can hold paths and
+settings, goes to the log instead, and the answer says so.
+
+xymonapi needs nothing central -- no directory, no certificate authority
+it must reach, no name service -- so that it answers when the rest of the
+network is in trouble: Xymon is what one looks at then. Its password file
+and its certificate are Xymon's own, files on the server.
+
+From other machines, use HTTPS: with xymond's certificate the API speaks it
+itself (XYMONAPI_TLS_CERT), and where the web server has a certificate the
+snippets under FILES pass /xymon/api/ to the API over it. An SSH tunnel to
+127.0.0.1:1986 is encrypted too, with nothing to set up. A client is given
+the URL that reaches the API, scheme, host and port, without /xymon/api/v1,
+which it adds: https://HOST:1986 for the API's own HTTPS; the web server's,
+https://HOST, or https://HOST:PORT when its HTTPS port is not 443, for the
+snippets; http://127.0.0.1:1986 through the tunnel. Plain HTTP across
+a network carries the password and the status texts readable, as port 1984
+does; keep it to a network where the Xymon pages themselves are plain and
+trusted. On the server itself nothing need cross a network: the socket is
+there. Either way, what must not leak are secrets: the password file,
+which only the Xymon user reads, the key, and what XYMONAPI_HIDE blanks
+out of the texts.
+
+Requests are served from a thread pool: a slow one holds up itself alone.
+
+.SH "SEE ALSO"
+xymonlaunch(8), tasks.cfg(5), xymonserver.cfg(5), xymon(1), showgraph.cgi(1),
+xymon(7), xymon-tls(7), xymonapi-connect(1), xymonapi-mcp(1), xymonapi-rag(1)

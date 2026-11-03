@@ -1,0 +1,8 @@
+# What this plugin is, for the index in README.md and for whoever installs
+# it alone. One key per line; the Makefile beside it does the installing.
+name: xymonapi-mcp
+version: 0.1.0
+side: client
+summary: an MCP server that gives an AI client read-only tools over the Xymon API
+requires: xymonapi >= 0.1.0 (its client beside it; the API over the network, XYMONAPI_URL), python >= 3.9
+manual: xymonapi-mcp.1
