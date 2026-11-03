@@ -14,6 +14,11 @@ what its prompt says beyond the fixed part, and which Xymon server it
 reads. The built-in agent, xymon, is this plugin's own: the Xymon MCP
 server beside it, this environment's API settings. A profile file under
 $XDG_CONFIG_HOME/xymonapi-agent/agents/ adds another, or redefines xymon.
+A profile that names other agents is a coordinator: its tools are those
+agents, one ask_NAME each, served by this command itself as an MCP server
+(mcp-agents), and each call is an ask to that agent, with its own backends
+and sandbox. A depth limit and a cap on asks per question keep two
+coordinators from asking each other forever.
 
 The agent CLI is the user's, installed and logged in by its own means; this
 command only drives it. Every backend gets the same fixed system prompt,
@@ -46,6 +51,13 @@ CONFIG = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "x
 STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "xymonapi-agent"
 TIMEOUT = float(os.environ.get("XYMONAPI_AGENT_TIMEOUT", "600"))
 MAX_TURNS = int(os.environ.get("XYMONAPI_AGENT_MAX_TURNS", "30"))
+# How many coordinators deep an ask may go, and how many asks one
+# coordinator's question may make of its agents.
+DEPTH = int(os.environ.get("XYMONAPI_AGENT_DEPTH", "2"))
+SUBASKS = int(os.environ.get("XYMONAPI_AGENT_SUBASKS", "8"))
+# What a child agent must not inherit: the parent's choices are its own.
+OWN = ("XYMONAPI_AGENT_AGENT", "XYMONAPI_AGENT_BACKEND", "XYMONAPI_AGENT_DEPTH")
+LAUNCHER = HERE / "xymonapi-agent.sh"
 # A session's id is the same on every machine for the same name: a name is
 # enough to continue it, and nothing need be stored for Claude Code.
 SESSION_NS = uuid.UUID("5a3b1d6e-7d1a-4e4e-9a0b-0c1d2e3f4a5b")
@@ -65,6 +77,13 @@ XYMON_PROMPT = (
     "The MCP server named xymon reads one Xymon monitoring server: its status "
     "board, alarms, hosts, RRD history and the searches of its manual pages "
     "and past colour changes. Answer with hosts, tests, colours and times.")
+COORDINATOR_PROMPT = (
+    "You coordinate other agents, each an MCP tool ask_NAME(question) that "
+    "answers in plain words about its own domain; the tools' descriptions "
+    "say which. Route the question to the agent or agents it concerns, ask "
+    "each what it alone can answer, in its own terms, and merge the answers "
+    "into one, naming which agent said what. Ask no agent twice the same "
+    "thing, and none that cannot know.")
 DOCTOR_QUESTION = ("Call the xymon health tool once and answer with exactly the "
                    "version it gives, nothing else.")
 
@@ -85,10 +104,22 @@ class Agent:
                                      re.split(r"[,\s]+", str(backend))) if b]
         self.model = str(d.get("model", ""))
         self.site = str(d.get("site", ""))
-        self.mcp = list(d.get("mcp", ["xymon"]))
+        self.agents = [str(a) for a in d.get("agents", [])]
+        self.mcp = list(d.get("mcp", [] if self.agents else ["xymon"]))
         self.prompt = str(d.get("prompt", ""))
         self.env = {str(k): str(v) for k, v in d.get("env", {}).items()}
         self.servers = {"xymon": {"command": str(MCP), "args": [], "env": MCP_ENV}}
+        if self.agents:
+            if name in self.agents:
+                raise ProfileError("agents names the agent itself")
+            # Its agents, as tools: this command, as an MCP server, with
+            # the environment the asks need and nothing of the parent's.
+            self.servers["agents"] = {"command": str(LAUNCHER),
+                                      "args": ["--agent", name, "mcp-agents"],
+                                      "env": [k for k in os.environ
+                                              if k.startswith("XYMONAPI_") and k not in OWN]
+                                      + ["PATH", "HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME"]}
+            self.mcp.append("agents")
         for n, s in d.get("server", {}).items():
             self.servers[n] = {"command": str(s.get("command", "")),
                                "args": [str(a) for a in s.get("args", [])],
@@ -124,6 +155,8 @@ class Agent:
         parts = [FIXED]
         if "xymon" in self.mcp:
             parts.append(XYMON_PROMPT)
+        if self.agents:
+            parts.append(COORDINATOR_PROMPT)
         if self.site:
             parts.append(f"The site is called {self.site}.")
         if self.prompt:
@@ -209,6 +242,10 @@ def profiles() -> dict:
                 out[p.stem] = Agent(p.stem, raw, p)
             except ProfileError as e:
                 raise ProfileError(f"{p}: {e}") from None
+    for ag in out.values():
+        for a in ag.agents:
+            if a not in out:
+                raise ProfileError(f"{ag.path}: agents names {a!r}, which no profile defines")
     return out
 
 
@@ -449,6 +486,116 @@ def ask(ag: Agent, question: str, backends: list, session: str | None = None) ->
     raise SystemExit("xymonapi-agent: no backend answered: " + "; ".join(failures))
 
 
+# --- the coordinator's tools, as an MCP server -------------------------------
+
+class ToolError(Exception):
+    pass
+
+
+def ask_child(parent: Agent, name: str, question: str) -> str:
+    """Ask the agent NAME QUESTION in a process of its own, one coordinator
+    deeper, with its own profile's choices: what the parent was told to use
+    is not inherited."""
+    env = {k: v for k, v in parent.environ().items() if k not in OWN}
+    env["XYMONAPI_AGENT_DEPTH"] = str(DEPTH - 1)
+    argv = [str(LAUNCHER), "--agent", name, "ask", "--json", question]
+    try:
+        r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise ToolError(f"{name} gave no answer in {TIMEOUT:g} seconds") from None
+    if r.returncode != 0:
+        tail = (r.stderr or r.stdout).strip().splitlines()[-1:] or ["no message"]
+        raise ToolError(f"{name} failed: {tail[0]}")
+    try:
+        return str(json.loads(r.stdout)["answer"])
+    except (ValueError, KeyError, TypeError):
+        raise ToolError(f"{name} gave no readable answer") from None
+
+
+def serve_agents(parent: Agent) -> None:
+    """MCP over stdio, one line per message, as xymonapi-mcp speaks it: the
+    tools are ask_NAME for each of PARENT's agents. At depth 0 every call is
+    refused, and after SUBASKS calls so is the next: the two guards."""
+    all_ = profiles()
+    tools = {f"ask_{a}": a for a in parent.agents}
+    asked = 0
+
+    def send(msg: dict) -> None:
+        sys.stdout.write(json.dumps({"jsonrpc": "2.0", **msg}, separators=(",", ":")) + "\n")
+        sys.stdout.flush()
+
+    def text(t: str, error: bool = False) -> dict:
+        return {"content": [{"type": "text", "text": t}], "isError": error}
+
+    def call(params: dict) -> dict:
+        nonlocal asked
+        name = tools.get(params.get("name"))
+        if name is None:
+            return text(f"no tool {params.get('name')!r}", error=True)
+        q = (params.get("arguments") or {}).get("question")
+        if not isinstance(q, str) or not q.strip():
+            return text("question must be a non-empty string", error=True)
+        if DEPTH <= 0:
+            return text(f"the depth limit is reached: {name} cannot be asked from here "
+                        "(XYMONAPI_AGENT_DEPTH)", error=True)
+        if asked >= SUBASKS:
+            return text(f"this question has asked its agents {SUBASKS} times already, the most "
+                        "allowed (XYMONAPI_AGENT_SUBASKS); answer with what you have", error=True)
+        asked += 1
+        try:
+            return text(ask_child(parent, name, q))
+        except ToolError as e:
+            return text(str(e), error=True)
+
+    def answer(msg: dict):
+        method, params = msg.get("method"), msg.get("params") or {}
+        if method == "initialize":
+            asked_v = params.get("protocolVersion")
+            versions = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
+            return {"protocolVersion": asked_v if asked_v in versions else versions[0],
+                    "capabilities": {"tools": {"listChanged": False}},
+                    "serverInfo": {"name": "agents", "version": ""},
+                    "instructions": f"The agents of {parent.name}, one tool each; ask in plain words."}
+        if method == "tools/list":
+            return {"tools": [{"name": t, "description": f"Ask the agent {a}: "
+                                                         f"{all_[a].description or a}. "
+                                                         "Its answer, in plain words.",
+                               "inputSchema": {"type": "object",
+                                               "properties": {"question": {"type": "string"}},
+                                               "required": ["question"]},
+                               "annotations": {"readOnlyHint": True, "openWorldHint": False}}
+                              for t, a in tools.items()]}
+        if method == "tools/call":
+            return call(params)
+        if method == "ping":
+            return {}
+        if method in ("resources/list", "prompts/list"):
+            return {method.split("/")[0]: []}
+        raise LookupError(method)
+
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            send({"id": None, "error": {"code": -32700, "message": "not JSON"}})
+            continue
+        if not isinstance(msg, dict) or "method" not in msg:
+            if not (isinstance(msg, dict) and "id" in msg):
+                send({"id": None, "error": {"code": -32600, "message": "not a request"}})
+            continue
+        try:
+            result = answer(msg)
+        except LookupError:
+            if "id" in msg:
+                send({"id": msg["id"], "error": {"code": -32601,
+                                                 "message": f"no method {msg['method']}"}})
+            continue
+        if "id" in msg:
+            send({"id": msg["id"], "result": result})
+
+
 def shown(argv: list) -> list:
     """ARGV with any token a secret could be in -- the MCP config, which
     carries the environment -- shortened for printing."""
@@ -476,6 +623,8 @@ def main() -> None:
     sub.add_parser("backends", help="which agent CLIs are here, and which answers")
     dr = sub.add_parser("doctor", help="ask a fixed question and check the tools answered")
     dr.add_argument("--json", action="store_true")
+    sub.add_parser("mcp-agents", help="serve a coordinator's agents as MCP tools on stdio "
+                                      "(what its backend is given; not for a terminal)")
     a = ap.parse_args()
 
     if a.cmd == "agents":
@@ -486,13 +635,19 @@ def main() -> None:
         for ag in all_.values():
             print(f"{ag.name}: {ag.description or '(no description)'}")
             print(f"  backends {', '.join(ag.backends) or '(any here)'}; "
-                  f"mcp {', '.join(ag.mcp)}"
+                  f"mcp {', '.join(ag.mcp) or '(none)'}"
+                  + (f"; agents {', '.join(ag.agents)}" if ag.agents else "")
                   + (f"; model {ag.model}" if ag.model else "")
                   + (f"; env {', '.join(ag.env)}" if ag.env else "")
                   + (f"; from {ag.path}" if ag.path else " (built in)"))
         return
 
     ag = agent(a.agent or "")
+    if a.cmd == "mcp-agents":
+        if not ag.agents:
+            raise SystemExit(f"xymonapi-agent: {ag.name} coordinates no agents")
+        serve_agents(ag)
+        return
     if a.cmd == "backends":
         for b in BACKENDS.values():
             print(f"{b.name}: {b.found() or 'not on PATH'}")

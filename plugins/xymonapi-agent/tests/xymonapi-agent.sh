@@ -16,7 +16,12 @@
 # $XDG_CONFIG_HOME/xymonapi-agent/agents/ is another agent: its backends
 # tried in order, a failing one said and the next taken; its own MCP
 # servers, its environment over this one, its words after the fixed prompt;
-# a bad profile is refused with its line.
+# a bad profile is refused with its line. A profile naming other agents is
+# a coordinator: its backend gets this command as an MCP server with one
+# ask_NAME tool per agent, each an ask of that agent in a process of its
+# own, with that agent's choices and not the parent's; at depth 0 and past
+# the cap on asks, a call is refused; a profile naming itself, or an agent
+# that is not defined, is refused.
 #
 # claude, codex and opencode are stubs that record their arguments and
 # answer a fixed text. Nothing of the API runs. Uses the test helpers of
@@ -219,4 +224,60 @@ rc=0; out=$(run agents 2>&1) || rc=$?
 assert_contains "no [server.nosuch] table" "$out" "an MCP server named but not defined is said"
 rm "$work/cfg/xymonapi-agent/agents/bad.toml"
 
-pass "xymonapi-agent runs the chosen agent CLI with the agent's MCP servers as its only tools, tries the backends of a profile in order, continues a Claude Code session by name, and doctor tells a tool's answer from any other"
+# A coordinator: ops over xymon and backup.
+cat > "$work/stub/opencode" <<STUB
+#!/bin/sh
+printf '%s\n' "\$@" > "$work/opencode.args"
+cp "\$OPENCODE_CONFIG" "$work/opencode.json"
+env | grep '^XYMONAPI_AGENT' > "$work/opencode.env" || true
+echo "an answer"
+STUB
+cat > "$work/cfg/xymonapi-agent/agents/ops.toml" <<'PROF'
+description = "routes a question to the right agent"
+backend = ["claude"]
+agents = ["xymon", "backup"]
+PROF
+out=$(run agents)
+assert_contains "mcp agents; agents xymon, backup" "$out" "agents shows a coordinator's agents, and its tools server"
+out=$(run --agent ops ask "anything wrong overnight?")
+assert_equal "xymon 4.3.31" "$out" "a coordinator is asked like any agent"
+args=$(cat "$work/claude.args")
+assert_contains "xymonapi-agent/xymonapi-agent.sh" "$args" "its backend gets this command as an MCP server"
+assert_contains "mcp-agents" "$args" "serving the agents"
+assert_contains "mcp__agents__*" "$args" "and may call only those tools"
+assert_contains "You coordinate other agents" "$args" "with the coordinator's prompt"
+grep -q 'mcp__xymon__' "$work/claude.args" && fail "a coordinator without the xymon server was allowed its tools"
+
+# The MCP server itself: its tools, an ask of backup run as backup, with
+# backup's backend, not the parent's; the guards.
+mcp() { printf '%s\n' "$@" | XYMONAPI_AGENT_BACKEND=claude PATH="$path" "$agent" --agent ops mcp-agents; }
+init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}'
+list='{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+call='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"ask_backup","arguments":{"question":"did it run?"}}}'
+out=$(mcp "$init" "$list" "$call")
+assert_contains '"serverInfo":{"name":"agents"' "$out" "mcp-agents answers initialize"
+assert_contains '"name":"ask_xymon","description":"Ask the agent xymon: the Xymon board' "$out" "lists one tool per agent, with its description"
+assert_contains '"name":"ask_backup"' "$out" "each of them"
+assert_contains '"id":3,"result":{"content":[{"type":"text","text":"an answer"}],"isError":false}' "$out" "and an ask_NAME call answers with that agent's answer"
+assert_contains '"restic_*": "allow"' "$(cat "$work/opencode.json")" "the child ran as backup, with backup's backend and tools"
+assert_equal "XYMONAPI_AGENT_DEPTH=1" "$(cat "$work/opencode.env")" "one deeper, and without the parent's backend choice"
+out=$(mcp '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"ask_nobody","arguments":{"question":"x"}}}')
+assert_contains '"isError":true' "$out" "a tool that is not an agent is an error"
+out=$(printf '%s\n' "$call" | XYMONAPI_AGENT_DEPTH=0 PATH="$path" "$agent" --agent ops mcp-agents)
+assert_contains "the depth limit is reached" "$out" "at depth 0 an ask is refused"
+out=$(printf '%s\n' "$call" "$call" | XYMONAPI_AGENT_SUBASKS=1 PATH="$path" "$agent" --agent ops mcp-agents)
+assert_contains '"id":3,"result":{"content":[{"type":"text","text":"an answer"}]' "$out" "the first ask within the cap answers"
+assert_contains "asked its agents 1 times already" "$out" "the one past it is refused"
+rc=0; out=$(run --agent xymon mcp-agents 2>&1 </dev/null) || rc=$?
+assert_contains "coordinates no agents" "$out" "mcp-agents for an agent with none says so"
+
+# A coordinator naming itself, or an agent not defined, is refused.
+printf 'agents = ["loop"]\n' > "$work/cfg/xymonapi-agent/agents/loop.toml"
+rc=0; out=$(run agents 2>&1) || rc=$?
+assert_contains "names the agent itself" "$out" "a profile in its own agents list is refused"
+printf 'agents = ["nosuch"]\n' > "$work/cfg/xymonapi-agent/agents/loop.toml"
+rc=0; out=$(run agents 2>&1) || rc=$?
+assert_contains "names 'nosuch', which no profile defines" "$out" "an agent that is not defined is refused"
+rm "$work/cfg/xymonapi-agent/agents/loop.toml"
+
+pass "xymonapi-agent runs the chosen agent CLI with the agent's MCP servers as its only tools, tries the backends of a profile in order, serves a coordinator's agents as tools with the two guards, continues a Claude Code session by name, and doctor tells a tool's answer from any other"
