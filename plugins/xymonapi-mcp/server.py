@@ -120,7 +120,9 @@ def series(entity: str, test: str, metric: str | None = None,
     """The values of one dataset of a host's RRD file over a time range.
 
     test is the RRD file without .rrd (la, disk, tcp.http.<host>:<port>, ...),
-    metric the dataset in it (default lambda). start and end are now, seconds
+    metric the dataset in it: la in la.rrd, sec in a tcp.*.rrd; left out, the
+    API reads the file's only one (xymonapi 2.1.0 and later), and names them
+    when there are several. start and end are now, seconds
     since the epoch, or relative like -30m, -24h, -7d. Xymon writes the
     files every 30 minutes, so the last points may be null while the test
     is fine: say so rather than reading a gap at the end as an outage.
