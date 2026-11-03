@@ -45,6 +45,9 @@ for c in claude codex; do
 done
 py=$(command -v "${XYMONAPI_PYTHON:-python3}")
 # A PATH with the stubs and the system's tools, and no real claude or codex.
+# The test's Python goes in with the stubs: on FreeBSD, for one, it lives in
+# /usr/local/bin, beside whatever else is installed there.
+ln -s "$py" "$work/stub/python3"
 path="$work/stub:/usr/bin:/bin"
 
 # A virtualenv beside the plugins, as make venv-client makes one: left as it
