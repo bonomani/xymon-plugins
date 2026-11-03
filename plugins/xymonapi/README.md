@@ -99,9 +99,11 @@ host and the port, without `/xymon/api/v1`, which the client adds:
   `XYMONAPI_LISTEN="0.0.0.0:1986"`. The URL: `https://xymon.example.ch:1986`.
 - **The web server in front of it.** Include the snippet `make install` wrote
   for your web server, `$XYMONHOME/etc/xymonapi-*.conf`, in its HTTPS part:
-  one hostname for the pages and the API. The URL: the web server's,
-  `https://xymon.example.ch`, with its port when that is not 443, as in
-  `https://xymon.example.ch:8443`.
+  one hostname for the pages and the API. The URL: the address your Xymon
+  pages are at -- the same web server and the same port -- without the
+  path: pages at `https://xymon.example.ch:8443/xymon/` mean the URL
+  `https://xymon.example.ch:8443`, and pages at
+  `https://xymon.example.ch/xymon/` the URL `https://xymon.example.ch`.
 - **An SSH tunnel**, for one person:
   `ssh -L 1986:127.0.0.1:1986 xymon-server`. The URL:
   `http://127.0.0.1:1986`, as if local.
