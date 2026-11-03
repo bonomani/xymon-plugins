@@ -445,8 +445,11 @@ def run_one(ag: Agent, backend: Backend, question: str, session: str | None) -> 
     argv, env, tmp = backend.command(ag, question, sid or None, resume)
     try:
         try:
+            # With nothing on stdin: a CLI given a pipe reads it as part of
+            # the question and waits for its end, which a caller that holds
+            # one open never sends.
             r = subprocess.run(argv, env={**ag.environ(), **env}, capture_output=True,
-                               text=True, timeout=TIMEOUT)
+                               text=True, timeout=TIMEOUT, stdin=subprocess.DEVNULL)
         except FileNotFoundError:
             raise BackendFailed(f"{argv[0]} is not on PATH") from None
         except subprocess.TimeoutExpired:
@@ -505,7 +508,8 @@ def ask_child(parent: Agent, name: str, question: str) -> str:
     env["XYMONAPI_AGENT_DEPTH"] = str(DEPTH - 1)
     argv = [str(LAUNCHER), "--agent", name, "ask", "--json", question]
     try:
-        r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=TIMEOUT)
+        r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=TIMEOUT,
+                           stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         raise ToolError(f"{name} gave no answer in {TIMEOUT:g} seconds") from None
     if r.returncode != 0:

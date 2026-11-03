@@ -42,20 +42,6 @@ URL: `unix:$XYMONVAR/xymonapi/api.sock`. Nothing is asked and no token is
 kept, since the socket's permissions already say who may read the API
 (`xymonapi.8`, `XYMONAPI_SOCKET`).
 
-Claude Code can also install it as a plugin, from this repository's
-marketplace at its branch `stable`:
-
-```
-/plugin marketplace add https://github.com/bonomani/xymon-plugins.git#stable
-/plugin install xymonapi-mcp@xymon-plugins
-```
-
-That copy takes `XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and
-`XYMONAPI_PYTHON` from your environment, defaults in
-[`.mcp.json`](.mcp.json), and still needs the token `xymonapi-connect`
-gets, installed by `make install-client` in `plugins/xymonapi`. Use
-`register` or the marketplace, not both.
-
 `make uninstall-client` removes this plugin and says what `register` did
 besides, to undo by hand: the registrations in Claude Code and Codex, and
 this machine's token.

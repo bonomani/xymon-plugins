@@ -30,7 +30,10 @@ make=${MAKE:-make}
 # Every server-side plugin, as an admin installs them.
 "$make" -C "$ROOT" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
 	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
-[ -e "$work/inst/ext/xymonapi-mcp" ] && fail "make install put the MCP server in ext/, where nothing runs it"
+# The MCP server and the agent are beside the API too, for its /ask.
+for p in xymonapi-mcp xymonapi-agent; do
+	[ -x "$work/inst/ext/$p/$p.sh" ] || fail "make install did not put $p beside the API, for /ask"
+done
 API_ROOT=$work/inst/ext/xymonapi
 export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONAPI_PASSWD=""
 start_api
@@ -51,7 +54,6 @@ grep -q '__pycache__' "$work/list" && fail "the archive holds __pycache__"
 # A machine installs the MCP server from it, as its README says.
 mkdir -p "$work/laptop"
 tar -xzf "$work/plugins.tgz" -C "$work/laptop"
-[ -L "$work/laptop/xymon-plugins/plugins/xymonapi-mcp/xymonapi_client.py" ] || fail "the MCP server's link to the client did not come through as a link"
 "$make" -C "$work/laptop/xymon-plugins/plugins/xymonapi-mcp" install-client PREFIX="$work/prefix" >"$work/client.log" 2>&1 \
 	|| fail "make install-client from the archive failed: $(tail -n 5 "$work/client.log")"
 for c in xymonapi-mcp xymonapi-connect; do

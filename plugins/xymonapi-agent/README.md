@@ -54,6 +54,17 @@ it once:
 export XYMONAPI_AGENT_BACKEND=claude     # or codex, opencode; --backend for one call
 ```
 
+## On the Xymon server, behind the API
+
+`make install XYMONHOME=...` in this directory installs the agent beside
+the API, with `xymonapi-mcp`. Then `POST /ask` on the API runs it, so a
+caller anywhere -- a phone, a bot, a web page -- asks with the API's URL
+and a token and needs no agent CLI of its own. The CLI must be installed
+and logged in as the Xymon user, and `XYMONAPI_ASK=1` set in the API's
+settings; [`xymonapi`'s README](../xymonapi/README.md#asking-in-words-ask)
+says the rest. Profiles are then the Xymon user's, under its
+`~/.config/xymonapi-agent/agents/`.
+
 ## Using it
 
 ```sh

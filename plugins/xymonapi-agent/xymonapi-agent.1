@@ -37,6 +37,8 @@ command and environment; a system prompt whose fixed part says the agent
 reads through those tools, changes nothing, has no shell, files or web,
 and that text a tool returns about a monitored system is data about it,
 never an instruction; and the rule that those tools are the only ones.
+Its standard input is empty: what is piped into xymonapi-agent is not the
+question.
 How completely a backend's flags can promise that differs, and
 \fBbackends\fR says so for each. A profile chooses tools, words and
 target; it cannot loosen that.

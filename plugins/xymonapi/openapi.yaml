@@ -13,8 +13,8 @@ info:
 
     C1. Every answer that is not a success is JSON, {"error": E, "detail": D},
         E one of Error's closed list, with its status: bad_request 400,
-        unauthorized 401, not_found 404, method_not_allowed 405, upstream 502.
-        D, when present, says why, for a person.
+        unauthorized 401, not_found 404, method_not_allowed 405, too_many 429,
+        upstream 502. D, when present, says why, for a person.
     C2. A path this document does not list answers not_found; a method a
         listed path does not take answers method_not_allowed.
     C3. With XYMONAPI_PASSWD set, every path but /plugins answers unauthorized
@@ -29,6 +29,21 @@ info:
         when it is 1 to 64 letters, digits, dots, underscores or hyphens, and
         one the API makes otherwise. The API's log lines about that request
         carry it, and a failure is logged with it.
+    C6. POST /ask answers not_found unless XYMONAPI_ASK is set on the server.
+        Set, it gives the question to xymonapi-agent installed beside the
+        API, run as the API's own user with the API's environment, and
+        answers the agent's answer with which agent and backend gave it; the
+        agent's failure, or no answer in XYMONAPI_ASK_TIMEOUT seconds, is
+        upstream, its detail the agent's last line. Nothing in Xymon changes.
+    C7. A session on /ask is the caller's: its name is prefixed, as
+        USER@CLIENT:, with the user and machine of the token, or the user
+        and "password", or "local@local" through the socket, before it
+        reaches the agent, so that no other caller continues it. The answer
+        gives the name as the caller sent it.
+    C8. /ask takes one question at a time from a caller, and at most
+        XYMONAPI_ASK_PER_HOUR in an hour; another is too_many, with a
+        Retry-After header in seconds. A question longer than XYMONAPI_ASK_MAX
+        characters is bad_request.
   license:
     name: GPL-2.0-or-later
 
@@ -243,6 +258,50 @@ paths:
           content:
             application/gzip: { schema: { type: string, format: binary } }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /ask:
+    post:
+      summary: A question in words, answered by an AI agent reading this server through its tools (C6).
+      operationId: ask
+      description: >
+        The agent is xymonapi-agent(1) beside the API, driving an agent CLI the
+        admin installed, with the Xymon MCP server as its only tool. Off, and
+        answering not_found, unless XYMONAPI_ASK is set. One question at a time
+        per caller, and XYMONAPI_ASK_PER_HOUR an hour (C8). A session is the
+        caller's (C7).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string, description: "In words; at most XYMONAPI_ASK_MAX characters, 2000 by default." }
+                session:  { type: string, description: "Continue the conversation of this name, or start it: letters, digits, . _ or -, 64 at most. The caller's own (C7)." }
+                agent:    { type: string, default: xymon, description: "Which of the server's agents, as xymonapi-agent(1) names them; xymon, the built-in one, by default." }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [answer, agent, backend]
+                properties:
+                  answer:  { type: string, description: "In words." }
+                  agent:   { type: string, description: "Which agent answered." }
+                  backend: { type: string, description: "Which agent CLI answered: claude, codex or opencode." }
+                  session: { type: string, description: "The name sent, when one was." }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: XYMONAPI_ASK is not set on this server (C6), or xymonapi-agent is not installed beside the API; the detail says which.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "502":
+          description: The agent failed, or gave no answer in time; the detail is its last line (C6).
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
   /tokens:
     get:
@@ -468,7 +527,7 @@ components:
       type: object
       required: [error]
       properties:
-        error:  { type: string, enum: [bad_request, unauthorized, not_found, method_not_allowed, upstream], description: "The kind of failure, with its status (C1)." }
+        error:  { type: string, enum: [bad_request, unauthorized, not_found, method_not_allowed, too_many, upstream], description: "The kind of failure, with its status (C1)." }
         detail: { type: string, description: "Why, for a person; free text, not to be matched." }
 
   responses:
@@ -486,4 +545,7 @@ components:
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     MethodNotAllowed:
       description: A method the path does not take (C2); the Allow header lists those it does.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    TooMany:
+      description: One question at a time, and XYMONAPI_ASK_PER_HOUR an hour, per caller (C8); Retry-After says when, in seconds.
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
