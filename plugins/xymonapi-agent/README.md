@@ -20,7 +20,7 @@ Every command, backend and setting is in
 ## Needs
 
 - **[`xymonapi-mcp`](../xymonapi-mcp/README.md)** beside it, which
-  `make install-client` installs first, with `xymonapi`'s client -- and so a
+  `./install.sh install-client xymonapi-agent` installs first, with `xymonapi`'s client -- and so a
   running [`xymonapi`](../xymonapi/README.md) on the Xymon server, reached as
   that README says. For the two search tools, `search_docs` and
   `search_history`, the server also runs
@@ -34,8 +34,8 @@ Every command, backend and setting is in
 ## Installing
 
 ```sh
-cd xymon-plugins/plugins/xymonapi-agent   # the code: top README, Getting the code
-make install-client                       # under ~/.local; PREFIX=... for elsewhere
+cd xymon-plugins                               # the code: top README, Getting the code
+./install.sh install-client xymonapi-agent     # under ~/.local; PREFIX=... for elsewhere
 xymonapi-mcp register https://xymon.example.ch   # once: connects this machine to the API
 xymonapi-agent backends                   # which CLI is here, and which answers
 xymonapi-agent doctor                     # one question through the tools
@@ -56,7 +56,7 @@ export XYMONAPI_AGENT_BACKEND=claude     # or codex, opencode; --backend for one
 
 ## On the Xymon server, behind the API
 
-`make install XYMONHOME=...` in this directory installs the agent beside
+`XYMONHOME=... ./install.sh install xymonapi-agent` installs the agent beside
 the API, with `xymonapi-mcp`. Then `POST /ask` on the API runs it, so a
 caller anywhere -- a phone, a bot, a web page -- asks with the API's URL
 and a token and needs no agent CLI of its own. The CLI must be installed

@@ -557,9 +557,9 @@ def main() -> None:
     except ImportError as e:
         # The launcher checks Python; the modules are checked here, where a
         # remote search needs none of them. 77 says "cannot run here".
-        print(f"xymonapi-rag: missing Python module: {e.name or e}: make venv-client in "
-              "plugins/xymonapi-rag installs it in the virtualenv beside the plugins (make venv "
-              "XYMONHOME=... on the server), or name a Python that has it in XYMONAPI_PYTHON",
+        print(f"xymonapi-rag: missing Python module: {e.name or e}: ./install.sh venv-client "
+              "installs it in the virtualenv beside the plugins (XYMONHOME=... ./install.sh venv "
+              "on the server), or name a Python that has it in XYMONAPI_PYTHON",
               file=sys.stderr)
         raise SystemExit(77) from e
 

@@ -166,7 +166,7 @@ def version_warning() -> str:
         t = _triple(theirs)
         if t and t < _triple(API_FLOOR):
             _warning = (f"the API at {URL} is xymonapi {theirs}; this client needs {API_FLOOR} or later: "
-                        "make install on the server, from a newer checkout of xymon-plugins, brings it up to date")
+                        "./install.sh install on the server, from a newer checkout of xymon-plugins, brings it up to date")
             # Once, on stderr, which an MCP client logs: stdout is the protocol.
             print(f"xymonapi: {_warning}", file=sys.stderr)
     return _warning
@@ -354,10 +354,10 @@ def connect(argv: list[str]) -> int:
     t, m = _triple(theirs), _triple(mine)
     if t and m and t < m:
         _say(f"the API runs xymonapi {theirs}, this machine's client {mine}: the server's admin "
-             "can update it, with make install from an updated checkout")
+             "can update it, with ./install.sh install from an updated checkout")
     elif t and m and t > m:
         _say(f"the API runs xymonapi {theirs}, this machine's client {mine}: update here, "
-             "with git pull && make install-client")
+             "with git pull && ./install.sh install-client")
     settings = {"XYMONAPI_URL": URL}
     if TOKEN_FILE:
         settings["XYMONAPI_TOKEN_FILE"] = TOKEN_FILE

@@ -3,7 +3,7 @@
 #
 # tests/compat/xymonapi-portability.sh
 #
-# The plugins' test scripts keep to Xymon's portability rules: bash 3.2,
+# The plugins' test scripts, and ./install.sh, keep to Xymon's portability rules: bash 3.2,
 # portable tool flags and regular expressions, no early-exit pipes under
 # pipefail, and the rest of what Xymon's BSD and macOS lanes taught it. The
 # rules are Xymon's own, read from XYMON_SRC at each run, not a copy kept
@@ -38,6 +38,9 @@ for d in "$ROOT"/plugins/*/tests; do
 	mkdir -p "$tree/tests/plugins/$name"
 	(cd "$d" && tar cf - .) | (cd "$tree/tests/plugins/$name" && tar xf -)
 done
+# And the installer, which runs on every machine the plugins go to: placed
+# where the check looks, and named back as it is here.
+cp "$ROOT/install.sh" "$tree/tests/install-sh-under-check.sh"
 # The check sources ../lib/assert.sh; this repository has its own file of
 # that name, so Xymon's goes in under another, and the check is pointed at it.
 sed -e 's|/\.\./lib/assert\.sh"|/../lib/assert-xymon.sh"|' "$tree/tests/buildsystem/$(basename "$check")" \
@@ -54,7 +57,7 @@ awk '
 	/^  \[[a-z-]+\] / { keep = ($1 != "[interpreter]"); if (keep) print; next }
 	/^      / { if (keep) print; next }
 	{ keep = 0 }
-' "$work/report" | sed -e 's|tests/plugins/\([^/]*\)/|plugins/\1/tests/|' > "$work/violations"
+' "$work/report" | sed -e 's|tests/plugins/\([^/]*\)/|plugins/\1/tests/|' -e 's|tests/install-sh-under-check\.sh|install.sh|' > "$work/violations"
 
 if [ -s "$work/violations" ]; then
 	fail "the plugins' tests break Xymon's portability rules:
@@ -66,4 +69,4 @@ if [ "$rc" -ne 0 ] && ! grep -q 'violation(s); see above' "$work/report"; then
 	fail "Xymon's portability check did not run: $(tail -n 5 "$work/report")"
 fi
 
-pass "the plugins' tests keep to Xymon's portability rules, but the one against Python, which every plugin needs"
+pass "the plugins' tests and install.sh keep to Xymon's portability rules, but the one against Python, which every plugin needs"

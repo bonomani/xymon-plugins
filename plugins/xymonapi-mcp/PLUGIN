@@ -1,8 +1,23 @@
 # What this plugin is, for the index in README.md and for whoever installs
-# it alone. One key per line; the Makefile beside it does the installing.
+# it alone. One key per line, a key repeated for each line of a message;
+# ./install.sh at the repository's top installs it from the lines below.
 name: xymonapi-mcp
 version: 0.1.0
 side: client
 summary: an MCP server that gives an AI client read-only tools over the Xymon API
 requires: xymonapi >= 0.1.0 (its client beside it; the API over the network, XYMONAPI_URL), python >= 3.9
 manual: xymonapi-mcp.1
+
+# How ./install.sh installs it: see xymonapi's PLUGIN file.
+needs: xymonapi
+server-files: server.py xymonapi-mcp.sh
+server-manual: xymonapi-mcp.1
+uninstalled: Uninstalled xymonapi-mcp. Kept: xymonapi.
+client-files: server.py xymonapi-mcp.sh
+client-manual: xymonapi-mcp.1
+command: xymonapi-mcp xymonapi-mcp.sh
+executable: xymonapi-mcp.sh
+uninstalled-client: Uninstalled xymonapi-mcp. What register did besides, to undo by hand:
+uninstalled-client:   claude mcp remove --scope user xymon; codex mcp remove xymon
+uninstalled-client:   revoke this machine's token: curl -X DELETE -u USER https://SERVER/xymon/api/v1/tokens/$(hostname -s)
+uninstalled-client:   rm ~/.config/xymon-api/xymon.token

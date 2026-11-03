@@ -57,15 +57,20 @@ without it, checked by reverting what makes it true.
   | a plugin's `README.md` | whoever installs, packages or uses that plugin, with the repository open | how to install it and use it |
   | a plugin's manual page | an admin, or a laptop user, with the plugin installed | its behaviour and every setting |
   | `plugins/xymonapi/openapi.yaml` | whoever writes a client or another implementation of the API | the contract: each path's answers, the closed list of errors, the numbered rules |
-  | a plugin's `PLUGIN` file | the build, and whoever packages it | its name, side, version, and what it needs |
+  | a plugin's `PLUGIN` file | `install.sh`, and whoever packages it | its name, side, version, what it needs, and what it installs |
 
 ## What only this repository has
 
 ### Plugins
 
-Each plugin is a directory under `plugins/` with a `Makefile` that installs
-it alone and a `PLUGIN` file. A plugin that needs another names it there and
-installs it first. Code shared by two plugins lives in one of them, the one
+Each plugin is a directory under `plugins/` with a `PLUGIN` file, which
+says what it installs on each side; its comments name every key.
+`install.sh`, at the top, is the one installer: it reads those lines and
+holds nothing particular to a plugin, so a new plugin is a directory and
+its `PLUGIN` file, with no change to the installer. It is a POSIX shell
+script, for every machine a plugin goes to, and keeps to the portability
+rules below. A plugin that needs another names it there, on its `needs:`
+line, and installs it first. Code shared by two plugins lives in one of them, the one
 it belongs to, and the other installs that one: the API's client,
 `xymonapi_client.py`, is `xymonapi`'s. A plugin's README and manual page name the
 plugins it uses, never those that use it: a new plugin built on another
@@ -74,7 +79,7 @@ changes nothing of that one.
 ### Versions
 
 A plugin's version is the `version:` line of its `PLUGIN` file, `X.Y.Z`.
-`make install` writes it beside the installed files, in `VERSION`, and
+The install writes it beside the installed files, in `VERSION`, and
 `/health` gives the API's. It changes when compatibility does, in the same
 commit as the change: the last number for an addition, the first for a
 change that breaks something for users or for another plugin. Other changes
@@ -140,8 +145,8 @@ The tests run against a server build of Xymon's current `main`, named by
 `XYMON_SRC`, and use its test helpers:
 
 ```sh
-XYMON_SRC=/path/to/built/xymon make test     # at the top: every test
-make test                                    # in plugins/<name>/: its own
+XYMON_SRC=/path/to/built/xymon tests/run.sh                      # every test
+XYMON_SRC=/path/to/built/xymon tests/run.sh plugins/<name>/tests # one plugin's
 ```
 
 A test belongs to the plugin it checks, under `plugins/<name>/tests/`, and
@@ -153,7 +158,7 @@ shared by several tests are under `tests/lib/`. Each test says at its top
 what it checks and what it needs.
 Unlike Xymon's, a test here may use Python: a helper written in Python goes
 under `tests/lib/`, as `fake-llm.py` and `ctrl-c.py` do. Otherwise the test
-scripts keep to Xymon's portability rules -- bash 3.2, portable tool flags,
+scripts, and `install.sh`, keep to Xymon's portability rules -- bash 3.2, portable tool flags,
 no early-exit pipes -- which `tests/compat/xymonapi-portability.sh` checks
 with Xymon's own check, read from `XYMON_SRC`. A test that cannot
 run where something it needs is missing skips, with exit 77, and says what.
