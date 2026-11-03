@@ -30,7 +30,10 @@ make=${MAKE:-make}
 # Every server-side plugin, as an admin installs them.
 "$make" -C "$ROOT" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
 	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
-[ -e "$work/inst/ext/xymonapi-mcp" ] && fail "make install put the MCP server in ext/, where nothing runs it"
+# The MCP server and the agent are beside the API too, for its /ask.
+for p in xymonapi-mcp xymonapi-agent; do
+	[ -x "$work/inst/ext/$p/$p.sh" ] || fail "make install did not put $p beside the API, for /ask"
+done
 API_ROOT=$work/inst/ext/xymonapi
 export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONAPI_PASSWD=""
 start_api

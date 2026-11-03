@@ -16,14 +16,21 @@ FILES = server.py xymonapi-mcp.sh
 
 all:
 
-# Nothing of it runs on the server: it is staged there, for the machines that
-# install from the server's /plugins. The directory an older install put in
-# ext/ goes.
+# On the server it is installed beside the API, for xymonapi-agent there,
+# which the API's /ask runs; and staged, for the machines that install from
+# the server's /plugins. Nothing starts it on the server but the agent.
 install:
 	$(need_home)
 	$(MAKE) -C ../xymonapi install
-	$(call gone,$(EXT))
+	$(call fresh,$(EXT))
+	cp -f $(FILES) "$(EXT)/"
+	chmod 644 "$(EXT)/server.py"
+	chmod 755 "$(EXT)/xymonapi-mcp.sh"
+	$(call version,$(EXT))
 	$(dist)
+	mkdir -p "$(MAN1)"
+	cp -f xymonapi-mcp.1 "$(MAN1)/"
+	chmod 644 "$(MAN1)/xymonapi-mcp.1"
 
 install-client:
 	$(MAKE) -C ../xymonapi install-client
@@ -48,9 +55,11 @@ venv-client:
 
 uninstall:
 	$(need_home)
+	$(call needed_by,$(EXTROOT),xymonapi-agent)
 	$(call needed_by,$(DIST)/plugins,xymonapi-agent)
 	$(call gone,$(EXT))
 	$(call gone,$(DIST)/plugins/$(PLUGIN))
+	rm -f "$(MAN1)/xymonapi-mcp.1"
 	@echo "Uninstalled xymonapi-mcp. Kept: xymonapi."
 
 # register also registered the server with the AI clients, and kept a token:
