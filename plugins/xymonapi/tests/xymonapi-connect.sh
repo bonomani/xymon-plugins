@@ -115,9 +115,11 @@ assert_contains "the API runs xymonapi 99.0.0, this machine's client $mine: upda
 printf '%s\n' "$mine" > "$apiver"
 
 # A Ctrl-C at the password prompt, on a terminal: echo back on, no token.
+# No virtualenv and no XYMONAPI_PYTHON: the python3 on PATH runs it, and the
+# password is the first thing asked -- no question about a virtualenv.
 mkdir -p "$work/cfg2"
 rc=0
-out=$(XDG_CONFIG_HOME="$work/cfg2" HOME="$work" XYMONAPI_USER=carol \
+out=$(XDG_CONFIG_HOME="$work/cfg2" HOME="$work" XYMONAPI_USER=carol XYMONAPI_PYTHON="" \
 	"${XYMONAPI_PYTHON:-python3}" "$ROOT/tests/lib/ctrl-c.py" 'password for carol: ' "$connect" "$url" 2>&1) || rc=$?
 assert_equal "130" "$rc" "Ctrl-C at the password prompt ends it ($out)"
 assert_contains "echo on" "$out" "with echo back on"

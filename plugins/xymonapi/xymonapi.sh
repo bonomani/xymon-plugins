@@ -11,23 +11,16 @@
 # The Python to run with: XYMONAPI_PYTHON when set; else the virtualenv
 # beside the plugins, ../venv, which make venv (venv-client elsewhere) makes
 # with their modules; else
-# python3 on PATH, which may lack them -- asked about first when a person is
-# at the terminal, said on stderr when none is (a task, an AI client).
+# python3 on PATH, without a word: a command that needs a module it lacks
+# says which, and what installs it, when it needs it.
 here=`dirname "$0"`
 venv=`cd "$here/.." && pwd`/venv
 if [ -n "${XYMONAPI_PYTHON:-}" ]; then
 	PYTHON=$XYMONAPI_PYTHON
 elif [ -x "$venv/bin/python3" ]; then
 	PYTHON=$venv/bin/python3
-elif [ -t 0 ] && [ -t 2 ]; then
-	PYTHON=python3
-	printf 'xymonapi: no virtualenv at %s (make venv, or venv-client, makes one); run with %s, %s? [y/N] ' \
-		"$venv" "`command -v python3 || echo python3`" "`python3 -V 2>&1`" >&2
-	read -r yn
-	case $yn in [yY]*) ;; *) exit 77 ;; esac
 else
 	PYTHON=python3
-	echo "xymonapi: no virtualenv at $venv; running with python3 on PATH" >&2
 fi
 
 command -v "$PYTHON" >/dev/null 2>&1 || {
@@ -43,7 +36,7 @@ command -v "$PYTHON" >/dev/null 2>&1 || {
 missing=`cd "$here" && "$PYTHON" -c 'import importlib.util as u
 print(" ".join(m for m in ("fastapi", "uvicorn", "yaml") if u.find_spec(m) is None))'`
 if [ -n "$missing" ]; then
-	echo "xymonapi: missing Python modules: $missing (see requirements.txt)" >&2
+	echo "xymonapi: missing Python modules: $missing: make venv XYMONHOME=... in plugins/xymonapi installs them in the virtualenv beside the plugins, or name a Python that has them in XYMONAPI_PYTHON" >&2
 	exit 77
 fi
 

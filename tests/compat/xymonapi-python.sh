@@ -5,18 +5,20 @@
 #
 # Which Python a launcher runs with, on either side: XYMONAPI_PYTHON when it
 # is set; else the virtualenv beside the installed plugins, venv/; else the
-# python3 on PATH, said on stderr when no terminal is there to ask. The same
+# python3 on PATH, without a word: none of them asks. The same
 # order in xymonapi-mcp, xymonapi-rag and xymonapi-connect, which exec the
 # Python they chose on their own module.
 # How the virtualenv comes to be: an install that needs modules makes it from
 # the Python PYTHON= names when that one has them, with --system-site-packages
 # and fetching nothing; says which Python make venv would use when none has;
-# and says which modules a virtualenv already there lacks. make venv-client
-# makes it with PYTHON, and leaves one that is there alone.
+# and says which modules a virtualenv already there lacks. On a terminal --
+# tests/lib/answer.py gives the install one -- those two hints are offers:
+# "y" makes the virtualenv, or completes it, with make venv-client; "N"
+# leaves the hint. Without a terminal nothing is asked. make venv-client
+# makes it with PYTHON, and leaves one that is there alone. A command whose
+# module is missing says what installs it.
 #
-# The confirmation a launcher asks on a terminal before falling back to PATH
-# is not run here: the test has no terminal, and that branch is read. The
-# search for a Python when PYTHON= is not given is not run either: what it
+# The search for a Python when PYTHON= is not given is not run: what it
 # finds depends on the machine.
 # Needs make and a Python 3.9 or later with the venv module in
 # XYMONAPI_PYTHON, or python3.
@@ -61,6 +63,7 @@ done
 [ -e "$lib/venv" ] && fail "a virtualenv was made with no Python that has the modules"
 assert_contains "no Python with the modules this plugin needs (fastembed numpy): make venv (venv-client elsewhere) PYTHON=$work/lacks/python3" \
 	"$(cat "$work/install-xymonapi-rag.log")" "installing a plugin that needs modules, with none that has them, names the Python make venv would use"
+assert_not_contains "[y/N]" "$(cat "$work/install-xymonapi-rag.log")" "and, with no terminal, asks nothing"
 assert_not_contains "virtualenv" "$(cat "$work/install-xymonapi-mcp.log")" "a plugin that needs no modules says nothing of it"
 
 fake "$lib/venv/bin" venv
@@ -93,11 +96,20 @@ PY="$work/named/python3" run xymonapi-mcp
 assert_contains "named $lib/xymonapi-mcp/server.py" "$(cat "$work/python.log")" "XYMONAPI_PYTHON wins over the virtualenv"
 assert_not_contains "venv " "$(cat "$work/python.log")" "which is not run"
 
-# No virtualenv, no terminal: the python3 on PATH, and a line on stderr.
+# No virtualenv: the python3 on PATH, and not a word, from any of them.
 rm -rf "$lib/venv"
-run xymonapi-mcp
-assert_contains "path $lib/xymonapi-mcp/server.py" "$(cat "$work/python.log")" "without a virtualenv the python3 on PATH runs it"
-assert_contains "xymonapi-mcp: no virtualenv at $lib/venv; running with python3 on PATH" "$(cat "$work/err")" "and stderr says so"
+for cmd in "xymonapi-mcp" "xymonapi-rag search x" "xymonapi-connect http://127.0.0.1:1"; do
+	# shellcheck disable=SC2086 # the command's words are meant to split
+	run $cmd
+	assert_contains "path $lib/" "$(cat "$work/python.log")" "without a virtualenv the python3 on PATH runs ${cmd%% *}"
+	assert_equal "" "$(cat "$work/err")" "and ${cmd%% *} says nothing of it"
+done
+
+# A command whose modules are missing says what installs them.
+rc=0
+XYMONAPI_PYTHON="$work/lacks/python3" "$ROOT/plugins/xymonapi/xymonapi.sh" < /dev/null > /dev/null 2> "$work/err" || rc=$?
+assert_equal "77" "$rc" "the API without its modules cannot run here"
+assert_contains "make venv XYMONHOME=... in plugins/xymonapi installs them" "$(cat "$work/err")" "and says what installs them"
 
 # An install that needs modules, with a Python that has them: the virtualenv
 # is made from it, with --system-site-packages, and nothing is fetched.
@@ -137,4 +149,49 @@ assert_file_exists "$prefix2/libexec/xymon-plugins/venv/kept"
 XYMONAPI_PYTHON="" "$prefix2/bin/xymonapi-mcp" < /dev/null > /dev/null 2> "$work/err" || true
 assert_equal "" "$(cat "$work/err")" "and the launcher takes it without a word"
 
-pass "a launcher runs with XYMONAPI_PYTHON, else the virtualenv beside the plugins, else the python3 on PATH and says so; an install makes the virtualenv from a Python that has the modules, fetching nothing, and otherwise says which make venv would use; make venv-client makes it and keeps one that is there"
+# On a terminal the hints are offers. A Python lacking the modules, which
+# makes a virtualenv whose python3 records what it is asked: "y" makes it
+# and installs into it every installed plugin's modules; "N" leaves the hint.
+fake "$work/venvpy" venvpy
+mkdir -p "$work/maker"
+cat > "$work/maker/python3" <<STUB
+#!/bin/sh
+case "\$*" in
+"-m venv "*) mkdir -p "\$3/bin"; cp "$work/venvpy/python3" "\$3/bin/python3"; exit 0 ;;
+*"print("*) echo "fastembed numpy" ;;
+*find_spec*) exit 1 ;;
+esac
+exit 0
+STUB
+chmod 755 "$work/maker/python3"
+py=${XYMONAPI_PYTHON:-python3}
+for yn in y N; do
+	pre=$work/offer-$yn
+	: > "$work/python.log"
+	rc=0
+	"$py" "$ROOT/tests/lib/answer.py" '[y/N] ' "$yn" \
+		"$make" -C "$ROOT/plugins/xymonapi-rag" install-client PREFIX="$pre" PYTHON="$work/maker/python3" > "$work/offer-$yn.log" 2>&1 || rc=$?
+	[ "$rc" -eq 0 ] || fail "make install-client answering $yn failed with $rc: $(tail -n 5 "$work/offer-$yn.log")"
+	assert_contains "xymonapi-rag needs fastembed numpy, which no Python here has (only to keep an index on this machine: search and ask through the server need none). Make a virtualenv at $pre/libexec/xymon-plugins/venv with $work/maker/python3, and install them from PyPI? [y/N]" \
+		"$(cat "$work/offer-$yn.log")" "on a terminal, the install offers the virtualenv, saying what the modules are for here"
+	if [ "$yn" = y ]; then
+		assert_contains "venvpy -m pip install -q -r $pre/libexec/xymon-plugins/xymonapi-rag/requirements.txt" "$(cat "$work/python.log")" "y makes it and installs the modules into it"
+	else
+		[ -e "$pre/libexec/xymon-plugins/venv" ] && fail "N made a virtualenv"
+		assert_contains "make venv (venv-client elsewhere)" "$(cat "$work/offer-$yn.log")" "N leaves the hint"
+	fi
+done
+# A virtualenv there that lacks them: "y" installs them into it.
+pre=$work/offer-lacks
+mkdir -p "$pre/libexec/xymon-plugins/venv/bin"
+printf '#!/bin/sh\nprintf "lacksvenv %%s\\n" "$*" >> "%s/python.log"\ncase "$*" in *"print("*) echo "fastembed numpy" ;; *find_spec*) exit 1 ;; esac\nexit 0\n' "$work" > "$pre/libexec/xymon-plugins/venv/bin/python3"
+chmod 755 "$pre/libexec/xymon-plugins/venv/bin/python3"
+: > "$work/python.log"
+rc=0
+"$py" "$ROOT/tests/lib/answer.py" '[y/N] ' y \
+	"$make" -C "$ROOT/plugins/xymonapi-rag" install-client PREFIX="$pre" > "$work/offer-lacks.log" 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "make install-client over a lacking virtualenv failed with $rc: $(tail -n 5 "$work/offer-lacks.log")"
+assert_contains "lacks fastembed numpy, which xymonapi-rag needs (only to keep an index" "$(cat "$work/offer-lacks.log")" "a virtualenv lacking the modules is offered them"
+assert_contains "lacksvenv -m pip install -q -r $pre/libexec/xymon-plugins/xymonapi-rag/requirements.txt" "$(cat "$work/python.log")" "and y installs them into it"
+
+pass "a launcher runs with XYMONAPI_PYTHON, else the virtualenv beside the plugins, else the python3 on PATH, asking nothing; an install makes the virtualenv from a Python that has the modules, fetching nothing, and otherwise says which make venv would use, or on a terminal offers to make or complete it; a command lacking modules says what installs them"

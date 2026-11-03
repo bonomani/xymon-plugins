@@ -69,20 +69,22 @@ side. `DESTDIR` stages either side for a package. The server install also
 copies each plugin into what the API serves at `/client`, for other
 machines to install from.
 
-**Python.** Every plugin runs on Python 3.9 or later, and the install
-downloads no module. When the machine already has a Python with the modules
-a plugin needs -- the newest of `python3.14` down to `python3` on PATH and
-in Homebrew's and pyenv's directories, or the one `PYTHON=` names -- the
-install makes a virtualenv beside the plugins from it, `ext/venv` on the
-server and `libexec/xymon-plugins/venv` elsewhere, pinning that interpreter
-and fetching nothing. When no Python has them, the install says so and
-names the newest Python it found; `make venv XYMONHOME=... PYTHON=...` on
-the server, or `make venv-client PYTHON=...` elsewhere, then makes the
-virtualenv and installs into it, from PyPI, the modules of every plugin
-installed there. The launchers run with `XYMONAPI_PYTHON` when it is set,
-else with that virtualenv, else with the `python3` on PATH -- asking first
-when a person is at the terminal, saying so on stderr when none is -- which
-must then have the modules, importable by the user Xymon runs as.
+**Python.** Every plugin runs on Python 3.9 or later. Only those that need
+modules beyond the standard library -- each `Makefile`'s `MODULES` -- deal
+with a virtualenv; the others ask nothing about one. For those, when the
+machine already has a Python with the modules -- the newest of `python3.14`
+down to `python3` on PATH and in Homebrew's and pyenv's directories, or the
+one `PYTHON=` names -- the install makes a virtualenv beside the plugins from
+it, `ext/venv` on the server and `libexec/xymon-plugins/venv` elsewhere,
+pinning that interpreter and fetching nothing. When no Python has them, or
+the virtualenv there lacks some, the install run from a terminal offers to
+make or complete it, installing the modules from PyPI -- the one virtualenv
+of that side, with the modules of every plugin installed there; without a
+terminal, or answered no, it says so, and `make venv XYMONHOME=...
+PYTHON=...` on the server, or `make venv-client PYTHON=...` elsewhere, does
+it later. The launchers run with `XYMONAPI_PYTHON` when it is set, else
+with that virtualenv, else with the `python3` on PATH, asking nothing; a
+command that then needs a module it lacks says which, and what installs it.
 
 **Enabling.** A server task is installed `DISABLED`, so that installing
 changes nothing until you remove that line from its file; xymonlaunch

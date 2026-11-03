@@ -241,7 +241,8 @@ without the hiding asked for would be worse than not running.
 The Python to run the API with. Unset, the launcher takes the python3 of
 the virtualenv beside the plugins, $XYMONHOME/ext/venv, which \fBmake
 venv\fR makes with the modules the installed plugins need; without one, the
-python3 found on PATH, saying so on stderr, the task's log.
+python3 found on PATH. When that one lacks a module, the API says which on
+stderr, the task's log, names \fBmake venv\fR, and exits with 77.
 
 .SH FILES
 .IP "\fB$XYMONHOME/ext/xymonapi/\fR"

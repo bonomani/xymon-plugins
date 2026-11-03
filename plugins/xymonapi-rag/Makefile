@@ -14,6 +14,9 @@ include ../../build/plugin.mk
 FILES = xymonrag.py xymonapi-rag.sh requirements.txt
 # The modules of requirements.txt, by import name, as xymonrag.py imports them.
 MODULES = fastembed numpy
+# On another machine they are needed only to keep an index there: the
+# offer says so.
+VENV_NOTE = only to keep an index on this machine: search and ask through the server need none
 
 all:
 
@@ -31,7 +34,7 @@ install:
 	chmod 644 "$(MAN1)/xymonapi-rag.1"
 	mkdir -p "$(TASKDIR)"
 	$(call task,xymonapi-rag.tasks.DIST,xymonapi-rag)
-	$(call venv_auto,$(EXTROOT))
+	$(call venv_auto,$(EXTROOT),venv)
 
 install-client:
 	$(MAKE) -C ../xymonapi install-client
@@ -44,7 +47,7 @@ install-client:
 	$(call launcher,xymonapi-rag,xymonapi-rag/xymonapi-rag.sh)
 	cp -f xymonapi-rag.1 "$(CLIENTMAN1)/"
 	chmod 644 "$(CLIENTMAN1)/xymonapi-rag.1"
-	$(call venv_auto,$(CLIENTROOT))
+	$(call venv_auto,$(CLIENTROOT),venv-client)
 
 # An isolated Python for the plugins installed here, with their modules.
 venv:
