@@ -105,6 +105,20 @@ for cmd in "xymonapi-mcp" "xymonapi-rag search x" "xymonapi-connect http://127.0
 	assert_equal "" "$(cat "$work/err")" "and ${cmd%% *} says nothing of it"
 done
 
+# No python3 at all, as on a FreeBSD that installed python3.12 alone: the
+# first of python3.14 down to python3.9 on PATH runs it. The PATH holds the
+# one tool the launchers call besides their shell's builtins, and that one.
+mkdir -p "$work/bare"
+ln -s "$(command -v dirname)" "$work/bare/dirname"
+fake "$work/bare" py311
+mv "$work/bare/python3" "$work/bare/python3.11"
+for cmd in "xymonapi-mcp" "xymonapi-rag search x" "xymonapi-connect http://127.0.0.1:1"; do
+	: > "$work/python.log"; : > "$work/err"
+	# shellcheck disable=SC2086 # the command's words are meant to split
+	XYMONAPI_PYTHON="" PATH="$work/bare" "$prefix/bin/"$cmd < /dev/null > /dev/null 2> "$work/err" || true
+	assert_contains "py311 $lib/" "$(cat "$work/python.log")" "with no python3, python3.11 on PATH runs ${cmd%% *} ($(cat "$work/err"))"
+done
+
 # A command whose modules are missing says what installs them.
 rc=0
 XYMONAPI_PYTHON="$work/lacks/python3" "$ROOT/plugins/xymonapi/xymonapi.sh" < /dev/null > /dev/null 2> "$work/err" || rc=$?
