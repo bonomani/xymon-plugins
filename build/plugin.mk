@@ -8,8 +8,9 @@
 # On a Xymon server the plugins go under $XYMONHOME/ext/, one
 # directory each, and a plugin that needs another finds it beside itself;
 # on a machine with no Xymon they go under $PREFIX/libexec/xymon-plugins/
-# the same way, with a command per plugin in $PREFIX/bin. Each plugin records its own version beside its
-# files, in VERSION.
+# the same way, with a command per plugin in $PREFIX/bin. Each plugin records
+# its own version beside its files, in VERSION, and the virtualenv they share
+# sits beside them, as venv/.
 #
 # XYMONHOME is the server directory, as xymonserver.cfg names it. Xymon's own
 # install links $XYMONHOME/ext and $XYMONHOME/etc to wherever those really

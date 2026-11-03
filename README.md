@@ -53,7 +53,8 @@ cd plugins/NAME && make install-client                           # elsewhere
 ```
 
 Run again, it updates the plugin; `make uninstall` or `make uninstall-client`
-removes it. The same targets at the top act on every plugin of one side.
+removes it. The same targets at the top act on every plugin of one side, and
+the uninstall there removes the virtualenv below too.
 
 The launchers run with the Python `XYMONAPI_PYTHON` names, else with the
 virtualenv beside the installed plugins when there is one, else with the

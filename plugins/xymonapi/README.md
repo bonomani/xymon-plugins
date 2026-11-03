@@ -51,7 +51,7 @@ see [Setting up another machine](#setting-up-another-machine).
 | installed | from |
 |---|---|
 | `$XYMONHOME/ext/xymonapi/`: the code, `openapi.yaml`, `requirements.txt` and the launcher `xymonapi.sh` | this directory |
-| `$XYMONHOME/ext/xymonapi/VERSION`, which `/health` gives | `version` in [`PLUGIN`](PLUGIN) |
+| `$XYMONHOME/ext/xymonapi/VERSION`, which `/health` gives | the release tag the checkout is at, else `version` in [`PLUGIN`](PLUGIN) |
 | `$XYMONHOME/etc/tasks.d/xymonapi`, the task, written `DISABLED`, and only when there is none | `xymonapi.tasks.DIST` |
 | `$XYMONHOME/etc/xymonapi-{apache,nginx,lighttpd}.conf`, web server snippets, written once | the files of the same name |
 | `$MANDIR/man8/xymonapi.8` | [`xymonapi.8`](xymonapi.8) |
@@ -65,12 +65,11 @@ from that stage should check how its tool installs a directory over a link.
 The Python modules are not installed with it. `make venv XYMONHOME=...`
 (`PYTHON=python3.x` for one other than `python3`) makes a virtualenv beside
 the plugins, `$XYMONHOME/ext/venv`, with the modules of every plugin
-installed there, a plugin installed later adds its own, and the launchers run
-with it unless `XYMONAPI_PYTHON` names another Python. Without one they fall
-back to the `python3` on PATH, which
-must then have the modules, importable by the user Xymon runs as: from your
-distribution's packages, for instance. `pip install --user` run as root puts
-them where that user does not look.
+installed there; a plugin installed later adds its own. The launchers run
+with it unless `XYMONAPI_PYTHON` names another Python, and without one fall
+back to the `python3` on PATH, which must then have the modules, importable
+by the user Xymon runs as: from your distribution's packages, for instance.
+`pip install --user` run as root puts them where that user does not look.
 
 Then remove `DISABLED` from the task, and check, with the default address:
 
@@ -119,8 +118,8 @@ make uninstall XYMONHOME=...
 
 Run here, it removes the API alone, and is refused, naming the plugin, while
 another installed one needs it; at the repository's top, every server-side
-plugin. It removes the code, what `/client` serves of it, the manual page
-and the task. It keeps the web server snippets -- take the `Include` out of
+plugin and the virtualenv beside them. It removes the code, what `/client`
+serves of it, the manual page and the task. It keeps the web server snippets -- take the `Include` out of
 your web server's configuration before deleting them -- and the tokens
 file, `$XYMONAPI_TOKENS`.
 `make uninstall-client` removes the client, refused in the same way.
@@ -174,8 +173,9 @@ anyone's. `/client` asks for no password: it holds the code and nothing
 secret.
 
 `make install-client` puts the client under
-`$PREFIX/libexec/xymon-plugins/xymonapi` and the command `xymonapi-connect`
-in `$PREFIX/bin`. `xymonapi-connect` asks for your user and password once --
+`$PREFIX/libexec/xymon-plugins/xymonapi`, the command `xymonapi-connect` in
+`$PREFIX/bin` and its manual page under `$PREFIX/share/man/man1`.
+`xymonapi-connect` asks for your user and password once --
 one of the API's [users](#users) -- to get this machine a token, kept in
 `~/.config/xymon-api/xymon.token`; the password is not kept. Run again, it
 keeps a token that works. It says when this machine's client and the API

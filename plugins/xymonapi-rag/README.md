@@ -15,8 +15,9 @@ setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 - **On another machine:** `xymonapi`'s client beside it, which
   `make install-client` here installs first, and a running API, reached
   over the network, as `XYMONAPI_URL` says.
-- Python 3.9 or later, and on the server the modules in
-  [`requirements.txt`](requirements.txt).
+- Python 3.9 or later, and the modules in
+  [`requirements.txt`](requirements.txt) on the server, and on any machine
+  that keeps an index of its own.
 
 ## On the server
 
@@ -66,9 +67,9 @@ Ollama by default, LM Studio with two settings. Pick the model with care: a
 small one such as `llama3.2` answers in a second but makes things up, where a
 larger one says when the passages do not hold the answer.
 
-`make uninstall` (on the server, where it also leaves `/client`) or
-`make uninstall-client` removes it, and keeps the plugins it brought, which
-may serve others, and its index.
+`make uninstall` (on the server, where it also takes it out of what
+`/client` serves) or `make uninstall-client` removes it, and keeps the
+plugins it brought, which may serve others, and its index.
 
 `eval` scores the search against a file of questions;
 [`tests/eval/docs.json`](../../tests/eval/docs.json) is the one CI runs.
