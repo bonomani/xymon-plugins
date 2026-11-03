@@ -13,7 +13,7 @@
 # is open: it gives the code of the plugins staged here, an archive rooted
 # at xymon-plugins/, with no password or tokens file in it; /health gives
 # the version, to a user, and only fields the spec lists. Installing from
-# that archive is xymonapi-client.sh's.
+# that archive is tests/compat/xymonapi-client.sh's.
 #
 # Skips where the API cannot run (tests/lib/xymonapi.sh). Needs the xymon
 # client of the Xymon tree in XYMON_SRC (for a free port), Apache's htpasswd
