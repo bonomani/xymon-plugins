@@ -33,36 +33,71 @@ forward. `main` holds every change as it lands.
 
 ```sh
 git clone --branch stable https://github.com/bonomani/xymon-plugins   # update later with git pull
-curl -L https://github.com/bonomani/xymon-plugins/archive/refs/heads/stable.tar.gz | tar xz
 ```
 
-or the [zip](https://github.com/bonomani/xymon-plugins/archive/refs/heads/stable.zip).
-A clone is the better choice: it updates with `git pull`, and can be asked
-how far behind it is.
+or the [tarball](https://github.com/bonomani/xymon-plugins/archive/refs/heads/stable.tar.gz)
+or [zip](https://github.com/bonomani/xymon-plugins/archive/refs/heads/stable.zip).
+A clone is the better choice: it updates with `git pull`, and
+`git fetch -q && git log --oneline HEAD..origin/stable` says what an update
+would bring.
+
+A machine that will only read the API can instead take the code from the
+Xymon server once the plugins are installed there, at the versions it runs:
+
+```sh
+curl --cacert ~/.config/xymon-api/xymon-ca.pem https://xymon.example.ch/xymon/api/v1/client | tar xz
+```
+
+`--cacert` names the server's certificate when it is not one the machine
+trusts already; `xymonapi`'s README says where to get it. Never `-k`: code
+fetched without checking the certificate could be anyone's.
 
 ## Installing
 
-The download holds every plugin; install only those you want, each from its
-own directory, as its README says. A plugin's `make install` (on the Xymon
-server) or `make install-client` (elsewhere) installs first any plugin it
-needs, so one command is enough:
+Every plugin installs the same way, from its own directory, and each
+README says only what is particular to it. A plugin has two sides, and
+you install the one the machine plays:
 
-```sh
-cd plugins/NAME && make install XYMONHOME=/usr/lib/xymon/server   # on the server
-cd plugins/NAME && make install-client                           # elsewhere
-```
+| side | where | command | puts |
+|---|---|---|---|
+| server | the Xymon server, as the user that may write its directory, usually root | `make install XYMONHOME=/usr/lib/xymon/server` | the code in `$XYMONHOME/ext/NAME/`, its task in `$XYMONHOME/etc/tasks.d/`, written `DISABLED`, its manual page under `MANDIR` (`/usr/share/man`) |
+| client | any machine that reads the API, as yourself | `make install-client` | the code in `$PREFIX/libexec/xymon-plugins/NAME/`, its command in `$PREFIX/bin`, its manual page in `$PREFIX/share/man/man1`; `PREFIX` is `~/.local` |
 
-Run again, it updates the plugin; `make uninstall` or `make uninstall-client`
-removes it. The same targets at the top act on every plugin of one side, and
-the uninstall there removes the virtualenv below too.
+A plugin that needs another installs it first, so one command is enough,
+and the same two targets at the repository's top install every plugin of a
+side. `DESTDIR` stages either side for a package. The server install also
+copies each plugin into what the API serves at `/client`, for other
+machines to install from.
 
-The launchers run with the Python `XYMONAPI_PYTHON` names, else with the
-virtualenv beside the installed plugins when there is one, else with the
-`python3` on PATH, asking first when a person is at the terminal. Installing
-a plugin that needs modules makes that virtualenv when the machine already
-has a Python with them, the newest, and downloads nothing; otherwise
-`make venv` (on the server) or `make venv-client` makes it and installs the
-modules of the plugins installed there.
+**Python.** Every plugin runs on Python 3.9 or later, and the install
+downloads no module. When the machine already has a Python with the modules
+a plugin needs -- the newest of `python3.14` down to `python3` on PATH and
+in Homebrew's and pyenv's directories, or the one `PYTHON=` names -- the
+install makes a virtualenv beside the plugins from it, `ext/venv` on the
+server and `libexec/xymon-plugins/venv` elsewhere, pinning that interpreter
+and fetching nothing. When no Python has them, the install says so and
+names the newest Python it found; `make venv XYMONHOME=... PYTHON=...` on
+the server, or `make venv-client PYTHON=...` elsewhere, then makes the
+virtualenv and installs into it, from PyPI, the modules of every plugin
+installed there. The launchers run with `XYMONAPI_PYTHON` when it is set,
+else with that virtualenv, else with the `python3` on PATH -- asking first
+when a person is at the terminal, saying so on stderr when none is -- which
+must then have the modules, importable by the user Xymon runs as.
+
+**Enabling.** A server task is installed `DISABLED`, so that installing
+changes nothing until you remove that line from its file; xymonlaunch
+notices and starts it. A later install leaves the task file as you left
+it.
+
+**Updating.** Run the same install again, from an updated checkout or a
+fresh `/client` download. The server install replaces the plugin's code and
+keeps your task file, snippets and settings; a task that is running keeps
+the old code until it is stopped, and xymonlaunch starts the new.
+
+**Uninstalling.** `make uninstall XYMONHOME=...` or `make uninstall-client`
+in a plugin's directory removes that plugin alone, and refuses while another
+installed plugin needs it, naming it; at the repository's top, every plugin
+of the side and the virtualenv beside them. Each says what it keeps.
 
 ## Versions
 

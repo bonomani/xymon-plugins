@@ -8,63 +8,61 @@ setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 
 ## Needs
 
-- **On the server:** [`xymonapi`](../xymonapi/README.md), which serves the
-  index at `/search` and whose client it uses. `make install` here installs
-  it first; the API's task must then be enabled, as its README says, for
-  the search to be served.
-- **On another machine:** `xymonapi`'s client beside it, which
-  `make install-client` here installs first, and a running API, reached
-  over the network, as `XYMONAPI_URL` says.
-- Python 3.9 or later, and the modules in
-  [`requirements.txt`](requirements.txt) on the server, and on any machine
-  that keeps an index of its own.
+- **[`xymonapi`](../xymonapi/README.md)**: on the server, the API, which
+  serves the index at `/search` and whose code the index task reads the
+  history with; elsewhere, its client. Either install here brings the one it
+  needs.
+- Python 3.9 or later. The modules in [`requirements.txt`](requirements.txt)
+  are needed on the server, and on a machine that keeps an index of its own;
+  how the install finds or makes a Python with them is in the [top
+  README](../../README.md#installing).
 
 ## On the server
 
-`make install` puts it in `$XYMONHOME/ext/xymonapi-rag/`, beside the
-`xymonapi` it reads the API with, its manual page in
-`$MANDIR/man1/`, and a daily `xymonlaunch` task, `tasks.d/xymonapi-rag`,
-written `DISABLED`; it also stages this directory for other machines, in
-what the server's `/client` serves. To enable it:
+```sh
+make install XYMONHOME=/usr/lib/xymon/server
+```
 
-1. have the modules in [`requirements.txt`](requirements.txt): when a Python
-   on the machine has them, `make install` has made the virtualenv beside the
-   plugins from it, and there is nothing to do; otherwise `make venv
-   XYMONHOME=...` makes it and installs them;
-2. put `XYMONAPI_RAG_DOCS` -- a directory with Xymon's manual pages;
-   `/usr/share/man` will do -- in a file under `xymonserver.d/`;
-3. remove `DISABLED` from the task.
+It installs the daily index task, `$XYMONHOME/etc/tasks.d/xymonapi-rag`,
+written `DISABLED`. To enable it, put `XYMONAPI_RAG_DOCS` -- a directory
+with Xymon's manual pages; `/usr/share/man` will do -- in a file under
+`xymonserver.d/`, then remove `DISABLED` from the task. The API's own task
+must run too, for the search to be served.
 
-The task reads the history from xymond's own files, as the API does: it needs
-no user, password or token. The first run downloads a 65 MB embedding model,
-which `XYMONAPI_RAG_OFFLINE` can forbid once the cache is seeded, and takes
-about a minute; the next ones embed only what is new and take seconds. The
-index holds the last 30 days of history, the newest 5000 changes at most, and
-the API serves it as soon as it is written.
+The task reads the history from xymond's own files, as the API does, and
+needs no credential. Its first run downloads a 65 MB embedding model and
+takes about a minute; the next ones embed only what is new and take
+seconds. `XYMONAPI_RAG_OFFLINE` forbids the download once the cache is
+seeded. The index holds the last 30 days of history, the newest 5000
+changes at most, and the API serves it as soon as it is written.
 
-## Anywhere with access to the API
+From a shell on the server, the installed launcher searches with no
+setting and no token when run through `xymoncmd`, which gives it `XYMONVAR`
+and so the API's socket, `$XYMONVAR/xymonapi/api.sock` (`xymonapi.8`,
+`XYMONAPI_SOCKET`):
 
 ```sh
+xymoncmd $XYMONHOME/ext/xymonapi-rag/xymonapi-rag.sh search "what does purple mean"
+```
+
+Without `xymoncmd`, set `XYMONAPI_URL=unix:` followed by that path.
+
+`make uninstall XYMONHOME=...` keeps the index, `$XYMONAPI_RAG_INDEX`.
+
+## On another machine
+
+```sh
+cd xymon-plugins/plugins/xymonapi-rag    # the code: top README, Getting the code
+make install-client                      # under ~/.local; PREFIX=... for elsewhere
+set -a; eval "$(xymonapi-connect https://xymon.example.ch)"; set +a
 xymonapi-rag search "what does purple mean"
 xymonapi-rag ask "has /boot filled up before, and where?"
 ```
 
-On the server itself nothing is asked: run through `xymoncmd`, or with
-`XYMONAPI_URL=unix:$XYMONVAR/xymonapi/api.sock`, the search reads the API's
-own socket, which the Xymon user and its group reach with no token
-(`xymonapi.8`, `XYMONAPI_SOCKET`).
-
-On another machine, `make install-client` here -- from a clone, or from the
-code the server's `/client` gives, as [`xymonapi`'s
-README](../xymonapi/README.md#setting-up-another-machine) shows -- installs it
-under `$PREFIX/libexec/xymon-plugins/` with the command `xymonapi-rag` in
-`$PREFIX/bin` (`~/.local` by default). `xymonapi-connect`, installed with
-it, gets that machine its token and prints the settings `xymonapi-rag`
-reads; to put them in the shell's environment:
-
-```sh
-set -a; eval "$(xymonapi-connect https://xymon.example.ch)"; set +a
-```
+`xymonapi-connect`, installed with the client, gets this machine its token
+with your password once, as [`xymonapi`'s
+README](../xymonapi/README.md#on-another-machine) says, and prints the
+settings `xymonapi-rag` reads; the `eval` puts them in the shell.
 
 `search` uses the server's index when there is none here. `ask` hands the
 passages to a language model speaking the OpenAI-compatible API -- a local
@@ -72,9 +70,7 @@ Ollama by default, LM Studio with two settings. Pick the model with care: a
 small one such as `llama3.2` answers in a second but makes things up, where a
 larger one says when the passages do not hold the answer.
 
-`make uninstall` (on the server, where it also takes it out of what
-`/client` serves) or `make uninstall-client` removes it, and keeps the
-plugins it brought, which may serve others, and its index.
+`make uninstall-client` keeps any index here, `$XYMONAPI_RAG_INDEX`.
 
 `eval` scores the search against a file of questions;
 [`tests/eval/docs.json`](../../tests/eval/docs.json) is the one CI runs.

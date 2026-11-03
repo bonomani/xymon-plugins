@@ -10,65 +10,57 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
 ## Needs
 
-- **A running [`xymonapi`](../xymonapi/README.md)**, on the Xymon server,
-  reached over the network: install and enable it there first. On another
-  machine, this plugin does not install it; it installs `xymonapi`'s client
-  alone beside it.
+- **A running [`xymonapi`](../xymonapi/README.md)** on the Xymon server,
+  reached through its socket from that machine and over the network from
+  any other; install and enable it there first. This plugin installs
+  `xymonapi`'s client beside itself, never the API.
 - Python 3.9 or later, and nothing else: it speaks the protocol with the
   standard library.
 
-## Installing
-
-Get the code from the Xymon server, at its versions, or from a clone of
-this repository, then install and register:
+## On the machine where the AI client runs
 
 ```sh
-curl --cacert ~/.config/xymon-api/xymon-ca.pem \
-  https://xymon.example.ch/xymon/api/v1/client | tar xz
-# or: git clone --branch stable https://github.com/bonomani/xymon-plugins
-cd xymon-plugins/plugins/xymonapi-mcp
-make install-client                # under ~/.local; PREFIX=... for elsewhere
+cd xymon-plugins/plugins/xymonapi-mcp    # the code: top README, Getting the code
+make install-client                      # under ~/.local; PREFIX=... for elsewhere
 xymonapi-mcp register https://xymon.example.ch
 ```
 
+`register` connects this machine to the API with `xymonapi-connect` --
+your password once, for a token of its own, as [`xymonapi`'s
+README](../xymonapi/README.md#on-another-machine) says -- then registers
+the server with Claude Code and Codex as `xymon`. Then ask your AI client
+"which hosts are red?". `register URL xymon-lab` names a second server; a
+client that is neither of those two is [registered by
+hand](#registering-it-by-hand).
+
 On the Xymon server itself, give `register` the API's socket instead of a
-URL, `unix:$XYMONVAR/xymonapi/api.sock`: no password and no token, since
-the socket's permissions already say who may read the API (`xymonapi.8`,
-`XYMONAPI_SOCKET`).
-
-Then ask your AI client "which hosts are red?". The server's `/client`
-holds this plugin when `make install`, here or at the repository's top, ran
-on the server, which stages it there and runs nothing of it. Leave out
-`--cacert` when this machine trusts the server's certificate already;
-otherwise copy it there first, as [`xymonapi`'s
-README](../xymonapi/README.md#setting-up-another-machine) says.
-
-`make install-client` puts the command `xymonapi-mcp` in `$PREFIX/bin` and
-the code under `$PREFIX/libexec/xymon-plugins/xymonapi-mcp`, after
-`xymonapi`'s client and `xymonapi-connect`. `register` connects this machine
-to the API with `xymonapi-connect` -- your password once, for a token of its
-own; nothing for the socket -- then registers the server with Claude Code and Codex as `xymon`;
-`register URL xymon-lab` names a second server.
+URL: `unix:$XYMONVAR/xymonapi/api.sock`. Nothing is asked and no token is
+kept, since the socket's permissions already say who may read the API
+(`xymonapi.8`, `XYMONAPI_SOCKET`).
 
 Claude Code can also install it as a plugin, from this repository's
-marketplace at its branch `stable`, the code every test passed:
+marketplace at its branch `stable`:
 
 ```
 /plugin marketplace add https://github.com/bonomani/xymon-plugins.git#stable
 /plugin install xymonapi-mcp@xymon-plugins
 ```
 
-The plugin carries its copy of `xymonapi`'s client. It then takes
-`XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and `XYMONAPI_PYTHON`
-from your environment, defaults in [`.mcp.json`](.mcp.json), and still needs
-a token, which `xymonapi-connect` gets -- installed with `xymonapi`'s client,
-by `make install-client` in `plugins/xymonapi`: use `register` or the
-marketplace, not both.
+That copy takes `XYMONAPI_URL`, `XYMONAPI_TOKEN_FILE`, `XYMONAPI_CA` and
+`XYMONAPI_PYTHON` from your environment, defaults in
+[`.mcp.json`](.mcp.json), and still needs the token `xymonapi-connect`
+gets, installed by `make install-client` in `plugins/xymonapi`. Use
+`register` or the marketplace, not both.
 
-`make uninstall-client` removes it, keeps `xymonapi`'s client, and says what
-`register` did besides, to undo by hand: the registrations in Claude
-Code and Codex, and this machine's token, to revoke on the server and delete
-here.
+`make uninstall-client` removes this plugin and says what `register` did
+besides, to undo by hand: the registrations in Claude Code and Codex, and
+this machine's token.
+
+## On the Xymon server
+
+`make install XYMONHOME=...` runs nothing of this plugin there: it stages
+it in what the API serves at `/client`, so that the machines above can
+install it from the server, at its version.
 
 ## Registering it by hand
 

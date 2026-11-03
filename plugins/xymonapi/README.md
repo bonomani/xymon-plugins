@@ -30,68 +30,44 @@ numbered rules every implementation keeps.
   `xymonserver.d/`, which no release reads yet; on 4.3.30 a file there is
   ignored, and with it the password the API should ask for.
 - Python 3.9 or later, with the modules in
-  [`requirements.txt`](requirements.txt).
+  [`requirements.txt`](requirements.txt): how the install finds or makes a
+  Python with them is in the [top README](../../README.md#installing).
 - `rrdtool`, for `/series`; a web server running Xymon's CGI programs at
   `XYMONSERVERCGIURL`, for `/graphs`; Apache's `htpasswd`, when a password
   file is used.
 
-## Installing
+## On the server
 
 ```sh
 make install XYMONHOME=/usr/lib/xymon/server
 ```
 
-Run here, it installs the API alone; run at the repository's top, every
-server-side plugin. It writes into the Xymon server directory, so it is
-normally run as root. `MANDIR` (default `/usr/share/man`) says where the
-manual page goes, and `DESTDIR` stages the install for a package.
-`make install-client` installs only the API's client, for another machine:
-see [Setting up another machine](#setting-up-another-machine).
-
-| installed | from |
-|---|---|
-| `$XYMONHOME/ext/xymonapi/`: the code, `openapi.yaml`, `requirements.txt` and the launcher `xymonapi.sh` | this directory |
-| `$XYMONHOME/ext/xymonapi/VERSION`, which `/health` gives | the release tag the checkout is at, else `version` in [`PLUGIN`](PLUGIN) |
-| `$XYMONHOME/etc/tasks.d/xymonapi`, the task, written `DISABLED`, and only when there is none | `xymonapi.tasks.DIST` |
-| `$XYMONHOME/etc/xymonapi-{apache,nginx,lighttpd}.conf`, web server snippets, written once | the files of the same name |
-| `$MANDIR/man8/xymonapi.8` | [`xymonapi.8`](xymonapi.8) |
-| `$XYMONHOME/ext/xymon-plugins-client/plugins/xymonapi/`, what `/client` serves | this directory, without its tests |
-
+Besides the code, the task and the manual page, which every plugin
+installs ([top README](../../README.md#installing)), it writes once the web
+server snippets `$XYMONHOME/etc/xymonapi-{apache,nginx,lighttpd}.conf`, for
+[other machines](#reaching-it-from-another-machine), and keeps them after.
 Xymon's own install links `$XYMONHOME/ext` and `$XYMONHOME/etc` to wherever
 those really are -- `/etc/xymon` on many installations -- so the files land
-there. With `DESTDIR`, the staged directories are plain ones: a package built
-from that stage should check how its tool installs a directory over a link.
+there; with `DESTDIR`, the staged directories are plain ones.
 
-The Python modules are not downloaded by the install. When the machine has
-a Python 3.9 or later with them already -- the newest of `python3.14` down to
-`python3`, on PATH and in Homebrew's and pyenv's directories, or the one
-`PYTHON=` names -- the install makes a virtualenv beside the plugins,
-`$XYMONHOME/ext/venv`, from it, pinning that interpreter and fetching
-nothing. When no Python has them, it says so and names the newest found:
-`make venv XYMONHOME=... PYTHON=...` then makes the virtualenv and installs
-the modules of every plugin there, from PyPI. The launchers run with the
-virtualenv unless `XYMONAPI_PYTHON` names another Python, and without one
-fall back to the `python3` on PATH, which must then have the modules,
-importable by the user Xymon runs as. `pip install --user` run as root puts
-them where that user does not look.
-
-Then remove `DISABLED` from the task, and check, with the default address:
+Then remove `DISABLED` from `$XYMONHOME/etc/tasks.d/xymonapi`, and check:
 
 ```sh
-curl http://127.0.0.1:1986/xymon/api/v1/health
-```
-
-A `401` means it runs and asks for a user: add `-u` with one of its users
-(see [Users](#users)). The programs of the server itself have a door that
-asks none, the API's Unix socket, `$XYMONVAR/xymonapi/api.sock`, which the
-Xymon user and its group reach:
-
-```sh
+curl http://127.0.0.1:1986/xymon/api/v1/health              # the port: 401 means it runs and asks for a user
 curl --unix-socket "$XYMONVAR/xymonapi/api.sock" http://localhost/xymon/api/v1/health
 ```
 
-The plugins' own clients take it by default there, as `xymonapi.8` says
-under `XYMONAPI_SOCKET`.
+The port asks for one of its [users](#users), `-u alice`, whatever the
+address. The socket, `$XYMONVAR/xymonapi/api.sock`, is for the programs of
+the server itself and asks none: its permissions let the Xymon user and its
+group in, and nobody else. The plugins' own clients take it by default
+there (`xymonapi.8`, `XYMONAPI_SOCKET`).
+
+Updating: install again, then `pkill -f "$XYMONHOME/ext/xymonapi/"`; the
+running API keeps the old code until then, and xymonlaunch starts the new.
+`make uninstall XYMONHOME=...` keeps the snippets -- take the `Include` out
+of your web server's configuration before deleting them -- and the tokens
+file, `$XYMONAPI_TOKENS`.
 
 ## Users
 
@@ -108,35 +84,6 @@ file, the API asks for no password at all -- fine while it listens on
 127.0.0.1 alone, not once other machines reach it. `XYMONAPI_PASSWD` names
 another file, as `xymonapi.8` says.
 
-## Updating
-
-```sh
-git pull && make install XYMONHOME=...      # in the checkout, as before
-pkill -f "$XYMONHOME/ext/xymonapi/"          # the running API keeps the old code until then
-```
-
-The install replaces the plugin's directory and keeps the task file you
-enabled, the web server snippets and your settings; xymonlaunch starts the
-new code once the old process is gone. A machine that installed from
-`/client` gets the new code by downloading it again and running
-`make install-client`; `xymonapi-connect`, run there, says whether it is
-behind. What an update would bring, before pulling:
-`git fetch -q && git log --oneline HEAD..origin/stable`.
-
-## Uninstalling
-
-```sh
-make uninstall XYMONHOME=...
-```
-
-Run here, it removes the API alone, and is refused, naming the plugin, while
-another installed one needs it; at the repository's top, every server-side
-plugin and the virtualenv beside them. It removes the code, what `/client`
-serves of it, the manual page and the task. It keeps the web server snippets -- take the `Include` out of
-your web server's configuration before deleting them -- and the tokens
-file, `$XYMONAPI_TOKENS`.
-`make uninstall-client` removes the client, refused in the same way.
-
 ## Reaching it from another machine
 
 Its port listens on 127.0.0.1 unless told otherwise, and asks the password
@@ -149,8 +96,8 @@ another machine, use HTTPS, one of:
   `XYMONAPI_TLS_CERT` and `_KEY`. Open the port with
   `XYMONAPI_LISTEN="0.0.0.0:1986"`.
 - **The web server in front of it.** Include the snippet `make install` wrote
-  for your web server in its HTTPS part: one hostname for the pages and the
-  API.
+  for your web server, `$XYMONHOME/etc/xymonapi-*.conf`, in its HTTPS part:
+  one hostname for the pages and the API.
 - **An SSH tunnel**, for one person:
   `ssh -L 1986:127.0.0.1:1986 xymon-server`, then the API is at
   `http://127.0.0.1:1986` as if local.
@@ -161,41 +108,33 @@ themselves are plain and trusted. Whichever you choose, keep secrets out of
 the texts: `XYMONAPI_HIDE` names a file of regular expressions whose matches
 come out as `[hidden]`, in every text and in the search index.
 
-## Setting up another machine
+## On another machine
 
 A machine that reads the API -- a laptop, say -- needs its client and a
 token of its own, and for that `make`, `curl` and Python 3.9 or later,
-nothing else. Get the code from this server, at its versions, or from a
-clone of this repository:
+nothing else:
 
 ```sh
 # Only when the certificate is the server's own, not one the machine trusts:
 # copy it where xymonapi-connect looks, over a channel you already trust.
-# Otherwise leave out these two lines and the --cacert option below.
 mkdir -p ~/.config/xymon-api
 scp xymon.example.ch:/etc/xymon/tls/xymond.pem ~/.config/xymon-api/xymon-ca.pem
 
-curl --cacert ~/.config/xymon-api/xymon-ca.pem \
-  https://xymon.example.ch/xymon/api/v1/client | tar xz
-cd xymon-plugins/plugins/xymonapi
-make install-client                       # under ~/.local; PREFIX=... for elsewhere
+cd xymon-plugins/plugins/xymonapi        # the code: top README, Getting the code
+make install-client                      # under ~/.local; PREFIX=... for elsewhere
 xymonapi-connect https://xymon.example.ch
 ```
 
-Never `-k`: code fetched without checking the certificate could be
-anyone's. `/client` asks for no password: it holds the code and nothing
-secret.
-
-`make install-client` puts the client under
-`$PREFIX/libexec/xymon-plugins/xymonapi`, the command `xymonapi-connect` in
-`$PREFIX/bin` and its manual page under `$PREFIX/share/man/man1`.
-`xymonapi-connect` asks for your user and password once --
-one of the API's [users](#users) -- to get this machine a token, kept in
+`xymonapi-connect` asks for your user and password once -- one of the API's
+[users](#users) -- to get this machine a token, kept in
 `~/.config/xymon-api/xymon.token`; the password is not kept. Run again, it
-keeps a token that works. It says when this machine's client and the API
-run different versions, and prints the settings a program reading the API
+keeps a token that works, says when this machine's client and the API run
+different versions, and prints the settings a program reading the API
 needs. A second server gets a name of its own:
 `xymonapi-connect https://lab.example.ch xymon-lab`. `/tokens` lists your
 machines and revokes one, and removing a user from the password file
 revokes all of theirs. Every detail is in
 [`xymonapi-connect.1`](xymonapi-connect.1).
+
+`make uninstall-client` keeps the token: revoke it with `/tokens`, or delete
+`~/.config/xymon-api/xymon.token`.
