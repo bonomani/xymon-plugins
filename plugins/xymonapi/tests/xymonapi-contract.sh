@@ -8,7 +8,7 @@
 # parameter that is not a name, no RRD file, xymond not answering, a path
 # that is not the API's, a method a path does not take, no user where one is
 # asked -- and each answer's status and error are the expected ones, and
-# the error is in the spec's closed list. /client answers without a user
+# the error is in the spec's closed list. /plugins answers without a user
 # even where every other path asks for one. Every answer carries an
 # X-Request-Id: the client's when it is a valid one, the API's otherwise,
 # and a failure's is in the API's log.
@@ -76,16 +76,16 @@ rid trace-me-0042 "$v1/no-such-path" > /dev/null
 grep -q 'trace-me-0042.*answered 404' "$work/api.log" || fail "[C5] the failure is not in the log with its id: $(tail -n 3 "$work/api.log")"
 stop_process "$API_PID"; API_PID=""
 
-# With a password asked: no user is unauthorized, everywhere but /client.
+# With a password asked: no user is unauthorized, everywhere but /plugins.
 command -v htpasswd >/dev/null 2>&1 || skip "Apache's htpasswd is not installed"
 htpasswd -cbB "$work/htpasswd" alice secret 2>/dev/null
 XYMONAPI_PASSWD="$work/htpasswd" XYMONAPI_TOKENS="$work/tokens" start_api
 answer '[C3]' GET "$v1/alarms" 401 unauthorized
 answer '[C3]' GET "$v1/no-such-path" 401 unauthorized
 answer '[C3]' GET "$v1/alarms" 502 upstream -u alice:secret
-# /client answers without a user: here, run from the repository with
+# /plugins answers without a user: here, run from the repository with
 # nothing staged, that nothing is staged, not that a user is missing.
-answer '[C4]' GET "$v1/client" 404 not_found
-assert_contains "make install there stages it" "$(curl -s "http://127.0.0.1:$API_PORT$v1/client")" "and what to do about it"
+answer '[C4]' GET "$v1/plugins" 404 not_found
+assert_contains "make install there stages it" "$(curl -s "http://127.0.0.1:$API_PORT$v1/plugins")" "and what to do about it"
 
-pass "every failure is an error openapi.yaml lists, with its status, every answer an X-Request-Id, and /client needs no user"
+pass "every failure is an error openapi.yaml lists, with its status, every answer an X-Request-Id, and /plugins needs no user"

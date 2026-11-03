@@ -148,7 +148,7 @@ A test belongs to the plugin it checks, under `plugins/<name>/tests/`, and
 may start the plugins that one requires, never others: `xymonapi-mcp`'s
 tests start an API, `xymonapi`'s start nothing of the other plugins. A test
 of how the plugins fit together -- installing them all, installing from
-the server's `/client`, the floors agreeing -- goes under `tests/compat/`. Helpers
+the server's `/plugins`, the floors agreeing -- goes under `tests/compat/`. Helpers
 shared by several tests are under `tests/lib/`. Each test says at its top
 what it checks and what it needs.
 Unlike Xymon's, a test here may use Python: a helper written in Python goes

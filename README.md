@@ -45,12 +45,12 @@ A machine that will only read the API can instead take the code from the
 Xymon server once the plugins are installed there, at the versions it runs:
 
 ```sh
-curl --cacert ~/.config/xymon-api/xymon-ca.pem https://xymon.example.ch/xymon/api/v1/client | tar xz
+curl --cacert ~/.config/xymon-api/xymon-ca.pem https://xymon.example.ch/xymon/api/v1/plugins | tar xz
 ```
 
 The address is the API's URL as `xymonapi`'s README gives it for each way of
 reaching it -- port included when it is not 443 -- followed by
-`/xymon/api/v1/client`. `--cacert` names the server's certificate when it
+`/xymon/api/v1/plugins`. `--cacert` names the server's certificate when it
 is not one the machine trusts already; `xymonapi`'s README says where to get
 it. Never `-k`: code
 fetched without checking the certificate could be anyone's.
@@ -69,7 +69,7 @@ you install the one the machine plays:
 A plugin that needs another installs it first, so one command is enough,
 and the same two targets at the repository's top install every plugin of a
 side. `DESTDIR` stages either side for a package. The server install also
-copies each plugin into what the API serves at `/client`, for other
+copies each plugin into what the API serves at `/plugins`, for other
 machines to install from.
 
 **Python.** Every plugin runs on Python 3.9 or later. Only those that need
@@ -96,7 +96,7 @@ notices and starts it. A later install leaves the task file as you left
 it.
 
 **Updating.** Run the same install again, from an updated checkout or a
-fresh `/client` download. The server install replaces the plugin's code and
+fresh `/plugins` download. The server install replaces the plugin's code and
 keeps your task file, snippets and settings; a task that is running keeps
 the old code until it is stopped, and xymonlaunch starts the new.
 

@@ -16,7 +16,7 @@ Its operations, under `/xymon/api/v1`, all GET but for `/tokens`:
 | `/series`, `/graphs` | the values of one RRD dataset; the PNG showgraph draws |
 | `/events`, `/histlog` | the colour changes, newest first; the status text saved at one |
 | `/search` | the manual-page and history passages nearest a question, when the server has a search index |
-| `/client` | the code of the plugins installed here, for other machines to install from |
+| `/plugins` | the plugins installed here, for other machines to install from |
 | `/tokens` | a machine's own token, listed, made and revoked with your password |
 
 [`xymonapi.8`](xymonapi.8) describes every operation and setting, for an

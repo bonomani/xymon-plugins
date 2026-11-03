@@ -5,6 +5,13 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## xymonapi 2.0.0
+
+`/client` is now `/plugins`, what it gives unchanged: the plugins installed
+on the server, as a `.tar.gz`. Machines already installed need nothing; one
+downloading the code from the server asks for
+`https://SERVER/xymon/api/v1/plugins` instead.
+
 ## xymonapi 1.0.0
 
 `/client` gives the code of the plugins installed on the server, as a

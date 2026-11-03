@@ -40,7 +40,7 @@ CLIENTROOT = $(DESTDIR)$(PREFIX)/libexec/xymon-plugins
 CLIENT = $(CLIENTROOT)/$(PLUGIN)
 BIN = $(DESTDIR)$(PREFIX)/bin
 CLIENTMAN1 = $(DESTDIR)$(PREFIX)/share/man/man1
-# What other machines install from, which the API serves at /client: each
+# What other machines install from, which the API serves at /plugins: each
 # plugin installed on the server stages its directory here, as in the
 # repository, beside build/ and the top Makefile.
 DIST = $(EXTROOT)/xymon-plugins-client

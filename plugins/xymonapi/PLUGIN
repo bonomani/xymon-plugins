@@ -1,7 +1,7 @@
 # What this plugin is, for the index in README.md and for whoever installs
 # it alone. One key per line; the Makefile beside it does the installing.
 name: xymonapi
-version: 1.0.0
+version: 2.0.0
 side: server, client
 summary: a read-only HTTP and JSON interface to a Xymon server, as one of its xymonlaunch tasks, and its client
 requires: on the server, xymon >= 4.3.31 (main); python >= 3.9

@@ -17,7 +17,7 @@ FILES = server.py xymonapi-mcp.sh
 all:
 
 # Nothing of it runs on the server: it is staged there, for the machines that
-# install from the server's /client. The directory an older install put in
+# install from the server's /plugins. The directory an older install put in
 # ext/ goes.
 install:
 	$(need_home)

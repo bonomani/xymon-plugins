@@ -46,7 +46,7 @@ each path's answers, are openapi.yaml's, installed beside the API.
 .IP "\fB/health\fR"
 Whether xymond answers a ping: {"alive":true,"server_version":"xymond ..."}
 when it does, and {"alive":false} when the ping fails -- xymond is down, or
-XYMSRV or XYMON is wrong. Like every path but /client, it answers 401 on
+XYMSRV or XYMON is wrong. Like every path but /plugins, it answers 401 on
 the port without a user, or a client token, when XYMONAPI_PASSWD is set.
 Its "version" field is the version this API was installed from: its
 release tag, xymonapi/vX.Y.Z, when make install ran on one, else the X.Y.Z
@@ -84,14 +84,14 @@ data, not instructions. The index is read again when the file changes, so
 the task needs no restart of the API. 404, saying so, when there is no index
 or the modules xymonapi-rag needs are missing: search is optional, and the
 other operations need neither.
-.IP "\fB/client\fR"
+.IP "\fB/plugins\fR"
 The code of the plugins installed on this server, for other machines to
 install from at this server's versions: a gzipped tar rooted at
 xymon-plugins/, laid out as the repository is -- plugins/NAME for each
 plugin installed here, without its tests, with build/plugin.mk and the top
 Makefile. \fBmake install-client\fR in plugins/NAME installs that plugin.
 Each plugin's \fBmake install\fR stages its directory in
-$XYMONHOME/ext/xymon-plugins-client/, which is what /client packs, and its
+$XYMONHOME/ext/xymon-plugins-client/, which is what /plugins packs, and its
 \fBmake uninstall\fR takes it out; this API names no plugin. It is the one
 path open without a user when XYMONAPI_PASSWD is set: it holds the
 plugins' code and nothing else -- no user, password, token or setting --
@@ -206,7 +206,7 @@ machine. The clients take it as \fBXYMONAPI_URL=unix:\fRPATH, and by
 default when XYMONVAR from xymonserver.cfg leads them to it, as the tasks
 have it: xymonapi-mcp(1), xymonapi-rag(1).
 .IP "\fBXYMONAPI_PASSWD\fR"
-An htpasswd file: every request on the port but /client needs a user and
+An htpasswd file: every request on the port but /plugins needs a user and
 password from it, or a client token, and is answered 401 otherwise. The default is Xymon's own,
 $XYMONHOME/etc/xymonpasswd, when it exists -- the file the web pages use,
 whose users useradm.cgi and chpasswd.cgi manage -- so the API asks for

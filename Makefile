@@ -13,7 +13,7 @@
 # A plugin that needs another installs it first, so the lists name only the
 # ends: xymonapi-mcp and xymonapi-rag bring xymonapi with them, its client
 # on a laptop, the API on the server. The MCP server runs on a laptop; the
-# server only stages it, for laptops to install from its /client.
+# server only stages it, for laptops to install from its /plugins.
 
 SERVER = xymonapi-mcp xymonapi-rag
 CLIENT = xymonapi-mcp xymonapi-rag

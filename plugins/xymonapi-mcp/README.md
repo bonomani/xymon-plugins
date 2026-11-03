@@ -63,7 +63,7 @@ this machine's token.
 ## On the Xymon server
 
 `make install XYMONHOME=...` installs the API first, when it is not there,
-and stages this plugin in what the API serves at `/client`, for the
+and stages this plugin in what the API serves at `/plugins`, for the
 machines above to install it from, at the server's version. It installs no
 command on the server: an MCP server runs where the AI client runs.
 

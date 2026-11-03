@@ -6,7 +6,7 @@
 #   make install-client [PREFIX=$HOME/.local]      its client alone, elsewhere
 #
 # It needs nothing else to run. make install also stages this directory for
-# other machines, which /client serves with every plugin staged there.
+# other machines, which /plugins serves with every plugin staged there.
 
 PLUGIN = xymonapi
 include ../../build/plugin.mk

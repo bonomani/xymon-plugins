@@ -9,11 +9,11 @@
 # its default and what Xymon's useradm and chpasswd create, and bcrypt. Every
 # path is covered, /openapi.json and FastAPI's /docs included. A user
 # name that looks like an option is refused, not passed to htpasswd as one.
-# A password file the API cannot read stops it from starting. /client alone
+# A password file the API cannot read stops it from starting. /plugins alone
 # is open: it gives the code of the plugins staged here, an archive rooted
 # at xymon-plugins/, with no password or tokens file in it; /health gives
 # the version, to a user, and only fields the spec lists. Installing from
-# that archive is tests/compat/xymonapi-client.sh's.
+# that archive is tests/compat/xymonapi-plugins.sh's.
 #
 # Skips where the API cannot run (tests/lib/xymonapi.sh). Needs the xymon
 # client of the Xymon tree in XYMON_SRC (for a free port), Apache's htpasswd
@@ -46,7 +46,7 @@ printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
 API_ROOT=$work/inst/ext/xymonapi
 
 # The answers checked here need no xymond: /health says alive:false without
-# one, and the password is checked first, on every path but /client.
+# one, and the password is checked first, on every path but /plugins.
 export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONAPI_PASSWD="$work/htpasswd" \
 	XYMONAPI_TOKENS="$work/tokens/tokens"
 start_api
@@ -71,15 +71,15 @@ for path in /openapi.json /docs; do
 	assert_equal "200" "$(curl -s -o /dev/null -w '%{http_code}' -u alice:secret "http://127.0.0.1:$API_PORT$path")" "$path with a user"
 done
 
-# /client: open, a password set or not, since what it gives is the plugins'
+# /plugins: open, a password set or not, since what it gives is the plugins'
 # code, as the repository has it: no user, password, token or setting.
-assert_equal "200" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/client")" "[C4] /client without a user"
-curl -s -o "$work/client.tgz" "http://127.0.0.1:$API_PORT/xymon/api/v1/client"
+assert_equal "200" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/plugins")" "[C4] /plugins without a user"
+curl -s -o "$work/plugins.tgz" "http://127.0.0.1:$API_PORT/xymon/api/v1/plugins"
 mkdir -p "$work/unpacked"
-tar -xzf "$work/client.tgz" -C "$work/unpacked" || fail "/client's answer is not a gzipped tar"
+tar -xzf "$work/plugins.tgz" -C "$work/unpacked" || fail "/plugins' answer is not a gzipped tar"
 assert_equal "xymon-plugins" "$(ls "$work/unpacked")" "rooted at xymon-plugins/"
-grep -rqF "$(cut -d: -f2 "$work/htpasswd" | head -n 1)" "$work/unpacked" && fail "[C4] /client gave the password file's contents"
-find "$work/unpacked" -type f -name tokens | grep -q . && fail "[C4] /client gave a tokens file"
+grep -rqF "$(cut -d: -f2 "$work/htpasswd" | head -n 1)" "$work/unpacked" && fail "[C4] /plugins gave the password file's contents"
+find "$work/unpacked" -type f -name tokens | grep -q . && fail "[C4] /plugins gave a tokens file"
 assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user"
 assert_not_contains "$version" "$(curl -s "$url")" "and not to a stranger"
 # Every field /health gives is one the spec lists for it: a field renamed in

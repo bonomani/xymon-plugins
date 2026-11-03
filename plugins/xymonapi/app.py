@@ -238,7 +238,7 @@ def installed_version() -> str:
     return ref if _VERSION_RE.fullmatch(ref) else ""
 
 
-def _client(request):
+def _plugins(request):
     """The code of the plugins installed here, as staged for other machines,
     in a .tar.gz rooted at xymon-plugins/: what a machine runs make
     install-client in, at this server's versions. Open to anyone, as the
@@ -321,7 +321,7 @@ ROUTES = {
     "/events": _events,
     "/histlog": _histlog,
     "/search": _search,
-    "/client": _client,
+    "/plugins": _plugins,
 }
 
 
@@ -363,16 +363,16 @@ def build_app() -> FastAPI:
 
         # Every path, not only the API's: FastAPI also serves /openapi.json
         # and its /docs pages, and with a password set nothing is answered
-        # to a stranger but /client, the plugins' code.
+        # to a stranger but /plugins, the plugins' code.
         def refuse(detail: str) -> JSONResponse:
             return JSONResponse({"error": "unauthorized", "detail": detail}, status_code=401,
                                 headers={"WWW-Authenticate": 'Basic realm="xymon"'})
 
         @app.middleware("http")
         async def _auth(request, call_next):
-            # /client alone is open: the code it gives is the repository's,
+            # /plugins alone is open: the code it gives is the repository's,
             # and a machine fetches it before it has a token to send.
-            if request.url.path == base + "/client":
+            if request.url.path == base + "/plugins":
                 return await call_next(request)
             # A request through the Unix socket (XYMONAPI_SOCKET) is from a
             # user the socket's permissions let in -- the kernel checked
