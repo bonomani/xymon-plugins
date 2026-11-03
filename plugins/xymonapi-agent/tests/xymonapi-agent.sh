@@ -35,8 +35,8 @@ set -euo pipefail
 ROOT=$(find_root)
 work=$(mktempdir)
 
-"${MAKE:-make}" -C "$ROOT/plugins/xymonapi-agent" install-client PREFIX="$work/client" >"$work/client.log" 2>&1 \
-	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
+"$ROOT/install.sh" install-client xymonapi-agent PREFIX="$work/client" >"$work/client.log" 2>&1 \
+	|| fail "install.sh install-client failed: $(tail -n 5 "$work/client.log")"
 agent=$work/client/bin/xymonapi-agent
 assert_file_exists "$work/client/libexec/xymon-plugins/xymonapi-mcp/xymonapi-mcp.sh"
 assert_file_exists "$work/client/libexec/xymon-plugins/xymonapi-agent/VERSION"

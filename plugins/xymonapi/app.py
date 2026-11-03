@@ -256,8 +256,8 @@ def _plugins(request):
     plugins = DIST / "plugins"
     if not plugins.is_dir() or not any(plugins.iterdir()):
         return JSONResponse({"error": "not_found",
-                             "detail": "no plugin's code is staged on this server: make install "
-                                       "there stages it"}, status_code=404)
+                             "detail": "no plugin's code is staged on this server: ./install.sh "
+                                       "install there stages it"}, status_code=404)
 
     def neutral(info: tarfile.TarInfo) -> tarfile.TarInfo:
         info.uid = info.gid = 0

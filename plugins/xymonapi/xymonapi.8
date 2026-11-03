@@ -90,8 +90,8 @@ other operations need neither.
 The code of the plugins installed on this server, for other machines to
 install from at this server's versions: a gzipped tar rooted at
 xymon-plugins/, laid out as the repository is -- plugins/NAME for each
-plugin installed here, without its tests, with build/plugin.mk and the top
-Makefile. \fBmake install-client\fR in plugins/NAME installs that plugin.
+plugin installed here, without its tests, with install.sh and LICENSE.
+\fB./install.sh install-client NAME\fR there installs that plugin.
 Each plugin's \fBmake install\fR stages its directory in
 $XYMONHOME/ext/xymon-plugins-client/, which is what /plugins packs, and its
 \fBmake uninstall\fR takes it out; this API names no plugin. It is the one

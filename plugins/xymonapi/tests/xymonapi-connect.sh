@@ -30,14 +30,13 @@ command -v openssl >/dev/null 2>&1 || skip "openssl is not installed"
 
 work=$(mktempdir)
 register_cleanup 'stop_process "$API_PID"'
-make=${MAKE:-make}
 
 # The API as make install lays it out, its VERSION the client's, and the
 # client as make install-client does.
-"$make" -C "$ROOT/plugins/xymonapi" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
-	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
-"$make" -C "$ROOT/plugins/xymonapi" install-client PREFIX="$work/client" >"$work/client.log" 2>&1 \
-	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
+"$ROOT/install.sh" install xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
+	|| fail "install.sh install failed: $(tail -n 5 "$work/install.log")"
+"$ROOT/install.sh" install-client xymonapi PREFIX="$work/client" >"$work/client.log" 2>&1 \
+	|| fail "install.sh install-client failed: $(tail -n 5 "$work/client.log")"
 connect=$work/client/bin/xymonapi-connect
 assert_file_exists "$connect"
 mine=$(cat "$work/client/libexec/xymon-plugins/xymonapi/VERSION")
