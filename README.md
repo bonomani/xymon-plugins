@@ -48,8 +48,11 @@ Xymon server once the plugins are installed there, at the versions it runs:
 curl --cacert ~/.config/xymon-api/xymon-ca.pem https://xymon.example.ch/xymon/api/v1/client | tar xz
 ```
 
-`--cacert` names the server's certificate when it is not one the machine
-trusts already; `xymonapi`'s README says where to get it. Never `-k`: code
+The address is the API's URL as `xymonapi`'s README gives it for each way of
+reaching it -- port included when it is not 443 -- followed by
+`/xymon/api/v1/client`. `--cacert` names the server's certificate when it
+is not one the machine trusts already; `xymonapi`'s README says where to get
+it. Never `-k`: code
 fetched without checking the certificate could be anyone's.
 
 ## Installing

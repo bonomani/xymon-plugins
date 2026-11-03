@@ -83,7 +83,10 @@ crosses no network.
 
 .SH ENVIRONMENT
 .IP "\fBXYMONAPI_URL\fR"
-Where xymonapi(8) is: http://, https://, or unix:PATH, the API's own
+Where xymonapi(8) is: an http:// or https:// URL, the host and, when it is
+not the scheme's own, the port -- 1986 for the API's own HTTPS, the web
+server's for one in front of it -- without /xymon/api/v1, which is added; or
+unix:PATH, the API's own
 socket on the server, where no token is needed (xymonapi(8),
 XYMONAPI_SOCKET). The default is that socket when XYMONAPI_SOCKET, or
 XYMONVAR, says where it is and it is there, and http://127.0.0.1:1986

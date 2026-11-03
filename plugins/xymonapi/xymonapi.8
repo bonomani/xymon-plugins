@@ -291,7 +291,11 @@ and its certificate are Xymon's own, files on the server.
 From other machines, use HTTPS: with xymond's certificate the API speaks it
 itself (XYMONAPI_TLS_CERT), and where the web server has a certificate the
 snippets under FILES pass /xymon/api/ to the API over it. An SSH tunnel to
-127.0.0.1:1986 is encrypted too, with nothing to set up. Plain HTTP across
+127.0.0.1:1986 is encrypted too, with nothing to set up. A client is given
+the URL that reaches the API, scheme, host and port, without /xymon/api/v1,
+which it adds: https://HOST:1986 for the API's own HTTPS; the web server's,
+https://HOST, or https://HOST:PORT when its HTTPS port is not 443, for the
+snippets; http://127.0.0.1:1986 through the tunnel. Plain HTTP across
 a network carries the password and the status texts readable, as port 1984
 does; keep it to a network where the Xymon pages themselves are plain and
 trusted. On the server itself nothing need cross a network: the socket is
