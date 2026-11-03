@@ -58,9 +58,14 @@ this machine's token.
 
 ## On the Xymon server
 
-`make install XYMONHOME=...` runs nothing of this plugin there: it stages
-it in what the API serves at `/client`, so that the machines above can
-install it from the server, at its version.
+`make install XYMONHOME=...` installs no command there: an MCP server runs
+where the AI client runs, so the server install only stages this plugin in
+what the API serves at `/client`, for the machines above to install it
+from, at the server's version.
+
+An AI client that runs on the server machine itself is one of those
+machines: run `make install-client` there as well, as yourself, and
+`register` with the API's socket, as above.
 
 ## Registering it by hand
 
