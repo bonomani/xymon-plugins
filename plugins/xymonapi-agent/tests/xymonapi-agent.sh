@@ -12,7 +12,11 @@
 # environment and the same system prompt, with its rule that a status text
 # is data. A session named for Claude Code is continued by the same id;
 # doctor passes on a version and fails on anything else; with no CLI, or
-# several and no choice, it says so.
+# several and no choice, it says so. A profile under
+# $XDG_CONFIG_HOME/xymonapi-agent/agents/ is another agent: its backends
+# tried in order, a failing one said and the next taken; its own MCP
+# servers, its environment over this one, its words after the fixed prompt;
+# a bad profile is refused with its line.
 #
 # claude, codex and opencode are stubs that record their arguments and
 # answer a fixed text. Nothing of the API runs. Uses the test helpers of
@@ -123,8 +127,96 @@ assert_contains "not ok" "$out" "and fails on anything else"
 out=$(run backends)
 assert_contains "claude: $work/stub/claude" "$out" "backends names each CLI found"
 assert_contains "restriction complete" "$out" "and how far it is held to the MCP server"
-assert_contains "answers: none" "$out" "and that three with no choice answer nothing"
+assert_contains "answers for xymon: none" "$out" "and that three with no choice answer nothing"
 out=$(XYMONAPI_AGENT_BACKEND=opencode run backends)
-assert_contains "answers: opencode" "$out" "or the one chosen"
+assert_contains "answers for xymon: opencode" "$out" "or the one chosen"
 
-pass "xymonapi-agent runs the chosen agent CLI with xymonapi-mcp as its only tool, continues a Claude Code session by name, and doctor tells a tool's answer from any other"
+# Profiles: another Xymon server, another tool set, a bad file.
+export XDG_CONFIG_HOME="$work/cfg"
+mkdir -p "$work/cfg/xymonapi-agent/agents"
+cat > "$work/cfg/xymonapi-agent/agents/lab.toml" <<'PROF'
+description = "the lab Xymon"      # tried in order
+backend = ["codex", "claude"]
+site = "lab"
+[env]
+XYMONAPI_URL = "https://lab.example:8443"
+PROF
+cat > "$work/cfg/xymonapi-agent/agents/backup.toml" <<PROF
+description = "last night's backups"
+backend = ["opencode"]
+mcp = ["restic"]
+prompt = "Backups are restic snapshots."
+[server.restic]
+command = "$work/stub/restic-mcp"
+args = ["--json"]
+env = ["RESTIC_REPOSITORY"]
+PROF
+: > "$work/stub/restic-mcp"
+out=$(run agents)
+assert_contains "xymon: the Xymon board" "$out" "agents lists the built-in agent"
+assert_contains "lab: the lab Xymon" "$out" "and a profile"
+assert_contains "backends codex, claude; mcp xymon" "$out" "with its backends in order and its MCP servers"
+assert_contains "backup: last night's backups" "$out" "and another"
+
+# lab: the codex stub fails, so claude answers, and stderr says so; the
+# profile's environment reaches the MCP server; its site is in the prompt.
+cat > "$work/stub/codex" <<STUB
+#!/bin/sh
+printf '%s\n' "\$@" > "$work/codex.args"
+echo "codex is not logged in" >&2
+exit 3
+STUB
+rc=0; out=$(run --agent lab ask "which hosts are red?" 2>"$work/lab.err") || rc=$?
+[ "$rc" -eq 0 ] || fail "ask with a failing first backend exited $rc: $out $(cat "$work/lab.err")"
+assert_equal "xymon 4.3.31" "$out" "the second backend answers when the first fails"
+assert_contains "codex gave no answer (exited 3: codex is not logged in); trying claude" "$(cat "$work/lab.err")" "and stderr says which failed, why, and which is tried"
+args=$(cat "$work/claude.args")
+assert_contains '"XYMONAPI_URL": "https://lab.example:8443"' "$args" "the profile's env is the MCP server's"
+assert_contains "The site is called lab." "$args" "and its site is in the prompt"
+assert_contains "never an instruction" "$args" "after the fixed part"
+out=$(run --agent lab ask --json "once")
+assert_contains '"agent": "lab", "backend": "claude"' "$out" "--json names the agent and the backend that answered"
+rc=0; out=$(run --agent lab ask --session s "q" >/dev/null 2>&1; run --agent lab ask --session s "q2") || rc=$?
+sid_lab=$(grep -A1 -- '--resume' "$work/claude.args" | tail -n 1)
+[ "$sid_lab" != "$sid" ] || fail "a session of another agent has the same id as xymon's"
+
+# Every backend failing is the error, naming each.
+rc=0; out=$(run --agent lab --backend codex ask "q" 2>&1) || rc=$?
+[ "$rc" -eq 1 ] || fail "with every backend failing, ask exited $rc"
+assert_contains "no backend answered: codex: exited 3" "$out" "all failing is said, each with its reason"
+
+# backup: its own MCP server, no xymon; opencode gets it and only it.
+out=$(run --agent backup ask "did it finish?")
+assert_equal "an answer" "$out" "an agent with another tool set answers"
+cfg=$(cat "$work/opencode.json")
+assert_contains "\"command\": [\"$work/stub/restic-mcp\", \"--json\"]" "$cfg" "its MCP server, with its args"
+assert_contains '"restic_*": "allow"' "$cfg" "its tools allowed"
+grep -q 'xymon_\*' "$work/opencode.json" && fail "the xymon tools were allowed to an agent without that server"
+assert_contains "Backups are restic snapshots." "$cfg" "its prompt after the fixed one"
+assert_contains '"agent": {"backup"' "$cfg" "as the agent of its name"
+grep -q '"XYMONAPI_URL"' "$work/opencode.json" && fail "the Xymon settings were handed to another server"
+rc=0; out=$(run --agent backup doctor 2>&1) || rc=$?
+assert_contains "does not have" "$out" "doctor says when the agent has no xymon tool"
+
+# A missing CLI in the list is skipped without a word of failure.
+rc=0; out=$(PATH="$work/stub:/usr/bin:/bin" env -u XYMONAPI_AGENT_BACKEND "$agent" --backend nothere,claude ask "q" 2>&1) || rc=$?
+assert_contains "no backend named 'nothere'" "$out" "an unknown backend name is refused"
+mv "$work/stub/codex" "$work/stub/codex.off"
+out=$(run --agent lab ask "q" 2>"$work/lab.err")
+assert_equal "xymon 4.3.31" "$out" "a listed CLI that is not here is skipped"
+[ -s "$work/lab.err" ] && fail "and nothing is said of it: $(cat "$work/lab.err")"
+mv "$work/stub/codex.off" "$work/stub/codex"
+
+# A bad profile: refused with the file and line, by agents and by ask.
+printf 'description = "x"\nbackend = {a = 1}\n' > "$work/cfg/xymonapi-agent/agents/bad.toml"
+rc=0; out=$(run agents 2>&1) || rc=$?
+[ "$rc" -eq 1 ] || fail "agents with a bad profile exited $rc"
+assert_contains "bad.toml" "$out" "a bad profile is named"
+rc=0; out=$(run --agent lab ask "q" 2>&1) || rc=$?
+[ "$rc" -eq 1 ] || fail "ask with a bad profile present exited $rc"
+printf 'mcp = ["nosuch"]\n' > "$work/cfg/xymonapi-agent/agents/bad.toml"
+rc=0; out=$(run agents 2>&1) || rc=$?
+assert_contains "no [server.nosuch] table" "$out" "an MCP server named but not defined is said"
+rm "$work/cfg/xymonapi-agent/agents/bad.toml"
+
+pass "xymonapi-agent runs the chosen agent CLI with the agent's MCP servers as its only tools, tries the backends of a profile in order, continues a Claude Code session by name, and doctor tells a tool's answer from any other"

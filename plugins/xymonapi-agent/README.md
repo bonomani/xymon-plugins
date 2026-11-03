@@ -64,9 +64,55 @@ xymonapi-agent ask --json "is anything red?" | jq -r .answer
 ```
 
 `--session NAME` continues a conversation: the second question follows on
-from the first. Claude Code continues a named session; with Codex and
+from the first, with the same agent. Claude Code continues a named session; with Codex and
 opencode a named session starts fresh each time, and stderr says so --
 their session ids are not stable enough in their documentation to keep.
+
+## Agents: another Xymon, another tool set
+
+What answers is an *agent*: its backends in order, its MCP servers, its
+words after the fixed prompt, and the Xymon server it reads. The built-in
+one, `xymon`, is the plugin as described above. A file under
+`~/.config/xymonapi-agent/agents/` adds another:
+
+```toml
+# ~/.config/xymonapi-agent/agents/lab.toml -- the lab's Xymon
+description = "the lab Xymon"
+backend = ["claude", "opencode"]        # tried in order
+site = "lab"
+[env]
+XYMONAPI_URL = "https://xymon-lab.example.ch"
+XYMONAPI_TOKEN_FILE = "~/.config/xymon-api/xymon-lab.token"
+```
+
+```toml
+# ~/.config/xymonapi-agent/agents/backup.toml -- another tool set entirely
+description = "last night's restic backups"
+backend = ["opencode"]
+mcp = ["restic"]
+prompt = "Backups are restic snapshots; a run is good when its snapshot exists."
+[server.restic]
+command = "/usr/local/bin/restic-mcp"
+env = ["RESTIC_REPOSITORY", "RESTIC_PASSWORD_FILE"]
+```
+
+```sh
+xymonapi-agent agents                                   # what is defined
+xymonapi-agent --agent lab ask "anything red?"
+xymonapi-agent --agent backup ask "did last night's run finish?"
+export XYMONAPI_AGENT_AGENT=lab                          # the default for a shell
+```
+
+A profile chooses tools, words and target. It cannot loosen the sandbox:
+the fixed part of the prompt and each backend's restriction stay, and the
+tools allowed are exactly those of its `mcp` list. The manual page has
+every key.
+
+**Backends in order.** `backend` is a list, and so is
+`XYMONAPI_AGENT_BACKEND=claude,opencode` or `--backend claude,opencode`: the
+first on PATH runs; if it exits with an error, times out or answers
+nothing, stderr says so and the next is tried. `--json` tells you which
+one answered.
 
 ## How far each backend is held to the tools
 
@@ -79,8 +125,8 @@ nothing to reach. The three differ:
 
 | backend | how it is held | how complete |
 |---|---|---|
-| `claude` | `--strict-mcp-config` (this MCP server, no other), `--tools ""` (no built-in tool), `--allowedTools mcp__xymon__*`, `--permission-mode dontAsk` | complete, as its documentation states each flag |
-| `opencode` | a configuration file of its own for the call, project configuration disabled: the MCP server, every tool denied but `xymon_*`, an agent with the system prompt | by configuration; your global `opencode` config still merges with it |
+| `claude` | `--strict-mcp-config` (the agent's MCP servers, no other), `--tools ""` (no built-in tool), `--allowedTools mcp__xymon__*`, `--permission-mode dontAsk` | complete, as its documentation states each flag |
+| `opencode` | a configuration file of its own for the call, project configuration disabled: the MCP server, every tool denied but the MCP servers', an agent with the system prompt | by configuration; your global `opencode` config still merges with it |
 | `codex` | `--sandbox read-only`, overrides that give it the MCP server and turn its shell tool and web search off, `--ephemeral` | partial: the documentation does not promise the shell is gone, so the token file may be readable to the model |
 
 `xymonapi-agent backends` prints the same for the machine it runs on;
@@ -94,8 +140,8 @@ do when you type the question yourself.
 
 The answer is text on stdout, and the exit status says whether there was
 one: 0 for an answer, 1 when the backend failed or none is chosen, 77 when
-no Python 3.9 is here. With `--json`, one object with `backend`, `session`
-and `answer`. A morning summary, in cron:
+no Python 3.9 is here. With `--json`, one object with `agent`, `backend`,
+`session` and `answer`. A morning summary, in cron:
 
 ```sh
 7 7 * * 1-5  xymonapi-agent ask "Summarise what went red or yellow in the last 24 hours, by host, and what is still not green." | mail -s "Xymon overnight" ops@example.ch
