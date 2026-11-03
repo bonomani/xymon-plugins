@@ -368,8 +368,13 @@ class Opencode(Backend):
         fd, path = tempfile.mkstemp(prefix="xymonapi-agent-", suffix=".json")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(cfg, f)
-        # Sessions: as Codex, none is continued here yet.
-        argv = [self.name, "run", "--agent", ag.name, question]
+        # Sessions: as Codex, none is continued here yet. The model goes on
+        # the command line too: run keeps its global default over the
+        # agent's model in a config file (seen with opencode 1.x).
+        argv = [self.name, "run", "--agent", ag.name]
+        if ag.model:
+            argv += ["--model", ag.model]
+        argv.append(question)
         return argv, {"OPENCODE_CONFIG": path, "OPENCODE_DISABLE_PROJECT_CONFIG": "1"}, path
 
 

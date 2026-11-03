@@ -61,8 +61,10 @@ echo "an answer"
 STUB
 chmod 755 "$work/stub/"*
 path="$work/stub:/usr/bin:/bin"
-export XDG_STATE_HOME="$work/state" XYMONAPI_URL="http://127.0.0.1:1" XYMONAPI_TOKEN_FILE="$work/token"
-unset XYMONAPI_AGENT_BACKEND
+# The test's own state and profiles, never this user's under ~/.config.
+export XDG_STATE_HOME="$work/state" XDG_CONFIG_HOME="$work/cfg" \
+	XYMONAPI_URL="http://127.0.0.1:1" XYMONAPI_TOKEN_FILE="$work/token"
+unset XYMONAPI_AGENT_BACKEND XYMONAPI_AGENT_AGENT XYMONAPI_AGENT_MODEL XYMONAPI_AGENT_SITE
 
 run() { PATH="$path" "$agent" "$@"; }
 
@@ -137,7 +139,6 @@ out=$(XYMONAPI_AGENT_BACKEND=opencode run backends)
 assert_contains "answers for xymon: opencode" "$out" "or the one chosen"
 
 # Profiles: another Xymon server, another tool set, a bad file.
-export XDG_CONFIG_HOME="$work/cfg"
 mkdir -p "$work/cfg/xymonapi-agent/agents"
 cat > "$work/cfg/xymonapi-agent/agents/lab.toml" <<'PROF'
 description = "the lab Xymon"      # tried in order
@@ -190,8 +191,15 @@ rc=0; out=$(run --agent lab --backend codex ask "q" 2>&1) || rc=$?
 [ "$rc" -eq 1 ] || fail "with every backend failing, ask exited $rc"
 assert_contains "no backend answered: codex: exited 3" "$out" "all failing is said, each with its reason"
 
-# backup: its own MCP server, no xymon; opencode gets it and only it.
+# backup: its own MCP server, no xymon; opencode gets it and only it, and
+# the model on its command line, where run honours it.
+# (before the [server.restic] table, which runs to the end of the file)
+sed -i.bak '1i\
+model = "ollama/llama3.2:latest"
+' "$work/cfg/xymonapi-agent/agents/backup.toml"
 out=$(run --agent backup ask "did it finish?")
+assert_contains "--model
+ollama/llama3.2:latest" "$(cat "$work/opencode.args")" "opencode is given the agent's model on the command line"
 assert_equal "an answer" "$out" "an agent with another tool set answers"
 cfg=$(cat "$work/opencode.json")
 assert_contains "\"command\": [\"$work/stub/restic-mcp\", \"--json\"]" "$cfg" "its MCP server, with its args"
