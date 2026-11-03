@@ -10,8 +10,9 @@ is written to RECORD -- its Authorization header, then its body. A POST to
 names the model no-such-model, which is answered 404 as Ollama answers for a
 model it has not pulled; thinking-model, answered with an empty content and
 reasoning only, as LM Studio answers for a reasoning model out of tokens; or
-slow-model, answered after three seconds. With REDIRECT, a URL, every request
-is answered 302 to it instead.
+slow-model, answered after three seconds -- by when a client with a shorter
+timeout has gone, which is not an error here. With REDIRECT, a URL, every
+request is answered 302 to it instead.
 """
 import http.server
 import json
@@ -50,8 +51,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(answer)))
-        self.end_headers()
-        self.wfile.write(answer)
+        try:
+            self.end_headers()
+            self.wfile.write(answer)
+        except (BrokenPipeError, ConnectionResetError):
+            pass                         # the client gave up waiting: what a timeout test does
 
     def log_message(self, *args):
         pass
