@@ -12,6 +12,7 @@ history.
 | [`xymonapi`](plugins/xymonapi/README.md) | server, client | a read-only HTTP and JSON interface to a Xymon server, as one of its xymonlaunch tasks, and its client | on the server, xymon >= 4.3.31 (main); python >= 3.9 |
 | [`xymonapi-mcp`](plugins/xymonapi-mcp/README.md) | client | an MCP server that gives an AI client read-only tools over the Xymon API | xymonapi >= 0.1.0 (its client beside it; the API's socket on the server, or the API over the network); python >= 3.9 |
 | [`xymonapi-rag`](plugins/xymonapi-rag/README.md) | server, client | a search of Xymon's manual pages and history by meaning; the index task on the server, search and ask anywhere | xymonapi >= 0.1.0 (its client beside it); python >= 3.9 |
+| [`xymonapi-agent`](plugins/xymonapi-agent/README.md) | client | one command that asks an AI agent -- Claude Code, Codex or opencode, headless -- a question about Xymon, with the MCP server as its only tool | xymonapi-mcp >= 0.1.0 (beside it, with xymonapi's client); one of the agent CLIs, installed and logged in; python >= 3.9 |
 
 Each row summarises the plugin's `PLUGIN` file. Its README says how to
 install and use it, its manual page every behaviour and setting.

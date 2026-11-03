@@ -48,6 +48,7 @@ venv-client:
 
 uninstall:
 	$(need_home)
+	$(call needed_by,$(DIST)/plugins,xymonapi-agent)
 	$(call gone,$(EXT))
 	$(call gone,$(DIST)/plugins/$(PLUGIN))
 	@echo "Uninstalled xymonapi-mcp. Kept: xymonapi."
@@ -55,6 +56,7 @@ uninstall:
 # register also registered the server with the AI clients, and kept a token:
 # said, not done, since they are this user's and the server's.
 uninstall-client:
+	$(call needed_by,$(CLIENTROOT),xymonapi-agent)
 	$(call gone,$(CLIENT))
 	rm -f "$(BIN)/xymonapi-mcp" "$(CLIENTMAN1)/xymonapi-mcp.1"
 	@echo "Uninstalled xymonapi-mcp. What register did besides, to undo by hand:"
