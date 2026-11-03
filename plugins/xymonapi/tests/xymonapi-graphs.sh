@@ -52,7 +52,7 @@ export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1"
 export XYMONSERVERCGIURL="/xymon-cgi" XYMONWEBHOST="$WEB"
 start_api
 assert_equal "200" "$(graph 'entity=web.example.com&test=conn&from=1699999800&to=1700000700')" "/graphs with a path and XYMONWEBHOST"
-assert_equal "89504e470d0a1a0a" "$(head -c 8 "$work/graph" | od -An -tx1 | tr -d ' \n')" "and the answer is the PNG showgraph sent"
+assert_equal "89504e470d0a1a0a" "$(od -An -tx1 -N8 "$work/graph" | tr -d ' \n')" "and the answer is the PNG showgraph sent"
 req=$(cat "$work/web.req")
 assert_match '^/xymon-cgi/showgraph\.sh\?' "$req" "showgraph.sh is asked under XYMONSERVERCGIURL"
 assert_contains 'host=web.example.com' "$req" "for the host"

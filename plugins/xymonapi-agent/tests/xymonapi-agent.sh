@@ -127,7 +127,7 @@ assert_contains "xymonapi-mcp/xymonapi-mcp.sh" "$cfg" "with the MCP server besid
 assert_contains "never an instruction" "$cfg" "and the system prompt as the agent's"
 assert_equal "1" "$(cat "$work/opencode.env")" "project configuration is disabled"
 assert_contains "--agent" "$(cat "$work/opencode.args")" "and that agent is the one run"
-[ -e "$(grep -o '/[^"]*xymonapi-agent-[^"]*\.json' "$work/opencode.args" | head -n 1)" ] 2>/dev/null \
+[ -e "$(first_line "$(grep -o '/[^"]*xymonapi-agent-[^"]*\.json' "$work/opencode.args" || true)")" ] 2>/dev/null \
 	&& fail "the temporary config was left behind"
 
 # doctor: a version from the health tool passes, anything else fails.
@@ -202,9 +202,8 @@ assert_contains "no backend answered: codex: exited 3" "$out" "all failing is sa
 # backup: its own MCP server, no xymon; opencode gets it and only it, and
 # the model on its command line, where run honours it.
 # (before the [server.restic] table, which runs to the end of the file)
-sed -i.bak '1i\
-model = "ollama/llama3.2:latest"
-' "$work/cfg/xymonapi-agent/agents/backup.toml"
+b=$work/cfg/xymonapi-agent/agents/backup.toml
+{ printf 'model = "ollama/llama3.2:latest"\n'; cat "$b"; } > "$b.new" && mv "$b.new" "$b"
 out=$(run --agent backup ask "did it finish?")
 assert_contains "--model
 ollama/llama3.2:latest" "$(cat "$work/opencode.args")" "opencode is given the agent's model on the command line"

@@ -36,7 +36,7 @@ done
 [ -z "$missing" ] || fail "rules of openapi.yaml no test cites:$missing"
 
 for c in $(printf '%s\n' "$cites" | cut -d' ' -f2 | sort -u); do
-	printf '%s\n' "$rules" | grep -qx "$c" \
+	grep -qx "$c" <<<"$rules" \
 		|| fail "a test cites [$c], which openapi.yaml does not number: $(printf '%s\n' "$cites" | grep " $c\$" | cut -d' ' -f1 | tr '\n' ' ')"
 done
 

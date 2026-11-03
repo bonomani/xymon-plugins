@@ -48,7 +48,8 @@ for f in Makefile LICENSE build/plugin.mk plugins/xymonapi/PLUGIN plugins/xymona
          plugins/xymonapi/xymonapi_client.py plugins/xymonapi-mcp/server.py; do
 	grep -qx "xymon-plugins/$f" "$work/list" || fail "the archive has no $f: $(head -n 20 "$work/list")"
 done
-grep -q '/tests/' "$work/list" && fail "the archive holds tests: $(grep '/tests/' "$work/list" | head -n 3)"
+t=$(grep '/tests/' "$work/list" || true)
+[ -n "$t" ] && fail "the archive holds tests: $(first_line "$t")"
 grep -q '__pycache__' "$work/list" && fail "the archive holds __pycache__"
 
 # A machine installs the MCP server from it, as its README says.
