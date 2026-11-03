@@ -94,9 +94,9 @@ def _refused(exc: Exception) -> JSONResponse:
 # request and not the event loop -- /health keeps answering meanwhile.
 def _health(request):
     out: dict = {"alive": False, "search": _search_info()}
-    # The version this API was installed from, which a client compares with
-    # its own: here, behind the password.
-    version = installed_version()
+    # The version of the code this process runs, which a client compares
+    # with its own: here, behind the password.
+    version = VERSION
     if version:
         out["version"] = version
     try:
@@ -236,6 +236,11 @@ def installed_version() -> str:
     except (OSError, UnicodeDecodeError):
         return ""
     return ref if _VERSION_RE.fullmatch(ref) else ""
+
+
+# Read once, when the process starts: /health reports the code that runs,
+# not an install it has not been restarted for, whose VERSION is beside it.
+VERSION = installed_version()
 
 
 def _plugins(request):

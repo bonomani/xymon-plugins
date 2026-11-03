@@ -48,7 +48,9 @@ Whether xymond answers a ping: {"alive":true,"server_version":"xymond ..."}
 when it does, and {"alive":false} when the ping fails -- xymond is down, or
 XYMSRV or XYMON is wrong. Like every path but /plugins, it answers 401 on
 the port without a user, or a client token, when XYMONAPI_PASSWD is set.
-Its "version" field is the version this API was installed from: its
+Its "version" field is the version of the code this process runs, read
+when it started -- an install it was not restarted for does not change it:
+the version it was installed from, its
 release tag, xymonapi/vX.Y.Z, when make install ran on one, else the X.Y.Z
 of its PLUGIN file; it is absent when the API was not installed.
 xymonapi-connect(1) compares it with the client's own.

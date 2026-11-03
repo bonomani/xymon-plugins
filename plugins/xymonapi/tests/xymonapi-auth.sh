@@ -86,6 +86,11 @@ assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "
 pgrep -f "$work/inst/ext/xymonapi/" | grep -qx "$API_PID" \
 	|| fail "pgrep -f on the API's directory does not find it, so the documented pkill would not stop it: $(ps -o command= -p "$API_PID")"
 assert_not_contains "$version" "$(curl -s "$url")" "and not to a stranger"
+# The version of the code that runs: an install the API was not restarted
+# for, which writes a new VERSION beside it, does not change it.
+printf 'xymonapi/v9.9.10\n' > "$work/inst/ext/xymonapi/VERSION"
+assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "/health keeps the version the process started with"
+printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
 # Every field /health gives is one the spec lists for it: a field renamed in
 # the code and not in openapi.yaml is a contract the API does not keep.
 spec_fields=$(sed -n '/^    Health:/,/^    [A-Z]/p' "$ROOT/plugins/xymonapi/openapi.yaml" | sed -n 's/^        \([a-z_]*\):.*/\1/p')
