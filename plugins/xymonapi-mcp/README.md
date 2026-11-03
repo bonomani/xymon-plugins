@@ -12,8 +12,9 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
 - **A running [`xymonapi`](../xymonapi/README.md)** on the Xymon server,
   reached through its socket from that machine and over the network from
-  any other; install and enable it there first. This plugin installs
-  `xymonapi`'s client beside itself, never the API.
+  any other. `make install-client` installs `xymonapi`'s client beside this
+  plugin; the API itself is installed and enabled on the server, by its
+  own README or by this plugin's `make install` there.
 - Python 3.9 or later, and nothing else: it speaks the protocol with the
   standard library.
 
@@ -58,10 +59,10 @@ this machine's token.
 
 ## On the Xymon server
 
-`make install XYMONHOME=...` installs no command there: an MCP server runs
-where the AI client runs, so the server install only stages this plugin in
-what the API serves at `/client`, for the machines above to install it
-from, at the server's version.
+`make install XYMONHOME=...` installs the API first, when it is not there,
+and stages this plugin in what the API serves at `/client`, for the
+machines above to install it from, at the server's version. It installs no
+command on the server: an MCP server runs where the AI client runs.
 
 An AI client that runs on the server machine itself is one of those
 machines: run `make install-client` there as well, as yourself, and

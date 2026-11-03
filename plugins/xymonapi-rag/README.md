@@ -37,15 +37,16 @@ seeded. The index holds the last 30 days of history, the newest 5000
 changes at most, and the API serves it as soon as it is written.
 
 From a shell on the server, the installed launcher searches with no
-setting and no token when run through `xymoncmd`, which gives it `XYMONVAR`
-and so the API's socket, `$XYMONVAR/xymonapi/api.sock` (`xymonapi.8`,
-`XYMONAPI_SOCKET`):
+setting and no token when run through `xymoncmd`, which gives it Xymon's
+settings: as the Xymon user it reads the index where the task wrote it,
+and otherwise asks the API through its socket, `$XYMONVAR/xymonapi/api.sock`
+(`xymonapi.8`, `XYMONAPI_SOCKET`):
 
 ```sh
-xymoncmd $XYMONHOME/ext/xymonapi-rag/xymonapi-rag.sh search "what does purple mean"
+xymoncmd /usr/lib/xymon/server/ext/xymonapi-rag/xymonapi-rag.sh search "what does purple mean"
 ```
 
-Without `xymoncmd`, set `XYMONAPI_URL=unix:` followed by that path.
+Without `xymoncmd`, set `XYMONAPI_URL=unix:` followed by the socket's path.
 
 `make uninstall XYMONHOME=...` keeps the index, `$XYMONAPI_RAG_INDEX`.
 
