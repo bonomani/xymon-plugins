@@ -2,13 +2,16 @@
 .SH NAME
 xymonapi-rag \- search Xymon's manual pages and history by meaning
 .SH SYNOPSIS
-.B "xymonapi-rag/xymonapi-rag.sh index [--no-history] [--full]"
+.B "xymonapi-rag index [--no-history] [--full]"
 .br
-.B "xymonapi-rag/xymonapi-rag.sh search [--kind docs|history] [-k N] QUESTION"
+.B "xymonapi-rag search [--kind docs|history] [-k N] QUESTION"
 .br
-.B "xymonapi-rag/xymonapi-rag.sh ask [-k N] QUESTION"
+.B "xymonapi-rag ask [-k N] QUESTION"
 .br
-.B "xymonapi-rag/xymonapi-rag.sh eval [-k N] [--min HITS] FILE"
+.B "xymonapi-rag eval [-k N] [--min HITS] FILE"
+.LP
+On the Xymon server the command is $XYMONHOME/ext/xymonapi-rag/xymonapi-rag.sh,
+run through xymoncmd(1) for Xymon's settings.
 
 .SH DESCRIPTION
 xymonapi-rag finds the passages of Xymon's manual pages, and of its history,
@@ -70,8 +73,8 @@ whose own model then writes the answer: with a Claude subscription, ask is
 not needed.
 
 It needs Python 3.9 or later, and, to index or to search an index here,
-the modules in rag/requirements.txt; when one is missing it says so and
-exits with status 77. \fBmake install-client\fR puts it under a PREFIX of
+the modules in requirements.txt beside it; when one is missing it says so
+and exits with status 77. \fBmake install-client\fR puts it under a PREFIX of
 yours, as the command xymonapi-rag.
 
 .SH SECURITY
@@ -128,7 +131,8 @@ as llama3.2, is the better fit.
 Where the API is, and the token to send it, as for xymonapi-mcp(1): for
 search and ask where there is no index here, and for index off the Xymon
 server. On the server, index reads the history from xymond's files and
-sends nothing.
+sends nothing, and search and ask take the API's socket by default, with
+no token (xymonapi(8), XYMONAPI_SOCKET).
 .IP "\fBXYMONAPI_PYTHON\fR"
 The Python to run with. Unset, the python3 of the virtualenv beside the
 plugins, $PREFIX/libexec/xymon-plugins/venv, which \fBmake venv-client\fR

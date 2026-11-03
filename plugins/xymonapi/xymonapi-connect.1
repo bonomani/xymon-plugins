@@ -19,9 +19,7 @@ server's certificate;
 .IP 2. 4
 keeps a token from an earlier run while it still works;
 .IP 3. 4
-otherwise, when the API asks for a password -- it does not through its
-Unix socket, unix:PATH, where the socket's permissions decided already who
-connects, and then nothing is asked or kept -- asks for a user of the API
+otherwise, when the API asks for a password, asks for a user of the API
 (XYMONAPI_USER when set) and the password once, on the terminal, or as two
 lines on stdin when stdin is not one; gets with them a token for this
 machine, named by its short hostname; and writes it to
@@ -35,6 +33,9 @@ prints on stdout what a client needs, as shell settings: XYMONAPI_URL,
 XYMONAPI_TOKEN_FILE when there is a token, and XYMONAPI_CA when a
 certificate is used.
 .PP
+Given the API's own socket, unix:PATH, on the server, it asks nothing and
+keeps nothing: the socket's permissions decided already who connects, and
+the settings printed name the socket alone.
 Running it again changes nothing while the token works, and replaces one
 that was revoked. Messages go to stderr. A password file an earlier setup
 kept, ~/.config/xymon-api/NAME.password, is removed.
