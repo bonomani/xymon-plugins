@@ -47,6 +47,7 @@ command -v "$PYTHON" >/dev/null 2>&1 || {
 [ "${1:-}" = register ] || exec "$PYTHON" "$here/server.py"
 
 # register URL [NAME]
+case ${2:-} in -h|--help) echo "usage: xymonapi-mcp register URL [NAME]"; exit 0 ;; esac
 [ $# -ge 2 ] && [ $# -le 3 ] || {
 	echo "usage: xymonapi-mcp register URL [NAME]" >&2
 	exit 2

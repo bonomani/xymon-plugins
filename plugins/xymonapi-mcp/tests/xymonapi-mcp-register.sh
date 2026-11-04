@@ -102,4 +102,13 @@ out=$(XDG_CONFIG_HOME="$work/cfg2" HOME="$work" PATH="$path" XYMONAPI_PYTHON="" 
 assert_equal "1" "$rc" "register fails when the API refuses the password"
 assert_equal "" "$(cat "$work/claude.args")" "and registers nothing"
 
+# --help asks for the usage, and is not a URL to connect to.
+: > "$work/claude.args"
+rc=0
+out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="" \
+	"$mcp_bin" register --help < /dev/null 2>&1) || rc=$?
+assert_equal "0" "$rc" "register --help exits 0"
+assert_equal "usage: xymonapi-mcp register URL [NAME]" "$out" "and prints register's usage, not xymonapi-connect's"
+assert_equal "" "$(cat "$work/claude.args")" "and registers nothing"
+
 pass "xymonapi-mcp register connects this machine and registers the installed server with Claude Code and Codex, with the token file and XYMONAPI_PYTHON only when set"
