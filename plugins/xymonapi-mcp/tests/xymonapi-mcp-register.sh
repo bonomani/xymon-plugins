@@ -3,7 +3,7 @@
 #
 # plugins/xymonapi-mcp/tests/xymonapi-mcp-register.sh
 #
-# xymonapi-mcp register, as make install-client lays it out, connects this
+# xymonapi-mcp register, as ./install.sh install-client lays it out, connects this
 # machine to the API through xymonapi-connect -- a password asked once, a
 # token kept -- and registers the MCP server with Claude Code and Codex: the
 # installed launcher as the command, with the API's address and the token
@@ -27,8 +27,8 @@ command -v htpasswd >/dev/null 2>&1 || skip "Apache's htpasswd is not installed"
 work=$(mktempdir)
 register_cleanup 'stop_process "$API_PID"'
 
-"${MAKE:-make}" -C "$ROOT/plugins/xymonapi-mcp" install-client PREFIX="$work/client" >"$work/client.log" 2>&1 \
-	|| fail "make install-client failed: $(tail -n 5 "$work/client.log")"
+"$ROOT/install.sh" install-client xymonapi-mcp PREFIX="$work/client" >"$work/client.log" 2>&1 \
+	|| fail "install.sh install-client failed: $(tail -n 5 "$work/client.log")"
 mcp_bin=$work/client/bin/xymonapi-mcp
 launcher=$work/client/libexec/xymon-plugins/xymonapi-mcp/xymonapi-mcp.sh
 
@@ -50,7 +50,7 @@ py=$(command -v "${XYMONAPI_PYTHON:-python3}")
 ln -s "$py" "$work/stub/python3"
 path="$work/stub:/usr/bin:/bin"
 
-# A virtualenv beside the plugins, as make venv-client makes one: left as it
+# A virtualenv beside the plugins, as ./install.sh venv-client makes one: left as it
 # is, since the launchers run with it (tests/compat/xymonapi-python.sh).
 mkdir -p "$work/client/libexec/xymon-plugins/venv/bin"
 printf 'carol\nsecret\n' > "$work/in"

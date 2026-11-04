@@ -39,7 +39,7 @@ numbered rules every implementation keeps.
 ## On the server
 
 ```sh
-make install XYMONHOME=/usr/lib/xymon/server
+XYMONHOME=/usr/lib/xymon/server ./install.sh install xymonapi
 ```
 
 Besides the code, the task and the manual page, which every plugin
@@ -65,14 +65,14 @@ there (`xymonapi.8`, `XYMONAPI_SOCKET`).
 
 Updating: install again. The install stops the running API, which would go
 on with the code it loaded, and says so; xymonlaunch starts the new.
-`make uninstall XYMONHOME=...` keeps the snippets -- take the `Include` out
+`./install.sh uninstall xymonapi` keeps the snippets -- take the `Include` out
 of your web server's configuration before deleting them -- and the tokens
 file, `$XYMONAPI_TOKENS`.
 
 ## Asking in words: /ask
 
 With [`xymonapi-agent`](../xymonapi-agent/README.md) installed beside the
-API (`make install` in its directory, which brings `xymonapi-mcp`), the API
+API (`./install.sh install xymonapi-agent`, which brings `xymonapi-mcp`), the API
 can answer a question in words: `POST /ask` with `{"question": "..."}`
 runs the agent as the Xymon user, with an agent CLI that user has
 installed and logged in -- Claude Code, Codex or opencode -- and the Xymon
@@ -120,7 +120,7 @@ host and the port, without `/xymon/api/v1`, which the client adds:
   `etc/tls/` and speaks HTTPS by itself; or name any certificate and key in
   `XYMONAPI_TLS_CERT` and `_KEY`. Open the port with
   `XYMONAPI_LISTEN="0.0.0.0:1986"`. The URL: `https://xymon.example.ch:1986`.
-- **The web server in front of it.** Include the snippet `make install` wrote
+- **The web server in front of it.** Include the snippet the install wrote
   for your web server, `$XYMONHOME/etc/xymonapi-*.conf`, in its HTTPS part:
   one hostname for the pages and the API. The URL: the address your Xymon
   pages are at -- the same web server and the same port -- without the
@@ -140,7 +140,7 @@ come out as `[hidden]`, in every text and in the search index.
 ## On another machine
 
 A machine that reads the API -- a laptop, say -- needs its client and a
-token of its own, and for that `make`, `curl` and Python 3.9 or later,
+token of its own, and for that a POSIX shell, `curl` and Python 3.9 or later,
 nothing else:
 
 ```sh
@@ -149,8 +149,8 @@ nothing else:
 mkdir -p ~/.config/xymon-api
 scp xymon.example.ch:/etc/xymon/tls/xymond.pem ~/.config/xymon-api/xymon-ca.pem
 
-cd xymon-plugins/plugins/xymonapi        # the code: top README, Getting the code
-make install-client                      # under ~/.local; PREFIX=... for elsewhere
+cd xymon-plugins                         # the code: top README, Getting the code
+./install.sh install-client xymonapi     # under ~/.local; PREFIX=... for elsewhere
 xymonapi-connect https://xymon.example.ch   # the URL: as reached, above
 ```
 
@@ -165,5 +165,5 @@ machines and revokes one, and removing a user from the password file
 revokes all of theirs. Every detail is in
 [`xymonapi-connect.1`](xymonapi-connect.1).
 
-`make uninstall-client` keeps the token: revoke it with `/tokens`, or delete
+`./install.sh uninstall-client xymonapi` keeps the token: revoke it with `/tokens`, or delete
 `~/.config/xymon-api/xymon.token`.

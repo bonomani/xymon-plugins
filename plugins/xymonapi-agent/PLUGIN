@@ -1,8 +1,22 @@
 # What this plugin is, for the index in README.md and for whoever installs
-# it alone. One key per line; the Makefile beside it does the installing.
+# it alone. One key per line, a key repeated for each line of a message;
+# ./install.sh at the repository's top installs it from the lines below.
 name: xymonapi-agent
 version: 0.1.0
 side: client
 summary: one command that asks an AI agent -- Claude Code, Codex or opencode, headless -- a question about Xymon, with the MCP server as its only tool
 requires: xymonapi-mcp >= 0.1.0 (beside it, with xymonapi's client); one of the agent CLIs, installed and logged in; python >= 3.9
 manual: xymonapi-agent.1
+
+# How ./install.sh installs it: see xymonapi's PLUGIN file.
+needs: xymonapi-mcp
+server-files: xymonagent.py xymonapi-agent.sh
+server-manual: xymonapi-agent.1
+installed: Installed xymonapi-agent beside the API. For /ask: set XYMONAPI_ASK=1 in a file under xymonserver.d/,
+installed:   and as the Xymon user install and log in to claude, codex or opencode, then run xymonapi-agent doctor: see xymonapi(8), /ask.
+uninstalled: Uninstalled xymonapi-agent. Kept: xymonapi-mcp and xymonapi.
+client-files: xymonagent.py xymonapi-agent.sh
+client-manual: xymonapi-agent.1
+command: xymonapi-agent xymonapi-agent.sh
+executable: xymonapi-agent.sh
+uninstalled-client: Uninstalled xymonapi-agent. Kept: xymonapi-mcp, xymonapi's client, and its sessions under $XDG_STATE_HOME/xymonapi-agent.

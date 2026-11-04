@@ -17,7 +17,7 @@ import traceback
 from pathlib import Path
 
 # xymonapi_client.py is xymonapi's, the API's own client, in its directory
-# beside this one: make installs the plugins side by side.
+# beside this one: install.sh installs the plugins side by side.
 sys.path.append(str(Path(__file__).resolve().parent.parent / "xymonapi"))
 import xymonapi_client as client  # noqa: E402
 

@@ -4,7 +4,7 @@
 # tests/run.sh -- run the tests in each DIR, by default every one: each
 # plugin's, under plugins/<name>/tests/, then those of how the plugins fit
 # together, under tests/compat/, against the built Xymon source tree named
-# by XYMON_SRC. A plugin's make test runs its own directory.
+# by XYMON_SRC. Given plugins/NAME/tests, it runs that plugin's alone.
 #
 #   XYMON_SRC=/path/to/xymon tests/run.sh [DIR...]
 #

@@ -254,7 +254,7 @@ paths:
       security: [ {} ]
       responses:
         "200":
-          description: "A gzipped tar rooted at xymon-plugins/, laid out as the repository is: plugins/NAME for each plugin staged here, without its tests, with build/plugin.mk and the top Makefile. make install-client in plugins/NAME installs that plugin."
+          description: "A gzipped tar rooted at xymon-plugins/, laid out as the repository is: plugins/NAME for each plugin staged here, without its tests, with install.sh and LICENSE. ./install.sh install-client NAME installs that plugin."
           content:
             application/gzip: { schema: { type: string, format: binary } }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -397,7 +397,7 @@ components:
       properties:
         alive: { type: boolean }
         server_version: { type: string, description: "xymond's answer to a ping, e.g. \"xymond 4.3.30\"." }
-        version: { type: string, description: "The version this API was installed from: its release tag, xymonapi/vX.Y.Z, when make install ran on one, else the X.Y.Z of its PLUGIN file; absent when it was not installed. xymonapi-connect compares it with the client's own." }
+        version: { type: string, description: "The version this API was installed from: its release tag, xymonapi/vX.Y.Z, when the install ran on one, else the X.Y.Z of its PLUGIN file; absent when it was not installed. xymonapi-connect compares it with the client's own." }
         search:
           type: object
           nullable: true

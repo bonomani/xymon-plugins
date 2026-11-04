@@ -5,6 +5,20 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## Every plugin's install, from xymonapi 2.2.0
+
+The plugins install with `./install.sh` at the repository's top, and `make`
+is no longer used: the `Makefile`s are gone. What was
+`make install XYMONHOME=...` in `plugins/NAME` is
+`XYMONHOME=... ./install.sh install NAME`; `make install-client`,
+`make uninstall`, `make uninstall-client`, `make venv` and
+`make venv-client` are the same words after `./install.sh`, and with no
+`NAME` they act on every plugin of the side, as the top `Makefile` did.
+`PREFIX`, `MANDIR`, `DESTDIR` and `PYTHON` mean what they meant, from the
+environment or as `NAME=value` arguments. What is installed, and where, is
+unchanged: an install over the old one needs nothing more. The tests run
+with `tests/run.sh` instead of `make test`.
+
 ## xymonapi 2.0.0
 
 An API started before its launcher named it by its full path -- one whose

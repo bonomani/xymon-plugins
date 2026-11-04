@@ -3,10 +3,10 @@
 #
 # tests/compat/xymonapi-plugins.sh
 #
-# What make install stages on a server is what /plugins gives, and a machine
+# What ./install.sh install stages on a server is what /plugins gives, and a machine
 # installs from it: the archive holds each plugin installed there, laid out
-# as the repository is but for the tests, with build/plugin.mk and the top
-# Makefile; make install-client in its plugins/xymonapi-mcp installs the MCP
+# as the repository is but for the tests, with install.sh and LICENSE;
+# ./install.sh install-client xymonapi-mcp there installs the MCP
 # server, xymonapi's client and xymonapi-connect, at the server's versions.
 # A plugin uninstalled from the server leaves the archive, and xymonapi is
 # not uninstalled while one staged there needs it.
@@ -25,14 +25,13 @@ command -v curl >/dev/null 2>&1 || skip "curl is not installed"
 
 work=$(mktempdir)
 register_cleanup 'stop_process "$API_PID"'
-make=${MAKE:-make}
 
 # Every server-side plugin, as an admin installs them.
-"$make" -C "$ROOT" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
-	|| fail "make install failed: $(tail -n 5 "$work/install.log")"
+"$ROOT/install.sh" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
+	|| fail "install.sh install failed: $(tail -n 5 "$work/install.log")"
 # The MCP server and the agent are beside the API too, for its /ask.
 for p in xymonapi-mcp xymonapi-agent; do
-	[ -x "$work/inst/ext/$p/$p.sh" ] || fail "make install did not put $p beside the API, for /ask"
+	[ -x "$work/inst/ext/$p/$p.sh" ] || fail "install.sh install did not put $p beside the API, for /ask"
 done
 API_ROOT=$work/inst/ext/xymonapi
 export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONAPI_PASSWD=""
@@ -44,7 +43,7 @@ curl -s -o "$work/plugins.tgz" "$plugins"
 # /plugins has an archive to give, /client is a path like any unknown one.
 assert_equal "404" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/client")" "[C2] /client is gone"
 tar -tzf "$work/plugins.tgz" > "$work/list" || fail "/plugins' answer is not a gzipped tar"
-for f in Makefile LICENSE build/plugin.mk plugins/xymonapi/PLUGIN plugins/xymonapi-mcp/PLUGIN plugins/xymonapi-rag/PLUGIN \
+for f in install.sh LICENSE plugins/xymonapi/PLUGIN plugins/xymonapi-mcp/PLUGIN plugins/xymonapi-rag/PLUGIN \
          plugins/xymonapi/xymonapi_client.py plugins/xymonapi-mcp/server.py; do
 	grep -qx "xymon-plugins/$f" "$work/list" || fail "the archive has no $f: $(head -n 20 "$work/list")"
 done
@@ -52,11 +51,16 @@ t=$(grep '/tests/' "$work/list" || true)
 [ -n "$t" ] && fail "the archive holds tests: $(first_line "$t")"
 grep -q '__pycache__' "$work/list" && fail "the archive holds __pycache__"
 
-# A machine installs the MCP server from it, as its README says.
+# A machine installs the MCP server from it, as its README says, with no
+# make: one stands first on PATH that records being called and fails.
+mkdir -p "$work/nomake"
+printf '#!/bin/sh\necho "make $*" >> "%s/make.called"\nexit 99\n' "$work" > "$work/nomake/make"
+chmod 755 "$work/nomake/make"
 mkdir -p "$work/laptop"
 tar -xzf "$work/plugins.tgz" -C "$work/laptop"
-"$make" -C "$work/laptop/xymon-plugins/plugins/xymonapi-mcp" install-client PREFIX="$work/prefix" >"$work/client.log" 2>&1 \
-	|| fail "make install-client from the archive failed: $(tail -n 5 "$work/client.log")"
+PATH="$work/nomake:$PATH" "$work/laptop/xymon-plugins/install.sh" install-client xymonapi-mcp PREFIX="$work/prefix" >"$work/client.log" 2>&1 \
+	|| fail "install.sh install-client from the archive failed: $(tail -n 5 "$work/client.log")"
+[ -e "$work/make.called" ] && fail "installing from the archive ran make: $(cat "$work/make.called")"
 for c in xymonapi-mcp xymonapi-connect; do
 	[ -x "$work/prefix/bin/$c" ] || fail "installing from the archive gave no $c"
 done
@@ -67,13 +71,13 @@ assert_equal "$(sed -n 's/^version: *//p' "$ROOT/plugins/xymonapi-mcp/PLUGIN")" 
 
 # Uninstalled from the server, a plugin leaves the archive; xymonapi stays
 # while one staged needs it.
-"$make" -C "$ROOT/plugins/xymonapi-rag" uninstall XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/un.log" 2>&1 \
-	|| fail "make uninstall of xymonapi-rag failed: $(tail -n 5 "$work/un.log")"
+"$ROOT/install.sh" uninstall xymonapi-rag XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/un.log" 2>&1 \
+	|| fail "install.sh uninstall of xymonapi-rag failed: $(tail -n 5 "$work/un.log")"
 tar -tzf <(curl -s "$plugins") > "$work/list2"
 grep -q '^xymon-plugins/plugins/xymonapi-rag/' "$work/list2" && fail "an uninstalled plugin stayed in the archive"
 grep -q '^xymon-plugins/plugins/xymonapi-mcp/PLUGIN$' "$work/list2" || fail "and took the others with it"
 rc=0
-"$make" -C "$ROOT/plugins/xymonapi" uninstall XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/un2.log" 2>&1 || rc=$?
+"$ROOT/install.sh" uninstall xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/un2.log" 2>&1 || rc=$?
 [ "$rc" -ne 0 ] || fail "xymonapi was uninstalled while the staged MCP server needs it"
 assert_contains "needed by xymonapi-mcp" "$(cat "$work/un2.log")" "and the refusal names it"
 

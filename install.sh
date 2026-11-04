@@ -1,0 +1,379 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Install, update and remove the plugins, on the Xymon server or on another
+# machine, with nothing but a POSIX shell and the usual tools: no make.
+#
+#   XYMONHOME=/usr/lib/xymon/server ./install.sh install [PLUGIN...]    on the server
+#   ./install.sh install-client [PLUGIN...]       elsewhere, under PREFIX (~/.local)
+#   ./install.sh uninstall|uninstall-client [PLUGIN...]
+#   ./install.sh venv|venv-client                 the virtualenv beside the plugins
+#
+# With no PLUGIN, every plugin of that side. A plugin that needs another
+# installs it first, and an uninstall is refused while one installed needs
+# the plugin removed. Running an install again updates: each plugin's
+# directory is replaced as a whole, and the admin's task files, web server
+# snippets and data are kept. Settings come from the environment, or as
+# NAME=value arguments: XYMONHOME, PREFIX, MANDIR (/usr/share/man), DESTDIR,
+# which stages either side for a package, and PYTHON, the Python a
+# virtualenv is made with.
+#
+# What each plugin installs is in its plugins/NAME/PLUGIN file. On a server
+# the plugins go under $XYMONHOME/ext/, one directory each, and a plugin that
+# needs another finds it beside itself; elsewhere they go under
+# $PREFIX/libexec/xymon-plugins/ the same way, with a command per plugin in
+# $PREFIX/bin. Each records its version beside its files, in VERSION, and
+# the virtualenv they share sits beside them, as venv/. Every path is
+# quoted, and escaped before it reaches sed: a directory with a space, an &
+# or a | in its name is a directory like any other.
+
+ROOT=$(cd "$(dirname "$0")" && pwd)
+
+die() { echo "install.sh: $*" >&2; exit 1; }
+usage() {
+	echo "usage: ./install.sh install|install-client|uninstall|uninstall-client|venv|venv-client [PLUGIN...] [NAME=value...]" >&2
+	exit 2
+}
+
+[ $# -ge 1 ] || usage
+ACTION=$1; shift
+NAMES=
+for a in "$@"; do
+	case $a in
+		*=*) export "$a" ;;
+		*) NAMES="$NAMES $a" ;;
+	esac
+done
+
+XYMONHOME=${XYMONHOME:-}
+DESTDIR=${DESTDIR:-}
+MANDIR=${MANDIR:-/usr/share/man}
+PREFIX=${PREFIX:-$HOME/.local}
+# PYTHON given is also the one an install makes the virtualenv from, in
+# place of its search for one.
+PYTHON_GIVEN=${PYTHON:-}
+PYTHON=${PYTHON:-python3}
+
+EXTROOT=$DESTDIR$XYMONHOME/ext
+ETC=$DESTDIR$XYMONHOME/etc
+TASKDIR=$ETC/tasks.d
+CLIENTROOT=$DESTDIR$PREFIX/libexec/xymon-plugins
+BIN=$DESTDIR$PREFIX/bin
+CLIENTMAN1=$DESTDIR$PREFIX/share/man/man1
+# What other machines install from, which the API serves at /plugins: each
+# plugin installed on the server stages its directory here, as in the
+# repository, beside this script and LICENSE.
+DIST=$EXTROOT/xymon-plugins-client
+
+# field PLUGIN KEY -- the value of KEY in the plugin's PLUGIN file, one line
+# for each time the key appears.
+field() { sed -n "s/^$2: //p" "$ROOT/plugins/$1/PLUGIN"; }
+
+# sedesc TEXT -- TEXT escaped for the right-hand side of a sed s|||.
+sedesc() { printf '%s\n' "$1" | sed -e 's/[\\&|]/\\&/g'; }
+
+# say PLUGIN KEY -- print the plugin's message KEY, its placeholders filled.
+say() {
+	field "$1" "$2" | sed -e "s|@ETC@|$(sedesc "$ETC")|g" -e "s|@TASKDIR@|$(sedesc "$TASKDIR")|g" \
+		-e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g"
+}
+
+# Every plugin, by the directories under plugins/ that hold a PLUGIN file.
+all_plugins() {
+	for f in "$ROOT"/plugins/*/PLUGIN; do
+		[ -e "$f" ] && basename "$(dirname "$f")"
+	done
+}
+
+# known PLUGIN -- refuse a name that is not a plugin here, or that could
+# name a directory other than one plugin's.
+known() {
+	case $1 in ""|*/*|.|..) die "not a plugin name: '$1'" ;; esac
+	[ -f "$ROOT/plugins/$1/PLUGIN" ] || die "no plugin $1 here: the plugins are $(echo $(all_plugins))"
+}
+
+# depth PLUGIN -- how many plugins deep it stands on: 0 for one that needs
+# none. Uninstalling every plugin goes from the deepest up.
+depth() {
+	d=0
+	for n in $(field "$1" needs); do
+		x=$(depth "$n"); [ $((x + 1)) -gt $d ] && d=$((x + 1))
+	done
+	echo $d
+}
+
+# dependents PLUGIN -- the plugins that name it in their needs.
+dependents() {
+	for p in $(all_plugins); do
+		case " $(field "$p" needs) " in *" $1 "*) echo "$p" ;; esac
+	done
+}
+
+need_home() {
+	[ -n "$XYMONHOME" ] || die "XYMONHOME is not set: XYMONHOME=<the Xymon server directory> ./install.sh $ACTION [PLUGIN...]"
+}
+
+# fresh DIR -- DIR, emptied: an install replaces a plugin's directory as a
+# whole, so that a file a newer version no longer ships does not stay behind
+# to be imported. It holds only what the plugin ships and its VERSION.
+fresh() { rm -rf "$1" && mkdir -p "$1"; }
+
+# copy PLUGIN SIDE DIR -- the side's files into DIR, executable or not.
+copy() {
+	exe=" $(field "$1" executable) "
+	for f in $(field "$1" "$2-files"); do
+		cp -f "$ROOT/plugins/$1/$f" "$3/" || exit 1
+		case $exe in *" $f "*) chmod 755 "$3/$f" ;; *) chmod 644 "$3/$f" ;; esac
+	done
+}
+
+# version PLUGIN DIR -- the plugin's version, in DIR/VERSION. Installed from
+# a release, the commit its tag PLUGIN/vX.Y.Z names, it is that tag, which
+# git checks out: the API's, which /health gives so a laptop fetches the same
+# code. From any other commit, or an archive, the version in the PLUGIN file.
+version() {
+	v=$(git -C "$ROOT/plugins/$1" describe --exact-match --tags --match "$1/v*" 2>/dev/null) || v=$(field "$1" version)
+	printf '%s\n' "$v" > "$2/VERSION" && chmod 644 "$2/VERSION"
+}
+
+# manual PLUGIN PAGE MANROOT -- the page into its section's directory.
+manual() {
+	[ -n "$2" ] || return 0
+	mkdir -p "$3/man${2##*.}" && cp -f "$ROOT/plugins/$1/$2" "$3/man${2##*.}/" && chmod 644 "$3/man${2##*.}/$2"
+}
+
+# dist PLUGIN -- stage the plugin's directory under $DIST/plugins, as it is
+# in the repository but for its tests, with this script and LICENSE beside:
+# a machine unpacking it runs ./install.sh install-client there, at the
+# server's versions. Links are copied as links, as in the repository.
+dist() {
+	rm -rf "$DIST/plugins/$1"
+	mkdir -p "$DIST/plugins"
+	cp -R "$ROOT/plugins/$1" "$DIST/plugins/$1"
+	rm -rf "$DIST/plugins/$1/tests"
+	find "$DIST/plugins/$1" -name __pycache__ -prune -exec rm -rf {} +
+	cp -f "$ROOT/install.sh" "$ROOT/LICENSE" "$DIST/"
+}
+
+# task PLUGIN -- its xymonlaunch task file as tasks.d/PLUGIN, @XYMONHOME@
+# replaced, unless one is there already: the one an admin enabled is not put
+# back to DISABLED by the next install.
+task() {
+	t=$(field "$1" task); [ -n "$t" ] || return 0
+	mkdir -p "$TASKDIR"
+	if [ -e "$TASKDIR/$1" ]; then
+		echo "keeping $TASKDIR/$1"
+	else
+		sed -e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g" "$ROOT/plugins/$1/$t" > "$TASKDIR/$1" && chmod 644 "$TASKDIR/$1"
+	fi
+}
+
+# conf PLUGIN -- its web server snippets into $XYMONHOME/etc unless there
+# already: an admin's edits are kept, as a task file is.
+conf() {
+	for c in $(field "$1" conf); do
+		if [ -e "$ETC/$c" ]; then
+			echo "keeping $ETC/$c"
+		else
+			cp "$ROOT/plugins/$1/$c" "$ETC/" && chmod 644 "$ETC/$c"
+		fi
+	done
+}
+
+# restart PLUGIN -- a process that runs the plugin's program from this
+# install keeps the code it loaded: stop it, and xymonlaunch starts the new.
+# Found by its command line, which names the program by its full path,
+# escaped for pgrep's regular expressions, as a directory may hold a | or a
+# dot. With DESTDIR the path is the staging one, which nothing runs from.
+restart() {
+	prog=$(field "$1" restart); [ -n "$prog" ] || return 0
+	if ! command -v pgrep >/dev/null 2>&1; then
+		echo "An API that runs keeps the old code until it is stopped; xymonlaunch then starts the new."
+		return 0
+	fi
+	pat=$(printf '%s/%s' "$EXTROOT/$1" "$prog" | sed -e 's/[][\\.*^$|+?(){}]/\\&/g')
+	pids=$(echo $(pgrep -f "$pat" | grep -vx "$$"))
+	[ -n "$pids" ] || return 0
+	if kill $pids 2>/dev/null; then
+		echo "Stopped the API that ran the old code (PID $pids): xymonlaunch starts the new one."
+	else
+		echo "Could not stop the API that runs the old code (PID $pids): stop it with kill $pids, and xymonlaunch starts the new one." >&2
+	fi
+}
+
+# offer QUESTION -- on a terminal, ask it; true on y. Without one, false.
+offer() {
+	[ -t 0 ] && [ -t 1 ] || return 1
+	printf '%s [y/N] ' "$1"
+	read -r yn
+	case $yn in [yY]*) return 0 ;; esac
+	return 1
+}
+
+# venv_auto PLUGIN ROOT MODULES TARGET NOTE -- the last step of installing a
+# plugin that needs the Python modules MODULES (their import names), which
+# downloads nothing unless asked. With no virtualenv at ROOT/venv yet: the
+# newest Python 3.9 or later on this machine that has them already --
+# PYTHON when given, else python3.14 down to python3.9 and python3, on PATH
+# and in Homebrew's and pyenv's directories -- is made the virtualenv's,
+# with --system-site-packages, so that it is only pinned beside the plugins
+# and nothing is copied or fetched; with no such Python, the hint says which
+# ./install.sh venv would use. A candidate is named by the interpreter it
+# runs (sys.executable), not a shim or link found on PATH. With a virtualenv
+# there, the modules it lacks are named. On a terminal the hint is an offer:
+# on "y", ./install.sh TARGET -- venv or venv-client -- installs the modules
+# from PyPI there and then. NOTE says in the offer what the modules are for.
+venv_auto() {
+	plugin=$1 root=$2 modules=$3 target=$4 note=$5
+	[ -n "$modules" ] || return 0
+	if [ -x "$root/venv/bin/python3" ]; then
+		missing=$("$root/venv/bin/python3" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $modules)
+		[ -z "$missing" ] && return 0
+		if offer "The virtualenv $root/venv lacks $missing, which $plugin needs${note:+ ($note)}. Install them into it, from PyPI?"; then
+			"$ROOT/install.sh" "$target" || exit 1
+		else
+			echo "The virtualenv $root/venv lacks $missing, which this plugin needs: ./install.sh venv (venv-client elsewhere) installs them."
+		fi
+		return 0
+	fi
+	py= newest=
+	for c in ${PYTHON_GIVEN:-python3.14 python3.13 python3.12 python3.11 python3.10 python3.9 python3}; do
+		for d in "" /opt/homebrew/bin /usr/local/bin /opt/homebrew/opt/python@3.*/bin "$HOME"/.pyenv/versions/*/bin; do
+			case $c in
+				/*) p=$c ;;
+				*) if [ -n "$d" ]; then p=$d/$c; else p=$(command -v "$c" 2>/dev/null); fi ;;
+			esac
+			[ -n "$p" ] && [ -x "$p" ] || continue
+			"$p" -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null || continue
+			real=$("$p" -c 'import sys; print(sys.executable)' 2>/dev/null)
+			[ -n "$real" ] && [ -x "$real" ] && p=$real
+			[ -n "$newest" ] || newest=$p
+			"$p" -c 'import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in sys.argv[1:]))' $modules 2>/dev/null || continue
+			py=$p; break 2
+		done
+	done
+	if [ -n "$py" ]; then
+		"$py" -m venv --system-site-packages "$root/venv" || exit 1
+		echo "Made $root/venv from $py ($("$py" -V 2>&1)), which has the modules this plugin needs ($modules): the plugins there run with it."
+	elif [ -n "$newest" ] && offer "$plugin needs $modules, which no Python here has${note:+ ($note)}. Make a virtualenv at $root/venv with $newest, and install them from PyPI?"; then
+		PYTHON=$newest "$ROOT/install.sh" "$target" || exit 1
+	else
+		echo "No virtualenv at $root/venv, and no Python with the modules this plugin needs ($modules): ./install.sh venv (venv-client elsewhere)${newest:+ PYTHON=$newest} makes one and installs them; without it, the python3 on PATH must have them."
+	fi
+}
+
+# venv ROOT -- a virtualenv at ROOT/venv, beside the plugins installed in
+# ROOT, with the modules of each, from the requirements.txt installed with
+# it: what every launcher runs with when XYMONAPI_PYTHON names no other. Run
+# again, it adds the modules of a plugin installed since.
+venv() {
+	[ -d "$1" ] || die "nothing is installed in $1 yet"
+	[ -x "$1/venv/bin/python3" ] || "$PYTHON" -m venv "$1/venv" || exit 1
+	for r in "$1"/*/requirements.txt; do
+		[ -e "$r" ] || continue
+		echo "installing the modules of $r"
+		"$1/venv/bin/python3" -m pip install -q -r "$r" || exit 1
+	done
+	echo "The plugins in $1 run with $1/venv/bin/python3 ($("$1/venv/bin/python3" -V))."
+}
+
+DONE=
+install_server() {
+	case " $DONE " in *" $1 "*) return 0 ;; esac
+	for n in $(field "$1" needs); do install_server "$n"; done
+	[ -n "$(field "$1" server-files)" ] || die "$1 has nothing to install on the server"
+	ext=$EXTROOT/$1
+	fresh "$ext" || exit 1
+	copy "$1" server "$ext"
+	version "$1" "$ext"
+	dist "$1"
+	manual "$1" "$(field "$1" server-manual)" "$DESTDIR$MANDIR"
+	task "$1"
+	conf "$1"
+	say "$1" installed
+	restart "$1"
+	venv_auto "$1" "$EXTROOT" "$(field "$1" server-modules)" venv ""
+	DONE="$DONE $1"
+}
+
+install_client() {
+	case " $DONE " in *" $1 "*) return 0 ;; esac
+	for n in $(field "$1" needs); do install_client "$n"; done
+	[ -n "$(field "$1" client-files)" ] || die "$1 has nothing to install on another machine"
+	dir=$CLIENTROOT/$1
+	fresh "$dir" || exit 1
+	mkdir -p "$BIN" "$CLIENTMAN1"
+	copy "$1" client "$dir"
+	version "$1" "$dir"
+	set -- "$1" $(field "$1" command)
+	if [ $# -eq 3 ]; then
+		# The command runs the script from where it is installed: PREFIX as
+		# given, without DESTDIR, quoted.
+		printf '#!/bin/sh\nexec "%s/libexec/xymon-plugins/%s/%s" "$@"\n' "$PREFIX" "$1" "$3" > "$BIN/$2"
+		chmod 755 "$BIN/$2"
+	fi
+	manual "$1" "$(field "$1" client-manual)" "$DESTDIR$PREFIX/share/man"
+	venv_auto "$1" "$CLIENTROOT" "$(field "$1" client-modules)" venv-client "$(field "$1" venv-note)"
+	DONE="$DONE $1"
+}
+
+# needed PLUGIN DIR -- refuse to remove the plugin while one installed in DIR
+# needs it beside it: removing it would leave that one broken.
+needed() {
+	for d in $(dependents "$1"); do
+		[ -e "$2/$d" ] && die "$1 is needed by $d, installed in $2: uninstall $d first"
+	done
+	return 0
+}
+
+uninstall_server() {
+	needed "$1" "$EXTROOT"
+	needed "$1" "$DIST/plugins"
+	rm -rf "$EXTROOT/$1" "$DIST/plugins/$1"
+	m=$(field "$1" server-manual)
+	[ -n "$m" ] && rm -f "$DESTDIR$MANDIR/man${m##*.}/$m"
+	[ -n "$(field "$1" task)" ] && rm -f "$TASKDIR/$1"
+	say "$1" uninstalled
+}
+
+uninstall_client() {
+	needed "$1" "$CLIENTROOT"
+	rm -rf "$CLIENTROOT/$1"
+	set -- "$1" $(field "$1" command)
+	[ $# -eq 3 ] && rm -f "$BIN/$2"
+	m=$(field "$1" client-manual)
+	[ -n "$m" ] && rm -f "$CLIENTMAN1/$m"
+	say "$1" uninstalled-client
+}
+
+# The plugins named, each checked, or every plugin; for an uninstall, the
+# deepest first, so that none is removed while one installed needs it.
+for n in $NAMES; do known "$n"; done
+if [ -n "$NAMES" ]; then LIST=$NAMES; else LIST=$(all_plugins); fi
+deepest_first() {
+	for n in $LIST; do echo "$(depth "$n") $n"; done | sort -rn | cut -d' ' -f2
+}
+
+case $ACTION in
+	install)
+		need_home
+		for n in $LIST; do install_server "$n"; done ;;
+	install-client)
+		for n in $LIST; do install_client "$n"; done ;;
+	uninstall)
+		need_home
+		for n in $(deepest_first); do uninstall_server "$n"; done
+		[ -n "$NAMES" ] || rm -rf "$EXTROOT/venv" ;;
+	uninstall-client)
+		for n in $(deepest_first); do uninstall_client "$n"; done
+		if [ -z "$NAMES" ]; then
+			rm -rf "$CLIENTROOT/venv"
+			rmdir "$CLIENTROOT" 2>/dev/null || true
+		fi ;;
+	venv)
+		need_home
+		venv "$EXTROOT" ;;
+	venv-client)
+		venv "$CLIENTROOT" ;;
+	*) usage ;;
+esac
