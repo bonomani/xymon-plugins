@@ -5,6 +5,22 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## The install actions, from xymonapi 2.3.0
+
+`./install.sh install-client`, `uninstall-client` and `venv-client` are now
+`install-tools`, `uninstall-tools` and `venv-tools`: what they install are
+the plugins' commands, on your own machine, and "client" is Xymon's word for
+a monitored host. The old names are refused, saying the new one. The server
+actions gain `-server` -- `install-server`, `uninstall-server`,
+`venv-server` -- and keep their old spellings. What is installed, and where,
+is unchanged: an install over the old one needs nothing more. In a
+`PLUGIN` file, `client-files`, `client-manual`, `client-modules` and
+`uninstalled-client` are `tools-files`, `tools-manual`, `tools-modules` and
+`uninstalled-tools`. The directory the server stages the plugins in for
+`/plugins`, `ext/xymon-plugins-client`, is `ext/xymon-plugins-dist`; a
+server install renames nothing, so remove the old directory by hand after
+the first install with this version, or leave it: nothing reads it.
+
 ## Every plugin's install, from xymonapi 2.2.0
 
 The plugins install with `./install.sh` at the repository's top, and `make`

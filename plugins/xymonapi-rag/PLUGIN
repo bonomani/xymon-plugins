@@ -15,10 +15,10 @@ server-manual: xymonapi-rag.1
 server-modules: fastembed numpy
 task: xymonapi-rag.tasks.DIST
 uninstalled: Uninstalled xymonapi-rag. Kept: its index, $XYMONAPI_RAG_INDEX, and xymonapi.
-client-files: xymonrag.py xymonapi-rag.sh requirements.txt
-client-manual: xymonapi-rag.1
-client-modules: fastembed numpy
+tools-files: xymonrag.py xymonapi-rag.sh requirements.txt
+tools-manual: xymonapi-rag.1
+tools-modules: fastembed numpy
 venv-note: only to keep an index on this machine: search and ask through the server need none
 command: xymonapi-rag xymonapi-rag.sh
 executable: xymonapi-rag.sh
-uninstalled-client: Uninstalled xymonapi-rag. Kept: xymonapi's client, and any index here, $XYMONAPI_RAG_INDEX.
+uninstalled-tools: Uninstalled xymonapi-rag. Kept: xymonapi's client, and any index here, $XYMONAPI_RAG_INDEX.
