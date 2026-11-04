@@ -66,7 +66,7 @@ Python module fastembed; it is downloaded once, about 65 MB, the first time
 it is used. Indexing and searching send nothing elsewhere. Only ask does,
 and only to $XYMONAPI_RAG_LLM_URL.
 
-The same search is offered to an AI client by the search_docs and
+The same search is offered to an AI tool by the search_docs and
 search_history tools of
 .I xymonapi-mcp(1),
 whose own model then writes the answer: with a Claude subscription, ask is
@@ -82,7 +82,7 @@ A history passage holds a status text, which the monitored host wrote: a
 host that is broken into can write there words meant to steer a language
 model. Each such passage carries a "trust" field saying it is data, not
 instructions, and ask tells the model so; a model may still be misled. Give
-ask, and an AI client that uses search_history, no more than read access,
+ask, and an AI tool that uses search_history, no more than read access,
 as the tools of xymonapi-mcp(1) have.
 
 .SH ENVIRONMENT
