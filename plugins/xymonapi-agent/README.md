@@ -24,7 +24,7 @@ Every command, backend and setting is in
   command as the Xymon user, which then needs an AI CLI and a backend of its
   own -- a hosted provider with a key, or a local model on this or another
   machine of yours -- named in a profile of that user ([A language
-  model](../../README.md#a-language-model)).
+  model](../xymonapi/README.md#a-language-model)).
 
 ## Needs
 
