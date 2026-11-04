@@ -113,6 +113,16 @@ would bring.
 ## Installing
 
 ```sh
+./install.sh
+```
+
+On a terminal, with no word, the script asks what to do: install or remove,
+which role this machine plays -- the Xymon server when `XYMONHOME` is set,
+your own machine otherwise -- and which plugins. Enter takes each default,
+and the answers run one of the commands below, said first, for you to type
+next time:
+
+```sh
 XYMONHOME=/usr/lib/xymon/server ./install.sh install NAME   # the Xymon server's part
 ./install.sh install NAME                                   # your own machine's
 ```
