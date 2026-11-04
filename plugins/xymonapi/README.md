@@ -3,8 +3,12 @@
 The Xymon API gives, over HTTP and as JSON, the status board, its alarms
 and hosts, the values in its RRD files, the graphs drawn from them, and the
 history of colour changes with the status text saved at each. It only
-reads, and changes nothing in Xymon. It runs on the server as one of
-Xymon's `xymonlaunch` tasks, with Xymon's own settings.
+reads, and changes nothing in Xymon.
+
+- **On the Xymon server**: the API, one of Xymon's `xymonlaunch` tasks, with
+  Xymon's own settings; it reads xymond's files and needs no credential.
+- **On your own machine**: `xymonapi-connect`, which gets this machine a
+  token, and the client library the other plugins read the API with.
 
 Its operations, under `/xymon/api/v1`, all GET but for `/tokens`:
 
@@ -60,7 +64,7 @@ curl --unix-socket "$XYMONVAR/xymonapi/api.sock" http://localhost/xymon/api/v1/h
 The port asks for one of its [users](#users), `-u alice`, whatever the
 address. The socket, `$XYMONVAR/xymonapi/api.sock`, is for the programs of
 the server itself and asks none: its permissions let the Xymon user and its
-group in, and nobody else. The plugins' own clients take it by default
+group in, and nobody else. The plugins' commands take it by default
 there (`xymonapi.8`, `XYMONAPI_SOCKET`).
 
 Updating: install again. The install stops the running API, which would go
@@ -111,9 +115,10 @@ another file, as `xymonapi.8` says.
 
 Its port listens on 127.0.0.1 unless told otherwise, and asks the password
 there whatever the address; the socket above never leaves the machine. From
-another machine, use HTTPS, one of -- each with the URL a client is then
-given, in `xymonapi-connect`, `register` or `XYMONAPI_URL`: the scheme, the
-host and the port, without `/xymon/api/v1`, which the client adds:
+another machine, use HTTPS, one of -- each with the URL an API client is
+then given, in `xymonapi-connect`, `register` or `XYMONAPI_URL`: the scheme,
+the host and the port, without `/xymon/api/v1`, which the client library
+adds:
 
 - **Its own HTTPS.** Where xymond has a certificate for TLS (`xymon-tls(7)`,
   from Xymon pull requests #617–#623, not yet merged), the API finds it in
@@ -139,8 +144,8 @@ come out as `[hidden]`, in every text and in the search index.
 
 ## On another machine
 
-A machine that reads the API -- a laptop, say -- needs its client and a
-token of its own, and for that a POSIX shell, `curl` and Python 3.9 or later,
+A machine that reads the API -- a laptop, say, or the server itself when you
+work there -- needs the API's client library and a token of its own, and for that a POSIX shell, `curl` and Python 3.9 or later,
 nothing else:
 
 ```sh
@@ -157,7 +162,7 @@ xymonapi-connect https://xymon.example.ch   # the URL: as reached, above
 `xymonapi-connect` asks for your user and password once -- one of the API's
 [users](#users) -- to get this machine a token, kept in
 `~/.config/xymon-api/xymon.token`; the password is not kept. Run again, it
-keeps a token that works, says when this machine's client and the API run
+keeps a token that works, says when this machine's library and the API run
 different versions, and prints the settings a program reading the API
 needs. A second server gets a name of its own:
 `xymonapi-connect https://lab.example.ch xymon-lab`. `/tokens` lists your

@@ -1,17 +1,23 @@
 # xymonapi-rag
 
 It finds the passages of Xymon's manual pages and history that a question is
-about, by what they mean rather than the words they share. The index lives
-on the Xymon server, where the pages and the history are, and the
-[API](../xymonapi/README.md) serves it at `/search`. Every command and
+about, by what they mean rather than the words they share. Every command and
 setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
+
+- **On the Xymon server**: the daily index task. It reads the pages and
+  xymond's history files where they are, needs no credential, and the
+  [API](../xymonapi/README.md) serves what it writes at `/search`. No
+  language model is involved.
+- **On your own machine**: `xymonapi-rag search`, the same search through
+  the API, and `ask`, which hands the passages found to a language model you
+  run.
 
 ## Needs
 
 - **[`xymonapi`](../xymonapi/README.md)**: on the server, the API, which
   serves the index at `/search` and whose code the index task reads the
-  history with; elsewhere, its client. Either install here brings the one it
-  needs.
+  history with; elsewhere, its client library. Either install here brings
+  the one it needs.
 - Python 3.9 or later. The modules in [`requirements.txt`](requirements.txt)
   are needed on the server, and on a machine that keeps an index of its own;
   how the install finds or makes a Python with them is in the [top
@@ -63,7 +69,7 @@ xymonapi-rag ask "has /boot filled up before, and where?"
 The URL is the API's as this machine reaches it, port included when it is
 not 443, as [`xymonapi`'s
 README](../xymonapi/README.md#reaching-it-from-another-machine) gives it.
-`xymonapi-connect`, installed with the client, gets this machine its token
+`xymonapi-connect`, installed with the API's client library, gets this machine its token
 with your password once, as [`xymonapi`'s
 README](../xymonapi/README.md#on-another-machine) says, and prints the
 settings `xymonapi-rag` reads; the `eval` puts them in the shell.
