@@ -218,7 +218,7 @@ offer() {
 # and in Homebrew's and pyenv's directories -- is made the virtualenv's,
 # with --system-site-packages, so that it is only pinned beside the plugins
 # and nothing is copied or fetched; with no such Python, the hint says which
-# ./install.sh venv would use. A candidate is named by the interpreter it
+# ./install.sh TARGET would use. A candidate is named by the interpreter it
 # runs (sys.executable), not a shim or link found on PATH. With a virtualenv
 # there, the modules it lacks are named. On a terminal the hint is an offer:
 # on "y", ./install.sh TARGET -- venv or venv-client -- installs the modules
@@ -232,7 +232,7 @@ venv_auto() {
 		if offer "The virtualenv $root/venv lacks $missing, which $plugin needs${note:+ ($note)}. Install them into it, from PyPI?"; then
 			"$ROOT/install.sh" "$target" || exit 1
 		else
-			echo "The virtualenv $root/venv lacks $missing, which this plugin needs: ./install.sh venv (venv-client elsewhere) installs them."
+			echo "The virtualenv $root/venv lacks $missing, which this plugin needs: ./install.sh $target installs them."
 		fi
 		return 0
 	fi
@@ -258,7 +258,7 @@ venv_auto() {
 	elif [ -n "$newest" ] && offer "$plugin needs $modules, which no Python here has${note:+ ($note)}. Make a virtualenv at $root/venv with $newest, and install them from PyPI?"; then
 		PYTHON=$newest "$ROOT/install.sh" "$target" || exit 1
 	else
-		echo "No virtualenv at $root/venv, and no Python with the modules this plugin needs ($modules): ./install.sh venv (venv-client elsewhere)${newest:+ PYTHON=$newest} makes one and installs them; without it, the python3 on PATH must have them."
+		echo "No virtualenv at $root/venv, and no Python with the modules this plugin needs ($modules): ./install.sh $target${newest:+ PYTHON=$newest} makes one and installs them; without it, the python3 on PATH must have them."
 	fi
 }
 
