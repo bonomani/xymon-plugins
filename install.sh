@@ -4,10 +4,15 @@
 # Install, update and remove the plugins, on the Xymon server or on another
 # machine, with nothing but a POSIX shell and the usual tools: no make.
 #
-#   XYMONHOME=/usr/lib/xymon/server ./install.sh install [PLUGIN...]    on the server
-#   ./install.sh install-client [PLUGIN...]       elsewhere, under PREFIX (~/.local)
-#   ./install.sh uninstall|uninstall-client [PLUGIN...]
-#   ./install.sh venv|venv-client                 the virtualenv beside the plugins
+#   XYMONHOME=/usr/lib/xymon/server ./install.sh install-server [PLUGIN...]  on the Xymon server
+#   ./install.sh install-tools [PLUGIN...]       on your own machine, under PREFIX (~/.local)
+#   ./install.sh uninstall-server|uninstall-tools [PLUGIN...]
+#   ./install.sh venv-server|venv-tools          the virtualenv beside the plugins
+#
+# The server actions are also spelt without -server, their names before the
+# tools had one. install-client and its kin are refused, naming the tools
+# action: "client" is Xymon's, the monitored host, and the action of that
+# name will install a client extension there once one is here.
 #
 # With no PLUGIN, every plugin of that side. A plugin that needs another
 # installs it first, and an uninstall is refused while one installed needs
@@ -31,7 +36,7 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 
 die() { echo "install.sh: $*" >&2; exit 1; }
 usage() {
-	echo "usage: ./install.sh install|install-client|uninstall|uninstall-client|venv|venv-client [PLUGIN...] [NAME=value...]" >&2
+	echo "usage: ./install.sh install-server|install-tools|uninstall-server|uninstall-tools|venv-server|venv-tools [PLUGIN...] [NAME=value...]" >&2
 	exit 2
 }
 
@@ -57,13 +62,13 @@ PYTHON=${PYTHON:-python3}
 EXTROOT=$DESTDIR$XYMONHOME/ext
 ETC=$DESTDIR$XYMONHOME/etc
 TASKDIR=$ETC/tasks.d
-CLIENTROOT=$DESTDIR$PREFIX/libexec/xymon-plugins
+TOOLSROOT=$DESTDIR$PREFIX/libexec/xymon-plugins
 BIN=$DESTDIR$PREFIX/bin
-CLIENTMAN1=$DESTDIR$PREFIX/share/man/man1
+TOOLSMAN1=$DESTDIR$PREFIX/share/man/man1
 # What other machines install from, which the API serves at /plugins: each
 # plugin installed on the server stages its directory here, as in the
 # repository, beside this script and LICENSE.
-DIST=$EXTROOT/xymon-plugins-client
+DIST=$EXTROOT/xymon-plugins-dist
 
 # field PLUGIN KEY -- the value of KEY in the plugin's PLUGIN file, one line
 # for each time the key appears.
@@ -144,7 +149,7 @@ manual() {
 
 # dist PLUGIN -- stage the plugin's directory under $DIST/plugins, as it is
 # in the repository but for its tests, with this script and LICENSE beside:
-# a machine unpacking it runs ./install.sh install-client there, at the
+# a machine unpacking it runs ./install.sh install-tools there, at the
 # server's versions. Links are copied as links, as in the repository.
 dist() {
 	rm -rf "$DIST/plugins/$1"
@@ -221,7 +226,7 @@ offer() {
 # ./install.sh TARGET would use. A candidate is named by the interpreter it
 # runs (sys.executable), not a shim or link found on PATH. With a virtualenv
 # there, the modules it lacks are named. On a terminal the hint is an offer:
-# on "y", ./install.sh TARGET -- venv or venv-client -- installs the modules
+# on "y", ./install.sh TARGET -- venv-server or venv-tools -- installs the modules
 # from PyPI there and then. NOTE says in the offer what the modules are for.
 venv_auto() {
 	plugin=$1 root=$2 modules=$3 target=$4 note=$5
@@ -292,18 +297,18 @@ install_server() {
 	conf "$1"
 	say "$1" installed
 	restart "$1"
-	venv_auto "$1" "$EXTROOT" "$(field "$1" server-modules)" venv ""
+	venv_auto "$1" "$EXTROOT" "$(field "$1" server-modules)" venv-server ""
 	DONE="$DONE $1"
 }
 
-install_client() {
+install_tools() {
 	case " $DONE " in *" $1 "*) return 0 ;; esac
-	for n in $(field "$1" needs); do install_client "$n"; done
-	[ -n "$(field "$1" client-files)" ] || die "$1 has nothing to install on another machine"
-	dir=$CLIENTROOT/$1
+	for n in $(field "$1" needs); do install_tools "$n"; done
+	[ -n "$(field "$1" tools-files)" ] || die "$1 has nothing to install on your own machine"
+	dir=$TOOLSROOT/$1
 	fresh "$dir" || exit 1
-	mkdir -p "$BIN" "$CLIENTMAN1"
-	copy "$1" client "$dir"
+	mkdir -p "$BIN" "$TOOLSMAN1"
+	copy "$1" tools "$dir"
 	version "$1" "$dir"
 	set -- "$1" $(field "$1" command)
 	if [ $# -eq 3 ]; then
@@ -312,8 +317,8 @@ install_client() {
 		printf '#!/bin/sh\nexec "%s/libexec/xymon-plugins/%s/%s" "$@"\n' "$PREFIX" "$1" "$3" > "$BIN/$2"
 		chmod 755 "$BIN/$2"
 	fi
-	manual "$1" "$(field "$1" client-manual)" "$DESTDIR$PREFIX/share/man"
-	venv_auto "$1" "$CLIENTROOT" "$(field "$1" client-modules)" venv-client "$(field "$1" venv-note)"
+	manual "$1" "$(field "$1" tools-manual)" "$DESTDIR$PREFIX/share/man"
+	venv_auto "$1" "$TOOLSROOT" "$(field "$1" tools-modules)" venv-tools "$(field "$1" venv-note)"
 	DONE="$DONE $1"
 }
 
@@ -336,15 +341,20 @@ uninstall_server() {
 	say "$1" uninstalled
 }
 
-uninstall_client() {
-	needed "$1" "$CLIENTROOT"
-	rm -rf "$CLIENTROOT/$1"
+uninstall_tools() {
+	needed "$1" "$TOOLSROOT"
+	rm -rf "$TOOLSROOT/$1"
 	set -- "$1" $(field "$1" command)
 	[ $# -eq 3 ] && rm -f "$BIN/$2"
-	m=$(field "$1" client-manual)
-	[ -n "$m" ] && rm -f "$CLIENTMAN1/$m"
-	say "$1" uninstalled-client
+	m=$(field "$1" tools-manual)
+	[ -n "$m" ] && rm -f "$TOOLSMAN1/$m"
+	say "$1" uninstalled-tools
 }
+
+case $ACTION in
+	install-client|uninstall-client|venv-client)
+		die "$ACTION is now ${ACTION%-client}-tools: the plugins' commands, on your own machine. A client, here, is Xymon's, on a monitored host, and nothing installs one yet." ;;
+esac
 
 # The plugins named, each checked, or every plugin; for an uninstall, the
 # deepest first, so that none is removed while one installed needs it.
@@ -355,25 +365,25 @@ deepest_first() {
 }
 
 case $ACTION in
-	install)
+	install|install-server)
 		need_home
 		for n in $LIST; do install_server "$n"; done ;;
-	install-client)
-		for n in $LIST; do install_client "$n"; done ;;
-	uninstall)
+	install-tools)
+		for n in $LIST; do install_tools "$n"; done ;;
+	uninstall|uninstall-server)
 		need_home
 		for n in $(deepest_first); do uninstall_server "$n"; done
 		[ -n "$NAMES" ] || rm -rf "$EXTROOT/venv" ;;
-	uninstall-client)
-		for n in $(deepest_first); do uninstall_client "$n"; done
+	uninstall-tools)
+		for n in $(deepest_first); do uninstall_tools "$n"; done
 		if [ -z "$NAMES" ]; then
-			rm -rf "$CLIENTROOT/venv"
-			rmdir "$CLIENTROOT" 2>/dev/null || true
+			rm -rf "$TOOLSROOT/venv"
+			rmdir "$TOOLSROOT" 2>/dev/null || true
 		fi ;;
-	venv)
+	venv|venv-server)
 		need_home
 		venv "$EXTROOT" ;;
-	venv-client)
-		venv "$CLIENTROOT" ;;
+	venv-tools)
+		venv "$TOOLSROOT" ;;
 	*) usage ;;
 esac
