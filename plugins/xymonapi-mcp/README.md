@@ -18,8 +18,8 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
 - **A running [`xymonapi`](../xymonapi/README.md)** on the Xymon server,
   reached through its socket from that machine and over the network from
-  any other. `./install.sh install-tools xymonapi-mcp` installs `xymonapi`'s client beside this
-  plugin; the API itself is installed and enabled on the server, by its
+  any other. `./install.sh install-tools xymonapi-mcp` installs `xymonapi`'s client library beside
+  this plugin; the API itself is installed and enabled on the server, by its
   own README or by this plugin's server install there.
 - Python 3.9 or later, and nothing else: it speaks the protocol with the
   standard library.
@@ -37,7 +37,7 @@ not 443 -- [`xymonapi`'s
 README](../xymonapi/README.md#reaching-it-from-another-machine) gives it for
 each way of reaching it. `register` connects this machine to the API with
 `xymonapi-connect` -- your password once, for a token of its own, as
-[`xymonapi`'s README](../xymonapi/README.md#on-another-machine) says -- then
+[`xymonapi`'s README](../xymonapi/README.md#on-your-own-machine) says -- then
 registers the server with Claude Code and Codex as `xymon`. Then ask your AI
 tool "which hosts are red?". `register URL xymon-lab` names a second
 server; an AI tool that is neither of those two is [registered by
