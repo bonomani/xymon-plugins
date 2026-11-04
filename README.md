@@ -14,14 +14,40 @@ monitoring system, of two kinds:
 The `plugins/` half was the repository `xymon-api`, then `bonomani/xymon-plugins`,
 and carries its whole history.
 
+## Where things run
+
+Code in this repository runs in one of three places, and Xymon has names for
+the first two:
+
+| place | Xymon's name | started by | lives in |
+|---|---|---|---|
+| the Xymon server | server extension | xymonlaunch, from a file in `tasks.d` | `$XYMONHOME/ext` |
+| a monitored host | client extension | the Xymon client, from `clientlaunch.cfg` | the client's `ext/` |
+| your own machine | -- | you, or your AI tool | `~/.local` |
+
+The API is the line between the first two places and the third. Everything
+on the two Xymon sides is started by Xymon itself, as its own user, and needs
+no credential of the API's: on the server, the API, the daily search index
+and `/ask` read xymond's own files; on a monitored host, a check reads the
+host it is on. Everything on your own machine -- `xymonapi-connect`, the MCP
+server your AI tool starts, `xymonapi-rag search`, `xymonapi-agent` -- goes
+through the API, with a token or, on the server itself, its socket. **No
+language model is needed for the monitoring data to reach your AI tool**:
+only `xymonapi-agent`, `/ask` and `xymonapi-rag ask` call one, as [A language
+model](#a-language-model) says.
+
+"Client" in these pages means Xymon's client, on a monitored host; a program
+that calls the API is an *API client*; Claude Code, Codex, opencode and the
+like are *AI tools*.
+
 ## The plugins
 
-| plugin | side | what it is | needs |
+| plugin | on the Xymon server | on your own machine | needs |
 |---|---|---|---|
-| [`xymonapi`](plugins/xymonapi/README.md) | server, client | a read-only HTTP and JSON interface to a Xymon server, as one of its xymonlaunch tasks, and its client | on the server, xymon >= 4.3.31 (main); python >= 3.9 |
-| [`xymonapi-mcp`](plugins/xymonapi-mcp/README.md) | client | an MCP server that gives an AI client read-only tools over the Xymon API | xymonapi >= 0.1.0 (its client beside it; the API's socket on the server, or the API over the network); python >= 3.9 |
-| [`xymonapi-rag`](plugins/xymonapi-rag/README.md) | server, client | a search of Xymon's manual pages and history by meaning; the index task on the server, search and ask anywhere | xymonapi >= 0.1.0 (its client beside it); python >= 3.9 |
-| [`xymonapi-agent`](plugins/xymonapi-agent/README.md) | client | one command that asks an AI agent -- Claude Code, Codex or opencode, headless -- a question about Xymon, with the MCP server as its only tool | xymonapi-mcp >= 0.1.0 (beside it, with xymonapi's client); one of the agent CLIs, installed and logged in; python >= 3.9 |
+| [`xymonapi`](plugins/xymonapi/README.md) | the API: a read-only HTTP and JSON interface to the server, as one of its xymonlaunch tasks | `xymonapi-connect`, which gets this machine a token, and the client library the other plugins use | on the server, xymon >= 4.3.31 (main); python >= 3.9 |
+| [`xymonapi-mcp`](plugins/xymonapi-mcp/README.md) | nothing runs: the plugin is staged for `/plugins` | an MCP server that gives an AI tool read-only tools over the API | xymonapi >= 0.1.0 (its client library beside it; the API's socket on the server, or the API over the network); python >= 3.9 |
+| [`xymonapi-rag`](plugins/xymonapi-rag/README.md) | the daily index of Xymon's manual pages and history, which the API serves at `/search` | `xymonapi-rag search` and `ask`: the same search, by meaning, from anywhere | xymonapi >= 0.1.0 (its client library beside it); python >= 3.9; a language model only for `ask` |
+| [`xymonapi-agent`](plugins/xymonapi-agent/README.md) | `/ask`: the API answers a question in words, off by default | `xymonapi-agent`: one command that asks an AI CLI -- Claude Code, Codex or opencode, headless -- with the MCP server as its only tool | xymonapi-mcp >= 0.1.0 (beside it, with xymonapi's client library); one of the AI CLIs, installed and logged in; python >= 3.9 |
 
 Each row summarises the plugin's `PLUGIN` file. Its README says how to
 install and use it, its manual page every behaviour and setting.
@@ -30,8 +56,8 @@ install and use it, its manual page every behaviour and setting.
 
 A directory under `plugins/` holding:
 
-- `PLUGIN`: its name, version, side, summary, what it needs, its manual
-  page, and the files `install.sh` installs;
+- `PLUGIN`: its name, version, which of the two sides below it has, summary,
+  what it needs, its manual page, and the files `install.sh` installs;
 - `README.md`: installing and using it;
 - its manual page, and its code.
 
@@ -68,13 +94,16 @@ fetched without checking the certificate could be anyone's.
 
 Every plugin installs the same way, with `./install.sh` at the
 repository's top -- a POSIX shell script, needing no `make` -- and each
-README says only what is particular to it. A plugin has two sides, and
-you install the one the machine plays:
+README says only what is particular to it. A plugin has up to two sides, the
+Xymon server's and your own machine's ([Where things run](#where-things-run)),
+and you install the one the machine plays. The `install-client` action is
+the second: it installs nothing on a Xymon client, and its name is older
+than this page.
 
-| side | where | command | puts |
+| side | where, as whom | command | puts |
 |---|---|---|---|
-| server | the Xymon server, as the user that may write its directory, usually root | `XYMONHOME=/usr/lib/xymon/server ./install.sh install NAME` | the code in `$XYMONHOME/ext/NAME/`, its task in `$XYMONHOME/etc/tasks.d/`, written `DISABLED`, its manual page under `MANDIR` (`/usr/share/man`) |
-| client | any machine that reads the API, as yourself | `./install.sh install-client NAME` | the code in `$PREFIX/libexec/xymon-plugins/NAME/`, its command in `$PREFIX/bin`, its manual page in `$PREFIX/share/man/man1`; `PREFIX` is `~/.local` |
+| the Xymon server | the Xymon server, as the user that may write its directory, usually root | `XYMONHOME=/usr/lib/xymon/server ./install.sh install NAME` | the code in `$XYMONHOME/ext/NAME/`, its task in `$XYMONHOME/etc/tasks.d/`, written `DISABLED`, its manual page under `MANDIR` (`/usr/share/man`) |
+| your own machine | any machine that reads the API, the server included, as yourself | `./install.sh install-client NAME` | the code in `$PREFIX/libexec/xymon-plugins/NAME/`, its command in `$PREFIX/bin`, its manual page in `$PREFIX/share/man/man1`; `PREFIX` is `~/.local` |
 
 A plugin that needs another installs it first, so one command is enough,
 and with no `NAME` the same two commands install every plugin of a side.
@@ -117,6 +146,29 @@ new code at its next run.
 `./install.sh uninstall-client NAME` removes that plugin alone, and refuses
 while another installed plugin needs it, naming it; with no `NAME`, every
 plugin of the side and the virtualenv beside them. Each says what it keeps.
+
+## A language model
+
+None of the plugins needs one to do its work. The API, the MCP server, the
+index and the search run without any. Three things call a model, and each
+says whose:
+
+- **Your AI tool's**, with the MCP server: the model is whatever Claude
+  Code, Codex, opencode or Claude Desktop runs -- a subscription, an API key
+  of yours, or a local model. The Xymon server knows nothing about it. What
+  the tools return, status texts included, goes to that tool's provider;
+  with a local model it stays on your machine.
+- **The server's**, for `/ask`: the Xymon user runs an AI CLI of its own,
+  and needs a backend for it, of one of three kinds -- a hosted provider
+  with an API key; a local model on the server itself, through Ollama or LM
+  Studio; or a local model on another machine of yours, reached by URL. A
+  profile under the Xymon user's `~/.config/xymonapi-agent/agents/` names
+  it, as [`xymonapi-agent`'s README](plugins/xymonapi-agent/README.md#agents-another-xymon-another-tool-set)
+  shows; `xymonapi-agent doctor`, run as that user, says whether it
+  answers. With none, `/ask` stays off and everything else works.
+- **A model you run**, for `xymonapi-rag ask`: an OpenAI-compatible
+  endpoint, Ollama by default, named by `XYMONAPI_RAG_LLM_URL`; no tools,
+  no CLI.
 
 ## Versions
 
