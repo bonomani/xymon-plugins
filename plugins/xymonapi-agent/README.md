@@ -40,7 +40,7 @@ Every command, backend and setting is in
   runs it; it has no model of its own and no API key.
 - Python 3.9 or later, and nothing else.
 
-## Installing
+## On your own machine
 
 ```sh
 cd xymon-plugins                               # the code: top README, Getting the code
