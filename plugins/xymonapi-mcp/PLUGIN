@@ -11,12 +11,12 @@ manual: xymonapi-mcp.1
 # How ./install.sh installs it: see xymonapi's PLUGIN file.
 needs: xymonapi
 server-root: ext
-server-roles: server
+server-roles: ai_server
 server-files: server.py xymonapi-mcp.sh
 server-manual: xymonapi-mcp.1
 server-removed: Removed xymonapi-mcp. Kept: xymonapi.
 tools-root: prefix
-tools-roles: tools
+tools-roles: ai_workstation
 tools-files: server.py xymonapi-mcp.sh
 tools-manual: xymonapi-mcp.1
 tools-command: xymonapi-mcp xymonapi-mcp.sh

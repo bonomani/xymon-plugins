@@ -80,6 +80,10 @@ move, how a change is made, tested and reviewed, is in
   profiles, each its part for one kind of place, declared in its `PLUGIN`
   file with where it goes and which roles of a machine bring it: `server`,
   `client` and `tools` are the first three, and a plugin may declare its own.
+  A role is a set of capabilities, defined in `ROLES` at the top; a
+  capability is a fact about the machine, detected with its evidence by the
+  probes of `CAPABILITIES`, or declared by you. `./install.sh roles` shows
+  both.
   `PLUGIN-PROFILE`, as `xymonapi-mcp-tools`, is the long form: that plugin,
   that profile, whatever the machine. A plugin name alone is the short form,
   and a profile word alone means every plugin of it. Unsaid, the action serves every profile the

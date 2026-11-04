@@ -68,6 +68,25 @@ one mark of a pair is an error, none a tree that is not Xymon's, and neither
 is guessed at -- and the first line says the role, why, and the profiles.
 Said, the profile is taken as said, so that a package is staged for a
 machine other than this one; a profile under `ext` still needs `XYMONHOME`.
+A role is a set of capabilities, listed in [`ROLES`](../ROLES), and a
+capability is detected by the probes of [`CAPABILITIES`](../CAPABILITIES),
+a program on PATH, an endpoint answering, a variable set, so that a new
+model server or AI CLI is a line there and not a change to the script: `server`
+is the `xymon_server` tree, `tools` your own account, `ai_workstation` your
+own account with an AI CLI on PATH, `ai_server` the server with an AI CLI
+and a model answering. A machine holds every role whose capabilities all
+hold, and `./install.sh roles` prints the capabilities with their evidence
+and the roles they add up to. The Xymon trees are found on the machine, not
+only where `XYMONHOME` points: from a running `xymonlaunch` and from the
+places the packagings use, so that the server is a fact of the machine
+whatever account you run from. Whose server it is, the script reads from the
+user `xymonlaunch` runs as, or the tree's owner: yours, and the server
+profile installs from your own shell, `XYMONHOME` taken from the tree and
+said; another's, and the profile is said and left to that user, with the
+`xymoncmd` line that installs it. A profile whose roles the machine lacks is
+not installed by the short form, and the run says what is lacking;
+`./install.sh capability NAME` declares a capability no mark shows, as a
+model behind a remote endpoint, and `capability NAME off` forgets it.
 A plugin's directory under a root holds every profile of it that lives
 there, installed and removed whole. The tools profile is your own commands under your own
 home, so it is installed as yourself, in your own shell, on any machine:

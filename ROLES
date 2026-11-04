@@ -1,0 +1,17 @@
+# The roles a machine can play, each a set of capabilities, all of which
+# must hold: ./install.sh roles says which hold here, and why. A profile's
+# PROFILE-roles line in a PLUGIN file names roles from this list.
+#
+# The capabilities ./install.sh detects, each with its evidence:
+#   xymon_server  etc/xymonserver.cfg and bin/xymond under XYMONHOME
+#   xymon_client  etc/xymonclient.cfg and bin/xymonclient.sh under XYMONHOME
+#   own_account   no XYMONHOME in the environment: a person's own shell
+#   xymon_user    the server's xymonlaunch runs as you, or its tree is yours
+# and those the probes of CAPABILITIES, beside this file, can see: ai_cli,
+# an AI CLI on PATH; llm, a model answering. One that leaves no mark is
+# declared: ./install.sh capability NAME.
+server: xymon_server
+client: xymon_client
+tools: own_account
+ai_workstation: own_account ai_cli
+ai_server: xymon_server ai_cli llm

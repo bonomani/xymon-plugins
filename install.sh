@@ -63,6 +63,8 @@ die() { echo "install.sh: $*" >&2; exit 1; }
 usage() {
 	echo "usage: ./install.sh install|remove PLUGIN|PLUGIN-PROFILE|PROFILE... [NAME=value...]" >&2
 	echo "       ./install.sh venv [PROFILE] [NAME=value...]" >&2
+	echo "       ./install.sh roles                            this machine's capabilities, with evidence, and its roles" >&2
+	echo "       ./install.sh capability NAME [off]            declare a capability no mark shows, or forget it" >&2
 	echo "       ./install.sh                                  on a terminal: asks what to do" >&2
 	echo "PROFILE is one of $(echo $(profiles) | sed 's/ /, /g'). PLUGIN-PROFILE, as xymonapi-server, pins one plugin to one profile; PLUGIN alone takes the machine's, PROFILE alone every plugin of it. Nothing named installs nothing:" >&2
 	echo "etc/xymonserver.cfg and bin/xymond under XYMONHOME make the server, etc/xymonclient.cfg and bin/xymonclient.sh a monitored host, no XYMONHOME your own machine." >&2
@@ -128,7 +130,7 @@ BIN=$DESTDIR$PREFIX/bin
 TOOLSMAN1=$DESTDIR$PREFIX/share/man/man1
 # What other machines install from, which the API serves at /plugins: each
 # plugin installed on the server stages its directory here, as in the
-# repository, beside this script and LICENSE.
+# repository, beside this script, ROLES, CAPABILITIES and LICENSE.
 DIST=$EXTROOT/xymon-plugins-dist
 
 # field PLUGIN KEY -- the value of KEY in the plugin's PLUGIN file, one line
@@ -151,47 +153,158 @@ say() {
 # bin/, so that they are two pieces of evidence and not one seen twice: a
 # tree with only its etc/ copied in, or linked, shows one mark and is
 # refused. Every layout known, Debian's, the RPM's, Homebrew's and a source
-# install, keeps bin/ under XYMONHOME. A tree with both pairs is the server,
-# which always has a client.
+# install, keeps bin/ under XYMONHOME.
 SERVER_CFG=etc/xymonserver.cfg; SERVER_RUN=bin/xymond
 CLIENT_CFG=etc/xymonclient.cfg; CLIENT_RUN=bin/xymonclient.sh
 
 # marks CFG RUN -- how many of a side's two marks are there.
 marks() { n=0; for m in "$@"; do [ -e "$XYMONHOME/$m" ] && n=$((n + 1)); done; echo $n; }
 
-# detected_role -- the role this machine plays, named by the profile it
-# takes: server or client when both of that role's marks are there, tools
-# with no XYMONHOME; nothing when a tree has none of the marks, or one of a
-# pair, which role_problem then explains.
-detected_role() {
-	[ -n "$XYMONHOME" ] || { echo tools; return; }
-	if [ "$(marks $SERVER_CFG $SERVER_RUN)" -eq 2 ]; then echo server
-	elif [ "$(marks $CLIENT_CFG $CLIENT_RUN)" -eq 2 ]; then echo client
+# Capabilities: the facts about this machine the roles are made of, each
+# detected with its evidence -- the two Xymon ones by their marks here, the
+# others by the probes of the CAPABILITIES file beside this script -- or
+# declared and stored with "set by you". The roles are sets of them, in the
+# ROLES file, and a machine has every role whose capabilities all hold.
+#
+# CAPS holds "name evidence" lines; PROBLEM what stopped a detection, a
+# half pair of marks, which is an error and not a missing capability.
+CAPS= PROBLEM=
+have() { CAPS="$CAPS
+$1	$2"; }
+detect_capabilities() {
+	CAPS= PROBLEM= SERVER_TREE= CLIENT_TREE=
+	# The Xymon trees of this machine: the one XYMONHOME names first, which
+	# alone may raise an error; then, unless told not to look, the trees a
+	# running xymonlaunch was started with, from its --config, and the trees
+	# the packagings use. A Xymon server is a fact about the machine, found
+	# whether or not this account's environment knows its path.
+	# XYMON_PLUGINS_TREES names more trees to look at, for a layout of your
+	# own and for the tests.
+	trees="${XYMONHOME:+"$XYMONHOME"} ${XYMON_PLUGINS_TREES:-}"
+	if [ -z "${XYMON_PLUGINS_NO_PROBE:-}" ]; then
+		if command -v pgrep >/dev/null 2>&1; then
+			for pid in $(pgrep -x xymonlaunch 2>/dev/null); do
+				cfg=$(ps -o command= -p "$pid" 2>/dev/null | sed -n 's/.*--config=\([^ ]*\).*/\1/p')
+				case $cfg in */etc/*) trees="$trees ${cfg%/etc/*}:$pid" ;; esac
+			done
+		fi
+		for t in /usr/lib/xymon/server /usr/lib/xymon/client /usr/local/xymon/server /usr/local/xymon/client \
+			/opt/homebrew/opt/xymon-server*/server /opt/homebrew/opt/xymon-server*/client /home/xymon/server /home/xymon/client; do
+			[ -d "$t" ] && trees="$trees $t"
+		done
+	fi
+	XYMON_OWNER=
+	for entry in $trees; do
+		tree=${entry%%:*}; pid=${entry#*:}; [ "$pid" = "$entry" ] && pid=
+		for pair in "xymon_server:$SERVER_CFG:$SERVER_RUN" "xymon_client:$CLIENT_CFG:$CLIENT_RUN"; do
+			cap=${pair%%:*}; rest=${pair#*:}; cfg=${rest%%:*}; run=${rest#*:}
+			has_cap "$cap" && continue
+			case $(XYMONHOME=$tree marks $cfg $run) in
+				2) have "$cap" "$cfg, $run under $tree${pid:+, xymonlaunch running from it (PID $pid)}"
+				   case $cap in
+					xymon_server) SERVER_TREE=$tree
+						# Whose server it is: the user xymonlaunch runs as, else the
+						# tree's owner. Yours makes xymon_user hold.
+						if [ -n "$pid" ]; then XYMON_OWNER=$(ps -o user= -p "$pid" 2>/dev/null | sed 's/ //g'); why="xymonlaunch runs as $XYMON_OWNER"
+						else XYMON_OWNER=$(ls -ld "$tree" | awk '{print $3}'); why="$tree is owned by $XYMON_OWNER"; fi
+						[ "$XYMON_OWNER" = "$(id -un)" ] && have xymon_user "$why, which you are" ;;
+					xymon_client) CLIENT_TREE=$tree ;;
+				   esac ;;
+				1) [ "$tree" = "$XYMONHOME" ] || continue
+				   [ -e "$tree/$cfg" ] && PROBLEM="$tree has $cfg but not $run: half a Xymon ${cap#xymon_} tree, which this script does not guess at" \
+					|| PROBLEM="$tree has $run but not $cfg: half a Xymon ${cap#xymon_} tree, which this script does not guess at" ;;
+			esac
+		done
+	done
+	[ -n "$XYMONHOME" ] || have own_account "no XYMONHOME in the environment, HOME=$HOME"
+	# The probes of the CAPABILITIES file beside this script: command, http
+	# and env, the first that answers giving the evidence.
+	while IFS= read -r line; do
+		case $line in ''|'#'*) continue ;; esac
+		cap=${line%%:*}; rest=${line#*: }
+		has_cap "$cap" && continue
+		kind=${rest%% *}; rest=${rest#* }
+		case $kind in
+			command)
+				for c in $rest; do
+					p=$(command -v "$c" 2>/dev/null) && { have "$cap" "$c at $p"; break; }
+				done ;;
+			http)
+				[ -z "${XYMON_PLUGINS_NO_PROBE:-}" ] && command -v curl >/dev/null 2>&1 || continue
+				hostport=${rest%% *}; rest=${rest#* }; path=${rest%% *}; rest=${rest#* }
+				mark=${rest%%\"*}; mark=${rest#\"}; mark=${mark%%\"*}; note=${rest#*\"}; note=${note#*\"}; note=$(echo $note)
+				probe=$(curl -s -m 1 "http://$hostport$path" 2>/dev/null)
+				case $probe in *"$mark"*) have "$cap" "${note:-something} answering on $hostport$path" ;; esac ;;
+			env)
+				note=
+				for v in $rest; do
+					case $v in *[![:upper:][:digit:]_]*) continue ;; esac
+					eval "val=\${$v:-}"
+					[ -n "$val" ] && { have "$cap" "$v=$val"; break; }
+				done ;;
+		esac
+	done < "$ROOT/CAPABILITIES"
+	if [ -f "$CAPFILE" ]; then
+		while IFS='	' read -r cap why; do
+			case $cap in ''|'#'*) continue ;; esac
+			has_cap "$cap" || have "$cap" "$why"
+		done < "$CAPFILE"
 	fi
 }
+NL='
+'
+has_cap() { case "$CAPS" in *"$NL$1	"*) return 0 ;; esac; return 1; }
+cap_why() { printf '%s\n' "$CAPS" | sed -n "s/^$1	//p"; }
 
-# role_problem -- why no role was detected under $XYMONHOME: a pair half
-# there is an error to look at, none at all is a tree that is not Xymon's.
+# Where declared capabilities are kept: beside the Xymon configuration on a
+# Xymon machine, in your own configuration directory elsewhere.
+if [ -n "$XYMONHOME" ]; then CAPFILE=$XYMONHOME/etc/xymon-plugins.capabilities
+else CAPFILE=${XDG_CONFIG_HOME:-$HOME/.config}/xymon-plugins/capabilities; fi
+
+# all_roles -- the roles the ROLES file defines. role_caps ROLE -- its
+# capabilities. machine_roles -- those whose capabilities all hold here.
+# role_missing ROLE -- the capabilities it lacks here.
+all_roles() { sed -n 's/^\([a-z0-9_]*\): .*/\1/p' "$ROOT/ROLES"; }
+role_caps() { sed -n "s/^$1: //p" "$ROOT/ROLES"; }
+role_missing() { for c in $(role_caps "$1"); do has_cap "$c" || echo "$c"; done; }
+machine_roles() { for r in $(all_roles); do [ -z "$(role_missing "$r")" ] && echo "$r"; done; return 0; }
+
+# place_role -- the one role of a machine that says where the plugins go:
+# server, client or tools, the first that holds.
+place_role() { for r in server client tools; do case " $(echo $(machine_roles)) " in *" $r "*) echo "$r"; return ;; esac; done; }
+
+# detected_role -- the place role, kept under its old name for the dialogue.
+detected_role() { place_role; }
+
+# role_problem -- why no place role holds: a half pair is an error, none at
+# all a tree that is not Xymon's.
 role_problem() {
-	for pair in "server:$SERVER_CFG:$SERVER_RUN" "client:$CLIENT_CFG:$CLIENT_RUN"; do
-		role=${pair%%:*}; rest=${pair#*:}; cfg=${rest%%:*}; run=${rest#*:}
-		if [ "$(marks $cfg $run)" -eq 1 ]; then
-			[ -e "$XYMONHOME/$cfg" ] && echo "$XYMONHOME has $cfg but not $run: half a Xymon $role tree, which this script does not guess at" \
-				|| echo "$XYMONHOME has $run but not $cfg: half a Xymon $role tree, which this script does not guess at"
-			return
-		fi
-	done
+	[ -z "$PROBLEM" ] || { echo "$PROBLEM"; return; }
 	echo "$XYMONHOME is neither a Xymon server ($SERVER_CFG, $SERVER_RUN) nor a monitored host ($CLIENT_CFG, $CLIENT_RUN): say the profile, or unset XYMONHOME for your own machine"
 }
 
+# roles_report -- every capability with its evidence, then the roles they
+# add up to, then the roles missed and what each lacks.
+roles_report() {
+	echo "Capabilities of this machine:"
+	printf '%s\n' "$CAPS" | sed '/^$/d' | while IFS='	' read -r cap why; do printf '  %-14s %s\n' "$cap" "$why"; done
+	[ -z "$PROBLEM" ] || echo "  error: $PROBLEM"
+	echo "Roles, each a set of capabilities (ROLES beside install.sh):"
+	for r in $(all_roles); do
+		miss=$(echo $(role_missing "$r"))
+		if [ -z "$miss" ]; then printf '  %-14s yes: %s\n' "$r" "$(echo $(role_caps "$r") | sed 's/ /, /g')"
+		else printf '  %-14s no: lacks %s\n' "$r" "$(echo $miss | sed 's/ /, /g')"; fi
+	done
+}
+
 # role_profiles ROLE -- the profiles the PLUGIN files give that role, as
-# PROFILE-roles keys; client, which no plugin ships yet, for the client role.
+# PROFILE-roles keys. The client role brings none until a plugin ships one.
 role_profiles() {
 	{ for f in "$ROOT"/plugins/*/PLUGIN; do
 		sed -n 's/^\([a-z0-9_]*\)-roles: \(.*\)/\1 \2/p' "$f" | while read -r prof roles; do
 			case " $roles " in *" $1 "*) echo "$prof" ;; esac
 		done
-	  done; [ "$1" != client ] || echo client; } | sort -u
+	  done; } | sort -u
 }
 
 # root_of PLUGIN PROFILE -- ext or prefix, empty for a profile the plugin
@@ -213,18 +326,24 @@ settle_profile() {
 		pl=${pin%%:*} prof=${pin#*:}
 		[ -n "$(root_of "$pl" "$prof")" ] || die "$pl has no $prof profile: its profiles are $(echo $(plugin_declared "$pl"))"
 	done
-	ROLE=$(detected_role)
-	# The profiles of the plugins not pinned: said, or the role's. With every
-	# plugin pinned, none is needed, and the role may stay undetected.
+	detect_capabilities
+	ROLE=$(place_role)
+	ROLES_HELD=$(echo $(machine_roles))
+	# The profiles of the plugins not pinned: said, or those of every role
+	# this machine holds. With every plugin pinned, none is needed, and the
+	# role may stay undetected.
 	unpinned=
 	for n in $NAMES; do case " $PINNED " in *" $n:"*) ;; *) unpinned=1 ;; esac; done
 	[ -n "$NAMES" ] || unpinned=1
 	if [ -z "$unpinned" ]; then PROFILES=
 	elif [ -n "$PROFILE" ]; then PROFILES=$PROFILE
-	elif [ -n "$ROLE" ]; then PROFILES=$(echo $(role_profiles "$ROLE"))
+	elif [ -n "$ROLE" ]; then PROFILES=$(for r in $ROLES_HELD; do role_profiles "$r"; done | sort -u | tr '\n' ' '); PROFILES=$(echo $PROFILES)
 	else die "$(role_problem)"
 	fi
-	[ -n "$PROFILES" ] || [ -z "$unpinned" ] || die "$(role_line "$ROLE") No plugin here has a profile for that role."
+	if [ -z "$PROFILES" ] && [ -n "$unpinned" ]; then
+		[ "$ROLE" != client ] || die "$(role_line client) No plugin ships a client profile yet; the plugins' commands go on your own machine: ./install.sh $ACTION ... tools"
+		die "$(role_line "$ROLE") No plugin here has a profile for the roles this machine holds ($(echo $ROLES_HELD | sed 's/ /, /g'))."
+	fi
 	all=$PROFILES; for pin in $PINNED; do all="$all ${pin#*:}"; done
 	all=$(echo $all | tr ' ' '\n' | sort -u | tr '\n' ' ')
 	case " $all " in *" client "*)
@@ -237,15 +356,46 @@ settle_profile() {
 			case " $ROOTS " in *" $r "*) ;; *) ROOTS="$ROOTS $r" ;; esac
 		done
 	done
-	case " $ROOTS " in *" ext "*) [ -n "$XYMONHOME" ] || die "the $(echo $all | sed 's/ /, /g') profile needs XYMONHOME, the Xymon server directory: XYMONHOME=/usr/lib/xymon/server ./install.sh $ACTION ..." ;; esac
-	echo "$(role_line "$ROLE") $(profiles_phrase $all)"
+	THEIRS=
+	if [ -z "$XYMONHOME" ] && [ -n "$SERVER_TREE" ] && has_cap xymon_user; then
+		case " $ROOTS " in *" ext "*)
+			# The server is yours: its tree is XYMONHOME for this run.
+			XYMONHOME=$SERVER_TREE; export XYMONHOME
+			EXTROOT=$DESTDIR$XYMONHOME/ext; ETC=$DESTDIR$XYMONHOME/etc; TASKDIR=$ETC/tasks.d; DIST=$EXTROOT/xymon-plugins-dist
+			TOOK_HOME="XYMONHOME=$XYMONHOME taken from the server, which is yours ($(cap_why xymon_user))." ;;
+		esac
+	fi
+	if [ -z "$XYMONHOME" ]; then
+		case " $ROOTS " in *" ext "*)
+			if [ -z "$PROFILE$PINNED" ]; then
+				# Brought by the machine's roles, not asked for by name: the
+				# Xymon user's part, left to that user, and said.
+				keep= theirs=
+				for prof in $all; do
+					extp=; for pl in $(all_plugins); do [ "$(root_of "$pl" "$prof")" = ext ] && extp=1; done
+					if [ -n "$extp" ]; then theirs="$theirs $prof"; else keep="$keep $prof"; fi
+				done
+				all=$(echo $keep); PROFILES=$(echo $keep); THEIRS=$(echo $theirs)
+				ROOTS=$(echo $ROOTS | tr ' ' '\n' | grep -vx ext | tr '\n' ' ')
+				[ -n "$all" ] || die "$(role_line "$ROLE") The $(echo $THEIRS | sed 's/ /, /g') profile is ${XYMON_OWNER:-the Xymon user}'s: ${SERVER_TREE:+XYMONHOME=$SERVER_TREE }./install.sh $ACTION $(echo $NAMES), as ${XYMON_OWNER:-that user} or through xymoncmd. Nothing here is yours to install."
+			else
+				die "the $(echo $all | sed 's/ /, /g') profile needs XYMONHOME, the Xymon server directory: XYMONHOME=${SERVER_TREE:-/usr/lib/xymon/server} ./install.sh $ACTION ..."
+			fi ;;
+		esac
+	fi
+	echo "$(role_line "$ROLE") $(profiles_phrase $all)$(roles_line)"
+	[ -z "${TOOK_HOME:-}" ] || echo "$TOOK_HOME"
+	[ -z "$THEIRS" ] || echo "The $(echo $THEIRS | sed 's/ /, /g') profile is ${XYMON_OWNER:-the Xymon user}'s, not installed as you: ${SERVER_TREE:+XYMONHOME=$SERVER_TREE }./install.sh $ACTION $(echo $NAMES), as ${XYMON_OWNER:-that user} or through xymoncmd."
 }
+
+# roles_line -- the roles held, for the first line.
+roles_line() { [ -n "$ROLES_HELD" ] && echo " Roles: $(echo $ROLES_HELD | sed 's/ /, /g') (./install.sh roles says why)."; }
 
 # role_line ROLE -- the machine's role and what tells it.
 role_line() {
 	case $1 in
-		server) echo "This machine is the Xymon server ($SERVER_CFG, $SERVER_RUN under $XYMONHOME)." ;;
-		client) echo "This machine is a monitored host ($CLIENT_CFG, $CLIENT_RUN under $XYMONHOME)." ;;
+		server) echo "This machine is the Xymon server ($(cap_why xymon_server))." ;;
+		client) echo "This machine is a monitored host ($(cap_why xymon_client))." ;;
 		tools) echo "This is your own machine." ;;
 		"") echo "No Xymon role detected under $XYMONHOME; the profile is as said." ;;
 	esac
@@ -330,7 +480,7 @@ manual() {
 }
 
 # dist PLUGIN -- stage the plugin's directory under $DIST/plugins, as it is
-# in the repository but for its tests, with this script and LICENSE beside:
+# in the repository but for its tests, with this script, ROLES and LICENSE beside:
 # a machine unpacking it runs ./install.sh install there, as itself, at the
 # server's versions. Links are copied as links, as in the repository.
 dist() {
@@ -339,7 +489,7 @@ dist() {
 	cp -R "$ROOT/plugins/$1" "$DIST/plugins/$1"
 	rm -rf "$DIST/plugins/$1/tests"
 	find "$DIST/plugins/$1" -name __pycache__ -prune -exec rm -rf {} +
-	cp -f "$ROOT/install.sh" "$ROOT/LICENSE" "$DIST/"
+	cp -f "$ROOT/install.sh" "$ROOT/ROLES" "$ROOT/CAPABILITIES" "$ROOT/LICENSE" "$DIST/"
 }
 
 # task PLUGIN PROFILE -- the profile's xymonlaunch task file as tasks.d/PLUGIN, @XYMONHOME@
@@ -419,26 +569,31 @@ dialogue() {
 		r*) verb=remove ;;
 		*) die "neither install nor remove: '$verb'" ;;
 	esac
-	found=$(detected_role)
-	case $found in server) role=1 ;; client) role=2 ;; tools) role=3 ;; *) role= ;; esac
-	if [ -n "$found" ]; then echo "Which role does this machine play? Detected: $found."
+	detect_capabilities
+	found=$(place_role)
+	held=$(echo $(machine_roles))
+	if [ -n "$found" ]; then echo "Which role does this machine play? Detected: $(echo ${held:-none} | sed 's/ /, /g')."
 	else echo "Which role does this machine play? Not detected: $(role_problem)"; fi
-	echo "  1. the Xymon server: $(echo $(role_profiles server) | sed 's/ /, /g'), the plugins' tasks and the API, under ${XYMONHOME:-XYMONHOME}/ext"
-	echo "  2. a monitored host: client (no plugin ships that profile yet)"
-	echo "  3. your own machine: $(echo $(role_profiles tools) | sed 's/ /, /g'), the plugins' commands, under $PREFIX"
-	role=$(ask "Role" "${role:-none}")
+	i=0; default=
+	for r in $(all_roles); do
+		i=$((i + 1)); eval "role_$i=$r"
+		case " $held " in *" $r "*) mark=yes; [ -n "$default" ] || default=$i ;; *) mark="lacks $(echo $(role_missing "$r") | sed 's/ /, /g')" ;; esac
+		printf '  %d. %-14s %-30s %s\n' "$i" "$r" "$(echo $(role_caps "$r") | sed 's/ /, /g')" "$mark"
+	done
+	role=$(ask "Role" "${default:-none}")
 	case $role in
-		1*|s*) side=server ;;
-		2*|c*) side=client ;;
-		3*|t*) side=tools ;;
-		*) die "neither 1, 2 nor 3: '$role'" ;;
+		[1-9]*) eval "side=\${role_$role:-}" ;;
+		*) side=$role ;;
 	esac
-	if [ "$side" = server ] && [ -z "$XYMONHOME" ]; then
+	case " $(echo $(all_roles)) " in *" $side "*) ;; *) die "no role '$role': the roles are $(echo $(all_roles))" ;; esac
+	# What the chosen role's capabilities say about where things go.
+	case " $(role_caps "$side") " in *" xymon_server "*|*" xymon_client "*) place=xymon ;; *) place=own ;; esac
+	if [ "$place" = xymon ] && [ -z "$XYMONHOME" ]; then
 		XYMONHOME=$(ask "XYMONHOME, the Xymon server directory" /usr/lib/xymon/server)
 		export XYMONHOME
 		EXTROOT=$DESTDIR$XYMONHOME/ext
 	fi
-	[ "$side" = tools ] && XYMONHOME= && export XYMONHOME
+	[ "$place" = own ] && XYMONHOME= && export XYMONHOME
 	[ "$side" != client ] || die "$(role_line client) No plugin ships a client profile yet."
 	# The role's profiles, as the action will take them; said as one word
 	# when the role has one profile, so the printed command needs nothing else.
@@ -486,7 +641,7 @@ dialogue() {
 	for n in $chosen; do
 		for prof in $PROFILES; do [ -n "$(root_of "$n" "$prof")" ] && words="$words $n-$prof"; done
 	done
-	echo "Running: $([ "$side" != server ] || echo "XYMONHOME=$XYMONHOME ")./install.sh $verb $(echo $words)"
+	echo "Running: $([ "$place" != xymon ] || echo "XYMONHOME=$XYMONHOME ")./install.sh $verb $(echo $words)"
 	echo
 	exec "$ROOT/install.sh" "$verb" $words
 }
@@ -600,11 +755,32 @@ plugin_profiles() {
 }
 
 # wanted PLUGIN -- the profiles asked of the plugin: the ones it is pinned
-# to, else PROFILES.
+# to; else, with a profile said, that one; else those of PROFILES whose
+# PROFILE-roles line in this plugin names a role the machine holds, so that
+# a plugin for machines with an AI tool is not installed where there is none.
 wanted() {
 	w=
 	for pin in $PINNED; do [ "${pin%%:*}" = "$1" ] && w="$w ${pin#*:}"; done
-	echo "${w:-$PROFILES}"
+	[ -n "$w" ] && { echo $w; return; }
+	[ -z "$PROFILE" ] || { echo "$PROFILE"; return; }
+	for prof in $PROFILES; do
+		for r in $(field "$1" "$prof-roles"); do
+			case " $ROLES_HELD " in *" $r "*) w="$w $prof"; break ;; esac
+		done
+	done
+	echo $w
+}
+
+# not_wanted_why PLUGIN -- why nothing of the plugin was wanted: the roles
+# its profiles are for, and what this machine lacks for each.
+not_wanted_why() {
+	out=
+	for prof in $(plugin_declared "$1"); do
+		for r in $(field "$1" "$prof-roles"); do
+			case " $ROLES_HELD " in *" $r "*) ;; *) out="$out; its $prof profile is for $r, which this machine lacks ($(echo $(role_missing "$r") | sed 's/ /, /g'))" ;; esac
+		done
+	done
+	echo "${out#; }"
 }
 
 # command_for PLUGIN PROFILE -- the profile's command in $PREFIX/bin, running
@@ -653,6 +829,24 @@ remove_plugin() {
 
 [ -z "$DIALOGUE" ] || dialogue
 
+case $ACTION in
+	roles)
+		detect_capabilities; roles_report; exit 0 ;;
+	capability)
+		set -- $NAMES
+		[ $# -ge 1 ] || die "capability NAME declares that this machine has NAME; capability NAME off forgets it. The roles' capabilities are: $(echo $(sed -n 's/^[a-z0-9_]*: //p' "$ROOT/ROLES" | tr ' ' '\n' | sort -u))"
+		mkdir -p "$(dirname "$CAPFILE")"
+		[ -f "$CAPFILE" ] || : > "$CAPFILE"
+		if [ "${2:-}" = off ]; then
+			grep -v "^$1	" "$CAPFILE" > "$CAPFILE.new"; mv "$CAPFILE.new" "$CAPFILE"
+			echo "Forgot $1 ($CAPFILE)."
+		else
+			grep -v "^$1	" "$CAPFILE" > "$CAPFILE.new"; printf '%s\tset by you on %s\n' "$1" "$(date +%Y-%m-%d)" >> "$CAPFILE.new"; mv "$CAPFILE.new" "$CAPFILE"
+			echo "Declared $1, set by you on $(date +%Y-%m-%d) ($CAPFILE)."
+		fi
+		detect_capabilities; roles_report; exit 0 ;;
+esac
+
 # The plugins named, each checked, or every plugin; for a removal, the
 # deepest first, so that none is removed while one installed needs it.
 for n in $NAMES; do known "$n"; done
@@ -670,7 +864,11 @@ case $ACTION in
 	install)
 		for r in $ROOTS; do for n in $LIST; do install_plugin "$n" "$r" "$(wanted "$n")"; done; done
 		for n in $NAMES; do
-			case " $DONE " in *" $n:"*) ;; *) die "$n has no $(echo $(wanted "$n") | sed 's/ /, /g') profile" ;; esac
+			case " $DONE " in *" $n:"*) ;; *)
+				w=$(wanted "$n")
+				[ -n "$w" ] && die "$n has no $(echo $w | sed 's/ /, /g') profile" \
+					|| die "$n: nothing to install for the roles this machine holds ($(echo $ROLES_HELD | sed 's/ /, /g')): $(not_wanted_why "$n"). Pin a profile, as $n-$(plugin_declared "$n" | sed -n 1p), to install it anyway." ;;
+			esac
 		done ;;
 	remove)
 		for r in $ROOTS; do

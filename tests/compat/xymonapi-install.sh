@@ -114,7 +114,7 @@ assert_file_exists "$work/me/libexec/xymon-plugins/xymonapi/VERSION"
 # nothing to install, and is refused by name when asked for.
 repo=$work/repo
 mkdir -p "$repo/plugins"
-cp "$ROOT/install.sh" "$ROOT/LICENSE" "$repo/"
+cp "$ROOT/install.sh" "$ROOT/ROLES" "$ROOT/CAPABILITIES" "$ROOT/LICENSE" "$repo/"
 cp -R "$ROOT/plugins/xymonapi" "$repo/plugins/xymonapi"
 mkdir -p "$repo/plugins/fourth"
 printf 'hello\n' > "$repo/plugins/fourth/fourth.sh"
@@ -162,6 +162,56 @@ assert_file_exists "$work/four4/libexec/xymon-plugins/fourth/fourth.sh"
 	|| fail "install.sh remove fourth failed: $(tail -n 5 "$work/four-rm.log")"
 [ -e "$four/ext/fourth" ] && fail "remove left the declared profile's directory"
 assert_contains "Removed fourth." "$(cat "$work/four-rm.log")" "and says so"
+
+# Capabilities and roles. roles prints each capability with its evidence
+# and each role of ROLES with yes or what it lacks; a capability no mark
+# shows is declared and forgotten; a plugin whose profiles are for roles the
+# machine lacks is not installed by the short form, and says what is
+# lacking; the bare profile word installs it all the same.
+PATH=/usr/bin:/bin XDG_CONFIG_HOME="$work/cfg" "$ROOT/install.sh" roles >"$work/roles.log" 2>&1 \
+	|| fail "install.sh roles failed: $(tail -n 5 "$work/roles.log")"
+assert_contains "own_account    no XYMONHOME in the environment" "$(cat "$work/roles.log")" "roles prints the capability with its evidence"
+assert_contains "tools          yes: own_account" "$(cat "$work/roles.log")" "and a role held"
+assert_contains "ai_workstation no: lacks ai_cli" "$(cat "$work/roles.log")" "and what a role lacks"
+# The probes are the lines of CAPABILITIES: a variable set is the llm's
+# evidence, a program on PATH the ai_cli's, with its path.
+PATH=/usr/bin:/bin XDG_CONFIG_HOME="$work/cfg" OPENAI_BASE_URL=https://llm.example.ch/v1 "$ROOT/install.sh" roles >"$work/roles-env.log" 2>&1 \
+	|| fail "install.sh roles with OPENAI_BASE_URL failed: $(tail -n 5 "$work/roles-env.log")"
+assert_contains "llm            OPENAI_BASE_URL=https://llm.example.ch/v1" "$(cat "$work/roles-env.log")" "an env probe of CAPABILITIES gives the capability its evidence"
+ai_cli_on_path "$work/ai"
+PATH="$work/ai:/usr/bin:/bin" XDG_CONFIG_HOME="$work/cfg" "$ROOT/install.sh" roles >"$work/roles-ai.log" 2>&1 \
+	|| fail "install.sh roles with an AI CLI failed: $(tail -n 5 "$work/roles-ai.log")"
+assert_contains "ai_cli         claude at $work/ai/claude" "$(cat "$work/roles-ai.log")" "a command probe names the program and its path"
+PATH=/usr/bin:/bin XDG_CONFIG_HOME="$work/cfg" "$ROOT/install.sh" capability ai_cli >"$work/cap.log" 2>&1 \
+	|| fail "install.sh capability ai_cli failed: $(tail -n 5 "$work/cap.log")"
+assert_contains "Declared ai_cli, set by you on" "$(cat "$work/cap.log")" "a capability is declared"
+assert_contains "ai_workstation yes: own_account, ai_cli" "$(cat "$work/cap.log")" "and the role it completes holds"
+assert_file_exists "$work/cfg/xymon-plugins/capabilities"
+PATH=/usr/bin:/bin XDG_CONFIG_HOME="$work/cfg" "$ROOT/install.sh" capability ai_cli off >"$work/capoff.log" 2>&1 \
+	|| fail "install.sh capability ai_cli off failed: $(tail -n 5 "$work/capoff.log")"
+assert_contains "ai_workstation no: lacks ai_cli" "$(cat "$work/capoff.log")" "and forgotten"
+rc=0
+PATH=/usr/bin:/bin XDG_CONFIG_HOME="$work/cfg" "$ROOT/install.sh" install xymonapi-agent PREFIX="$work/noai" >"$work/noai.log" 2>&1 || rc=$?
+assert_equal "1" "$rc" "the agent is not installed where no AI CLI is"
+assert_contains "xymonapi-agent: nothing to install for the roles this machine holds (tools): its server profile is for ai_server, which this machine lacks (xymon_server, ai_cli, llm); its tools profile is for ai_workstation, which this machine lacks (ai_cli). Pin a profile, as xymonapi-agent-server, to install it anyway." "$(cat "$work/noai.log")" "saying which role each profile is for and what is lacking"
+[ -e "$work/noai" ] && fail "the agent was installed where no AI CLI is"
+# A Xymon server on the machine is a capability of the machine, found in
+# the trees it has whatever the account's environment: in your own shell
+# the server role holds, its profile is the Xymon user's and is said and
+# left to that user, and your own commands install.
+server_tree "$work/machine"
+PATH=/usr/bin:/bin XDG_CONFIG_HOME="$work/cfg" XYMON_PLUGINS_TREES="$work/machine" "$ROOT/install.sh" install xymonapi PREFIX="$work/mine" >"$work/mine.log" 2>&1 \
+	|| fail "install.sh install xymonapi as yourself on a server machine failed: $(tail -n 5 "$work/mine.log")"
+assert_contains "This machine is the Xymon server (etc/xymonserver.cfg, bin/xymond under $work/machine). The profiles, server" "$(cat "$work/mine.log")" "the server is found on the machine; its tree is yours, so its profile is too"
+assert_contains "XYMONHOME=$work/machine taken from the server, which is yours ($work/machine is owned by $(id -un), which you are)." "$(cat "$work/mine.log")" "and XYMONHOME is taken from the tree, saying why"
+assert_file_exists "$work/mine/bin/xymonapi-connect"
+assert_file_exists "$work/machine/ext/xymonapi/VERSION"
+assert_contains "xymon_user     $work/machine is owned by $(id -un), which you are" "$(PATH=/usr/bin:/bin XDG_CONFIG_HOME="$work/cfg" XYMON_PLUGINS_TREES="$work/machine" "$ROOT/install.sh" roles 2>&1)" "roles shows whose server it is"
+ai_cli_on_path "$work/ai"
+PATH="$work/ai:/usr/bin:/bin" XDG_CONFIG_HOME="$work/cfg" "$ROOT/install.sh" install xymonapi-agent PREFIX="$work/ai-me" >"$work/ai-me.log" 2>&1 \
+	|| fail "install.sh install xymonapi-agent with an AI CLI failed: $(tail -n 5 "$work/ai-me.log")"
+assert_contains "Roles: tools, ai_workstation" "$(cat "$work/ai-me.log")" "with an AI CLI the machine holds ai_workstation"
+assert_file_exists "$work/ai-me/bin/xymonapi-agent"
 
 # Under a umask that would leave a new file readable by its owner alone: the
 # task file must still be 644, like the others, whoever xymonlaunch runs as.

@@ -28,6 +28,9 @@ mkdir -p "$work/lacks"
 printf '#!/bin/sh\ncase "$*" in *"print("*) echo "fastembed numpy" ;; *find_spec*) exit 1 ;; esac\nexit 0\n' > "$work/lacks/python3"
 chmod 755 "$work/lacks/python3"
 lacks=PYTHON=$work/lacks/python3
+# An AI CLI on PATH, so that the AI roles hold and every tools plugin is offered.
+ai_cli_on_path "$work/ai"
+export PATH=$work/ai:$PATH
 
 # Without a terminal, no action is the usage, settings or not.
 rc=0
@@ -43,8 +46,9 @@ rc=0
 	-- "$ROOT/install.sh" PREFIX="$prefix" "$lacks" >"$work/all.log" 2>&1 || rc=$?
 [ "$rc" -eq 0 ] || fail "the dialogue installing everything failed with $rc: $(tail -n 5 "$work/all.log")"
 assert_contains "Which role does this machine play?" "$(cat "$work/all.log")" "the dialogue asks the role"
-assert_contains "Detected: tools." "$(cat "$work/all.log")" "with no XYMONHOME, tools is detected"
-assert_contains "3. your own machine: tools, the plugins' commands, under $prefix" "$(cat "$work/all.log")" "naming PREFIX"
+assert_contains "Detected: tools, ai_workstation." "$(cat "$work/all.log")" "with no XYMONHOME and an AI CLI, tools and ai_workstation hold"
+assert_contains "3. tools          own_account                    yes" "$(cat "$work/all.log")" "the roles are listed from ROLES with their capabilities"
+assert_contains "1. server         xymon_server                   lacks xymon_server" "$(cat "$work/all.log")" "and what a role missed"
 assert_contains "Running: ./install.sh install xymonapi-tools xymonapi-mcp-tools xymonapi-rag-tools xymonapi-agent-tools" "$(cat "$work/all.log")" "and says the action the answers spell"
 for p in xymonapi xymonapi-mcp xymonapi-rag xymonapi-agent; do
 	assert_file_exists "$prefix/libexec/xymon-plugins/$p/VERSION"

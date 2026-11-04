@@ -11,14 +11,14 @@ manual: xymonapi-agent.1
 # How ./install.sh installs it: see xymonapi's PLUGIN file.
 needs: xymonapi-mcp
 server-root: ext
-server-roles: server
+server-roles: ai_server
 server-files: xymonagent.py xymonapi-agent.sh
 server-manual: xymonapi-agent.1
 server-installed: Installed xymonapi-agent beside the API. For /ask: set XYMONAPI_ASK=1 in a file under xymonserver.d/,
 server-installed:   and as the Xymon user install and log in to claude, codex or opencode, then run xymonapi-agent doctor: see xymonapi(8), /ask.
 server-removed: Removed xymonapi-agent. Kept: xymonapi-mcp and xymonapi.
 tools-root: prefix
-tools-roles: tools
+tools-roles: ai_workstation
 tools-files: xymonagent.py xymonapi-agent.sh
 tools-manual: xymonapi-agent.1
 tools-command: xymonapi-agent xymonapi-agent.sh
