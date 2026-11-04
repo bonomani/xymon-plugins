@@ -21,7 +21,7 @@ setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 - Python 3.9 or later. The modules in [`requirements.txt`](requirements.txt)
   are needed on the server, and on a machine that keeps an index of its own;
   how the install finds or makes a Python with them is in the [top
-  README](../../README.md#installing-a-plugin).
+  README](../README.md#installing-a-plugin).
 
 ## On the Xymon server
 
