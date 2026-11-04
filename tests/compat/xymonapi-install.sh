@@ -33,10 +33,38 @@ ROOT=$(find_root)
 work=$(mktempdir)
 home=$work/server
 
+# The profile: unsaid, it follows the role detected from the tree XYMONHOME
+# names, said in the first line; a monitored host -- etc/xymonclient.cfg, no
+# server file -- is refused, since no plugin ships a client profile yet;
+# said, server needs XYMONHOME; tools is your own machine wherever you are,
+# a server machine included; two profiles are refused.
+mkdir -p "$work/host/etc" && : > "$work/host/etc/xymonclient.cfg"
+rc=0
+"$ROOT/install.sh" install XYMONHOME="$work/host" MANDIR="$work/man" >"$work/host.log" 2>&1 || rc=$?
+assert_equal "1" "$rc" "install.sh install on a monitored host is refused"
+assert_contains "The client profile, for a monitored host ($work/host/etc/xymonclient.cfg). No plugin ships a client profile yet" "$(cat "$work/host.log")" "saying why"
+[ -e "$work/host/ext" ] && fail "a monitored host got the server profile"
+rc=0
+"$ROOT/install.sh" install xymonapi server >"$work/nohome.log" 2>&1 || rc=$?
+assert_equal "1" "$rc" "server said without XYMONHOME is refused"
+assert_contains "the server profile needs XYMONHOME" "$(cat "$work/nohome.log")" "naming what is missing"
+rc=0
+"$ROOT/install.sh" install xymonapi server tools PREFIX="$work/two" >"$work/two.log" 2>&1 || rc=$?
+assert_equal "1" "$rc" "two profiles are refused"
+assert_contains "two profiles given: server and tools" "$(cat "$work/two.log")" "naming both"
+[ -e "$work/two" ] && fail "two profiles installed something"
+mkdir -p "$work/srv/etc" && : > "$work/srv/etc/xymonserver.cfg"
+"$ROOT/install.sh" install xymonapi tools XYMONHOME="$work/srv" PREFIX="$work/me" >"$work/me.log" 2>&1 \
+	|| fail "install.sh install tools on a server machine failed: $(tail -n 5 "$work/me.log")"
+assert_contains "The tools profile, for your own machine: the plugins' commands, under $work/me." "$(cat "$work/me.log")" "tools said on a server machine installs your own commands"
+assert_file_exists "$work/me/libexec/xymon-plugins/xymonapi/VERSION"
+[ -e "$work/srv/ext" ] && fail "the tools profile on a server machine touched the server's tree"
+
 # Under a umask that would leave a new file readable by its owner alone: the
 # task file must still be 644, like the others, whoever xymonlaunch runs as.
 ( umask 077 && "$ROOT/install.sh" install XYMONHOME="$home" MANDIR="$work/man" ) >"$work/install.log" 2>&1 \
 	|| fail "install.sh install failed: $(tail -n 5 "$work/install.log")"
+assert_contains "The server profile, for the Xymon server this machine is (XYMONHOME=$home, no etc/xymonclient.cfg there)" "$(cat "$work/install.log")" "unsaid, the profile follows the detected role, said first"
 
 for f in app.py xymon.py xymonapi_client.py tokens.py openapi.yaml requirements.txt xymonapi.sh; do
 	assert_file_exists "$home/ext/xymonapi/$f"

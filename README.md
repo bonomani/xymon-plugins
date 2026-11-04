@@ -76,10 +76,13 @@ move, how a change is made, tested and reviewed, is in
 - **Branches.** `stable` is the newest code every test passed, which CI
   moves forward; `main` holds every change as it lands. Install from
   `stable`.
-- **Install actions** are `install`, `remove` and `venv`, and the side they
-  serve is the role the machine plays, told by `XYMONHOME`: set, the Xymon
-  server's part; unset, your own machine's. Nothing installs on a monitored
-  host, Xymon's client, until the first check that does.
+- **Install actions** are `install`, `remove` and `venv`. A plugin ships up
+  to three profiles, `server`, `client` and `tools`, one per kind of machine,
+  and the last word names the one an action serves. Unsaid, the profile
+  follows the role the machine plays, detected one per run, server first,
+  then monitored host, then your own machine, and said in the first line. No
+  plugin ships a client profile until the first check that installs on a
+  monitored host.
 - **Words.** "Client" is Xymon's client; a program that calls the Xymon API
   is an API client; Claude Code, Codex, opencode and the like are AI tools.
 - **Manual pages.** Section 8 for what runs on the server, section 1 for the
@@ -117,17 +120,18 @@ would bring.
 ```
 
 On a terminal, with no word, the script asks what to do: install or remove,
-which role this machine plays -- the Xymon server when `XYMONHOME` is set,
-your own machine otherwise -- and which plugins. Enter takes each default,
-and the answers run one of the commands below, said first, for you to type
-next time:
+which role this machine plays, the detected one by default, and which
+plugins. Enter takes each default, and the answers run one of the commands
+below, said first, for you to type next time:
 
 ```sh
-XYMONHOME=/usr/lib/xymon/server ./install.sh install NAME   # the Xymon server's part
-./install.sh install NAME                                   # your own machine's
+XYMONHOME=/usr/lib/xymon/server ./install.sh install NAME server   # the plugin's server profile
+./install.sh install NAME tools                                    # its tools profile, your own commands
 ```
 
-With no `NAME`, every plugin of that side. What each command puts where,
+The profile may be left out: the script then takes the one for the role it
+detects from the tree `XYMONHOME` names, and says which in its first line. With no `NAME`, every
+plugin of that role. What each command puts where,
 Python and the virtualenv, enabling, updating and removing are in
 [`plugins/README.md`](plugins/README.md#installing-a-plugin); each plugin's
 README says only what is particular to it.

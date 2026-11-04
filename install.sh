@@ -4,23 +4,30 @@
 # Install, update and remove the plugins, on the Xymon server or on another
 # machine, with nothing but a POSIX shell and the usual tools: no make.
 #
-#   ./install.sh                     on a terminal: asks what to do, and does it
-#   ./install.sh install [PLUGIN...]
-#   ./install.sh remove [PLUGIN...]
-#   ./install.sh venv                the virtualenv beside the plugins
+#   ./install.sh                                    on a terminal: asks what to do, and does it
+#   ./install.sh install [PLUGIN...] [server|client|tools]
+#   ./install.sh remove [PLUGIN...] [server|client|tools]
+#   ./install.sh venv [server|client|tools]         the virtualenv beside the plugins
 #
-# Which side an action serves is the role this machine plays, told by
-# XYMONHOME: set -- by xymoncmd, the Xymon user's environment, or on the
-# command line -- the Xymon server's part, the plugins' tasks and the API
-# under $XYMONHOME/ext; unset, your own machine's, the plugins' commands
-# under PREFIX (~/.local). On a server machine, XYMONHOME= ./install.sh
-# install installs your own commands. Nothing installs on a monitored host,
-# Xymon's client, yet.
+# A plugin ships up to three profiles, one per kind of machine, and the last
+# word says which an action serves: server, the Xymon server's, the plugins'
+# tasks and the API under $XYMONHOME/ext; client, a monitored host's, which
+# nothing ships yet; tools, your own machine's, the plugins' commands under
+# PREFIX (~/.local), as yourself. The PLUGIN file lists each profile's files
+# as server-files and tools-files. Unsaid, the profile is the one for the
+# role this machine plays, detected from the tree XYMONHOME names -- set by
+# xymoncmd, the Xymon user's environment, or on the command line -- and the
+# first line says which and why: a tree with etc/xymonclient.cfg and no
+# etc/xymonserver.cfg is a monitored host, any other tree the server, no
+# XYMONHOME your own machine. Said, the profile is taken as said, so that a
+# package is staged for a server this machine is not; server still needs
+# XYMONHOME. On a Xymon machine your own commands are not installed with the
+# Xymon part unasked: the two are installed as two users.
 #
 # With no action at all, on a terminal, the script asks: install or remove,
 # which role this machine plays, the detected one by default, and which
 # plugins, Enter taking each default; it then runs the action those answers
-# spell, saying which, so the words are there to copy for next time.
+# spell, the profile said, so the words are there to copy for next time.
 # Without a terminal, no action means the usage.
 #
 # With no PLUGIN, every plugin of that side. A plugin that needs another
@@ -45,20 +52,34 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 
 die() { echo "install.sh: $*" >&2; exit 1; }
 usage() {
-	echo "usage: ./install.sh install|remove|venv [PLUGIN...] [NAME=value...]   the Xymon server's part with XYMONHOME set, else your own machine's" >&2
-	echo "       ./install.sh                                                on a terminal: asks what to do" >&2
+	echo "usage: ./install.sh install|remove|venv [PLUGIN...] [server|client|tools] [NAME=value...]" >&2
+	echo "       ./install.sh                                  on a terminal: asks what to do" >&2
+	echo "The profile, unsaid, follows the machine's role: a client tree in XYMONHOME is client, another tree server, no XYMONHOME tools." >&2
 	exit 2
 }
 
-# The first word that is not a NAME=value setting is the action, the
-# others the plugins. No action on a terminal is the dialogue, which runs
-# once the helpers below are defined; no action elsewhere is the usage.
+# profiles -- the profile names the PLUGIN files declare, as NAME-files
+# keys, and client, which no plugin ships yet: a word among the arguments
+# that is one of them is the profile, so a plugin declaring a fourth
+# changes nothing here.
+profiles() {
+	{ sed -n 's/^\([a-z0-9]*\)-files: .*/\1/p' "$ROOT"/plugins/*/PLUGIN; echo client; } | sort -u
+}
+is_profile() { case " $(echo $(profiles)) " in *" $1 "*) return 0 ;; esac; return 1; }
+
+# The first word that is not a NAME=value setting is the action, a profile
+# name is the profile, the others the plugins. No action on a terminal is the
+# dialogue, which runs once the helpers below are defined; no action
+# elsewhere is the usage.
 ACTION=
 NAMES=
+PROFILE=
 for a in "$@"; do
 	case $a in
 		*=*) export "$a" ;;
-		*) if [ -z "$ACTION" ]; then ACTION=$a; else NAMES="$NAMES $a"; fi ;;
+		*) if [ -z "$ACTION" ]; then ACTION=$a
+		   elif is_profile "$a"; then [ -z "$PROFILE" ] || die "two profiles given: $PROFILE and $a"; PROFILE=$a
+		   else NAMES="$NAMES $a"; fi ;;
 	esac
 done
 DIALOGUE=
@@ -98,6 +119,43 @@ sedesc() { printf '%s\n' "$1" | sed -e 's/[\\&|]/\\&/g'; }
 say() {
 	field "$1" "$2" | sed -e "s|@ETC@|$(sedesc "$ETC")|g" -e "s|@TASKDIR@|$(sedesc "$TASKDIR")|g" \
 		-e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g"
+}
+
+# detected_role -- what the tree XYMONHOME names makes this machine, named
+# by the profile it takes: client with etc/xymonclient.cfg, else server,
+# else, with no XYMONHOME, tools.
+detected_role() {
+	if [ -z "$XYMONHOME" ]; then echo tools
+	elif [ -e "$XYMONHOME/etc/xymonclient.cfg" ] && [ ! -e "$XYMONHOME/etc/xymonserver.cfg" ]; then echo client
+	else echo server
+	fi
+}
+
+# profile_line PROFILE -- the first line of a run: the profile, and the
+# role of the machine that chose it, with what tells it.
+profile_line() {
+	case $1 in
+		server)
+			if [ -e "$XYMONHOME/etc/xymonserver.cfg" ]; then why="$XYMONHOME/etc/xymonserver.cfg"; else why="XYMONHOME=$XYMONHOME, no etc/xymonclient.cfg there"; fi
+			echo "The server profile, for the Xymon server this machine is ($why): the plugins' tasks and the API, under $XYMONHOME/ext." ;;
+		client)
+			if [ -e "$XYMONHOME/etc/xymonclient.cfg" ]; then why=" ($XYMONHOME/etc/xymonclient.cfg)"; else why=; fi
+			echo "The client profile, for a monitored host$why." ;;
+		tools) echo "The tools profile, for your own machine: the plugins' commands, under $PREFIX." ;;
+	esac
+}
+
+# settle_profile -- PROFILE unsaid is the detected role's; said, it is
+# taken as said, so that a package is staged for a server this machine is
+# not, with only what it cannot do without: server needs XYMONHOME. client
+# is refused, since no plugin ships that profile yet.
+settle_profile() {
+	[ -n "$PROFILE" ] || PROFILE=$(detected_role)
+	case $PROFILE in
+		server) [ -n "$XYMONHOME" ] || die "the server profile needs XYMONHOME, the Xymon server directory: XYMONHOME=/usr/lib/xymon/server ./install.sh $ACTION ... server" ;;
+		client) die "$(profile_line client) No plugin ships a client profile yet; the plugins' commands go on your own machine: ./install.sh $ACTION ... tools" ;;
+	esac
+	profile_line "$PROFILE"
 }
 
 # Every plugin, by the directories under plugins/ that hold a PLUGIN file.
@@ -238,8 +296,7 @@ ask() {
 
 # dialogue -- the questions ./install.sh asks when given no word on a
 # terminal, then the action they spell, run as if its words had been typed.
-# The role defaults to the one XYMONHOME detects: set, the Xymon server;
-# unset, your own machine. The plugins offered are those of that role and,
+# The role defaults to the detected one, and picks the profile. The plugins offered are those of that profile and,
 # for a removal, those installed; a plugin unticked takes with it the ones
 # that need it, and a plugin removed takes its installed dependents, each
 # named, since that is what the actions themselves insist on.
@@ -251,31 +308,33 @@ dialogue() {
 		r*) verb=remove ;;
 		*) die "neither install nor remove: '$verb'" ;;
 	esac
-	if [ -n "$XYMONHOME" ]; then role=1; else role=2; fi
-	echo "Which role does this machine play?"
-	echo "  1. the Xymon server: the plugins' tasks and the API, under ${XYMONHOME:-XYMONHOME}/ext"
-	echo "  2. your own machine: the plugins' commands, under $PREFIX"
+	found=$(detected_role)
+	case $found in server) role=1 ;; client) role=2 ;; *) role=3 ;; esac
+	echo "Which role does this machine play? Detected: $found."
+	echo "  1. the Xymon server: the server profile, the plugins' tasks and the API, under ${XYMONHOME:-XYMONHOME}/ext"
+	echo "  2. a monitored host: the client profile (no plugin ships one yet)"
+	echo "  3. your own machine: the tools profile, the plugins' commands, under $PREFIX"
 	role=$(ask "Role" "$role")
 	case $role in
-		1*) side=server; files=server-files; root=$EXTROOT ;;
-		2*) side=tools; files=tools-files; root=$TOOLSROOT ;;
-		*) die "neither 1 nor 2: '$role'" ;;
+		1*|s*) side=server; files=server-files; root=$EXTROOT ;;
+		2*|c*) side=client ;;
+		3*|t*) side=tools; files=tools-files; root=$TOOLSROOT ;;
+		*) die "neither 1, 2 nor 3: '$role'" ;;
 	esac
 	if [ "$side" = server ] && [ -z "$XYMONHOME" ]; then
 		XYMONHOME=$(ask "XYMONHOME, the Xymon server directory" /usr/lib/xymon/server)
+		export XYMONHOME
 		root=$DESTDIR$XYMONHOME/ext
 	fi
-	# The side reaches the action as XYMONHOME: set for the server's, empty
-	# for your own machine's, whatever the environment held.
-	[ "$side" = server ] || XYMONHOME=
-	export XYMONHOME
+	PROFILE=$side
+	settle_profile >/dev/null
 	offered=
 	for p in $(for p in $(all_plugins); do echo "$(depth "$p") $p"; done | sort -n | cut -d' ' -f2); do
 		[ -n "$(field "$p" $files)" ] || continue
 		[ "$verb" = install ] || [ -e "$root/$p" ] || continue
 		offered="$offered $p"
 	done
-	[ -n "$offered" ] || die "nothing to $verb for that role: no plugin installed in $root"
+	[ -n "$offered" ] || die "nothing to $verb in that profile: no plugin installed in $root"
 	echo "Plugins, all of them unless you name some:"
 	for p in $offered; do
 		printf '  %-16s %s\n' "$p" "$(field "$p" summary)"
@@ -300,9 +359,9 @@ dialogue() {
 		done
 	fi
 	[ "$(echo $chosen)" = "$(echo $offered)" ] && [ "$verb" = install ] && chosen=
-	echo "Running: ${XYMONHOME:+XYMONHOME=$XYMONHOME }./install.sh $verb $(echo $chosen)"
+	echo "Running: $([ "$side" != server ] || echo "XYMONHOME=$XYMONHOME ")./install.sh $verb $(echo $chosen) $side"
 	echo
-	exec "$ROOT/install.sh" "$verb" $chosen
+	exec "$ROOT/install.sh" "$verb" $chosen "$side"
 }
 
 # venv_auto PLUGIN ROOT MODULES NOTE -- the last step of installing a
@@ -321,13 +380,13 @@ dialogue() {
 venv_auto() {
 	plugin=$1 root=$2 modules=$3 note=$4
 	[ -n "$modules" ] || return 0
-	# The hint, as typed on this side: XYMONHOME names the server's.
-	target="${XYMONHOME:+XYMONHOME=... }./install.sh venv"
+	# The hint, as typed for this profile.
+	target="./install.sh venv $PROFILE"
 	if [ -x "$root/venv/bin/python3" ]; then
 		missing=$("$root/venv/bin/python3" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $modules)
 		[ -z "$missing" ] && return 0
 		if offer "The virtualenv $root/venv lacks $missing, which $plugin needs${note:+ ($note)}. Install them into it, from PyPI?"; then
-			"$ROOT/install.sh" venv || exit 1
+			"$ROOT/install.sh" venv "$PROFILE" || exit 1
 		else
 			echo "The virtualenv $root/venv lacks $missing, which this plugin needs: $target installs them."
 		fi
@@ -353,7 +412,7 @@ venv_auto() {
 		"$py" -m venv --system-site-packages "$root/venv" || exit 1
 		echo "Made $root/venv from $py ($("$py" -V 2>&1)), which has the modules this plugin needs ($modules): the plugins there run with it."
 	elif [ -n "$newest" ] && offer "$plugin needs $modules, which no Python here has${note:+ ($note)}. Make a virtualenv at $root/venv with $newest, and install them from PyPI?"; then
-		PYTHON=$newest "$ROOT/install.sh" venv || exit 1
+		PYTHON=$newest "$ROOT/install.sh" venv "$PROFILE" || exit 1
 	else
 		echo "No virtualenv at $root/venv, and no Python with the modules this plugin needs ($modules): $target${newest:+ PYTHON=$newest} makes one and installs them; without it, the python3 on PATH must have them."
 	fi
@@ -453,9 +512,10 @@ deepest_first() {
 	for n in $LIST; do echo "$(depth "$n") $n"; done | sort -rn | cut -d' ' -f2
 }
 
-# The side: the Xymon server's with XYMONHOME set, else your own machine's.
-if [ -n "$XYMONHOME" ]; then SIDE=server; else SIDE=tools; fi
-case $ACTION-$SIDE in
+settle_profile
+# A profile a PLUGIN file declares but this script has no installer for yet.
+case $PROFILE in server|tools) ;; *) die "no installer for the $PROFILE profile yet" ;; esac
+case $ACTION-$PROFILE in
 	install-server)
 		for n in $LIST; do install_server "$n"; done ;;
 	install-tools)
