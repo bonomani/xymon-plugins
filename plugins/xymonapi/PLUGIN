@@ -2,17 +2,17 @@
 # it alone. One key per line, a key repeated for each line of a message;
 # ./install.sh at the repository's top installs it from the lines below.
 name: xymonapi
-version: 2.2.0
+version: 2.3.0
 side: server, client
 summary: a read-only HTTP and JSON interface to a Xymon server, as one of its xymonlaunch tasks, and its client
 requires: on the server, xymon >= 4.3.31 (main); python >= 3.9
 manual: xymonapi.8
 
-# How ./install.sh installs it. server-* and client-* are each side's: the
+# How ./install.sh installs it. server-* and tools-* are each side's: the
 # files copied beside the plugin's others, the manual page, the modules its
 # Python needs (offered at install time), the plugins it needs first.
 # executable lists the files made 755, the others 644; command is the
-# client's command in $PREFIX/bin and the script it runs; task, conf and
+# tools' command in $PREFIX/bin and the script it runs; task, conf and
 # restart are the server's xymonlaunch task, web server snippets kept once
 # written, and the program whose running process an install stops. The
 # messages may name @ETC@, @TASKDIR@ and @XYMONHOME@.
@@ -27,8 +27,8 @@ installed:   @ETC@/xymonapi-{apache,nginx,lighttpd}.conf in the web server, or g
 uninstalled: Uninstalled xymonapi. Kept, for you to remove: @ETC@/xymonapi-{apache,nginx,lighttpd}.conf --
 uninstalled:   take its Include out of the web server first -- and the tokens file, $XYMONAPI_TOKENS
 uninstalled:   ($XYMONVAR/xymonapi/tokens by default).
-client-files: xymonapi_client.py xymonapi-connect.sh
-client-manual: xymonapi-connect.1
+tools-files: xymonapi_client.py xymonapi-connect.sh
+tools-manual: xymonapi-connect.1
 command: xymonapi-connect xymonapi-connect.sh
 executable: xymonapi.sh xymonapi-connect.sh
-uninstalled-client: Uninstalled xymonapi's client. Kept: the tokens in ~/.config/xymon-api/, which the API's /tokens revokes.
+uninstalled-tools: Uninstalled xymonapi's client. Kept: the tokens in ~/.config/xymon-api/, which the API's /tokens revokes.

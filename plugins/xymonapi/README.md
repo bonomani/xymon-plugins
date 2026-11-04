@@ -43,7 +43,7 @@ numbered rules every implementation keeps.
 ## On the server
 
 ```sh
-XYMONHOME=/usr/lib/xymon/server ./install.sh install xymonapi
+XYMONHOME=/usr/lib/xymon/server ./install.sh install-server xymonapi
 ```
 
 Besides the code, the task and the manual page, which every plugin
@@ -69,14 +69,14 @@ there (`xymonapi.8`, `XYMONAPI_SOCKET`).
 
 Updating: install again. The install stops the running API, which would go
 on with the code it loaded, and says so; xymonlaunch starts the new.
-`./install.sh uninstall xymonapi` keeps the snippets -- take the `Include` out
+`./install.sh uninstall-server xymonapi` keeps the snippets -- take the `Include` out
 of your web server's configuration before deleting them -- and the tokens
 file, `$XYMONAPI_TOKENS`.
 
 ## Asking in words: /ask
 
 With [`xymonapi-agent`](../xymonapi-agent/README.md) installed beside the
-API (`./install.sh install xymonapi-agent`, which brings `xymonapi-mcp`), the API
+API (`./install.sh install-server xymonapi-agent`, which brings `xymonapi-mcp`), the API
 can answer a question in words: `POST /ask` with `{"question": "..."}`
 runs the agent as the Xymon user, with an agent CLI that user has
 installed and logged in -- Claude Code, Codex or opencode -- and the Xymon
@@ -155,7 +155,7 @@ mkdir -p ~/.config/xymon-api
 scp xymon.example.ch:/etc/xymon/tls/xymond.pem ~/.config/xymon-api/xymon-ca.pem
 
 cd xymon-plugins                         # the code: top README, Getting the code
-./install.sh install-client xymonapi     # under ~/.local; PREFIX=... for elsewhere
+./install.sh install-tools xymonapi     # under ~/.local; PREFIX=... for elsewhere
 xymonapi-connect https://xymon.example.ch   # the URL: as reached, above
 ```
 
@@ -170,5 +170,5 @@ machines and revokes one, and removing a user from the password file
 revokes all of theirs. Every detail is in
 [`xymonapi-connect.1`](xymonapi-connect.1).
 
-`./install.sh uninstall-client xymonapi` keeps the token: revoke it with `/tokens`, or delete
+`./install.sh uninstall-tools xymonapi` keeps the token: revoke it with `/tokens`, or delete
 `~/.config/xymon-api/xymon.token`.
