@@ -47,6 +47,12 @@ API_CURL="curl -s"
 # A port that turned out to be taken is a retry.
 start_api() {
 	local deadline rc
+	# One API per test at a time: a second start over one still running
+	# overwrote API_PID, and the first ran on, listening, after the test
+	# ended -- one more at each run of the suite.
+	if [ -n "${API_PID:-}" ] && kill -0 "$API_PID" 2>/dev/null; then
+		fail "start_api: the API started before (PID $API_PID) still runs: stop_process it first"
+	fi
 	if [ -n "${XYMONAPI_TLS_CERT:-}" ]; then
 		API_SCHEME="https"; API_CURL="curl -s --cacert $XYMONAPI_TLS_CERT"
 	else
