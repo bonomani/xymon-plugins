@@ -1,0 +1,16 @@
+# How ./install.sh detects a capability: one probe per line, the first that
+# answers gives the capability its evidence. Three kinds of probe:
+#   command NAME...          one of the programs is on PATH
+#   http HOST:PORT PATH "MARK"  the URL answers, and the body holds MARK
+#   env VAR...               one of the variables is set
+# What follows the probe is a note, kept for the evidence. A capability no
+# probe can see is declared: ./install.sh capability NAME. The two Xymon
+# capabilities, xymon_server and xymon_client, are the script's own: two
+# marks under XYMONHOME, both needed (see install.sh).
+ai_cli: command claude codex opencode
+llm: http 127.0.0.1:1234 /v1/models "data"   LM Studio
+llm: http 127.0.0.1:11434 /api/tags "models"  Ollama
+llm: http 127.0.0.1:8080 /v1/models "data"   llama.cpp server, LocalAI
+llm: http 127.0.0.1:8000 /v1/models "data"   vLLM
+llm: http 127.0.0.1:1337 /v1/models "data"   Jan
+llm: env OLLAMA_HOST OPENAI_BASE_URL OPENAI_API_BASE   a model elsewhere, named by the environment

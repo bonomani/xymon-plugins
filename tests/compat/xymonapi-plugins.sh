@@ -44,7 +44,7 @@ curl -s -o "$work/plugins.tgz" "$plugins"
 # /plugins has an archive to give, /client is a path like any unknown one.
 assert_equal "404" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$API_PORT/xymon/api/v1/client")" "[C2] /client is gone"
 tar -tzf "$work/plugins.tgz" > "$work/list" || fail "/plugins' answer is not a gzipped tar"
-for f in install.sh LICENSE plugins/xymonapi/PLUGIN plugins/xymonapi-mcp/PLUGIN plugins/xymonapi-rag/PLUGIN \
+for f in install.sh ROLES CAPABILITIES LICENSE plugins/xymonapi/PLUGIN plugins/xymonapi-mcp/PLUGIN plugins/xymonapi-rag/PLUGIN \
          plugins/xymonapi/xymonapi_client.py plugins/xymonapi-mcp/server.py; do
 	grep -qx "xymon-plugins/$f" "$work/list" || fail "the archive has no $f: $(head -n 20 "$work/list")"
 done

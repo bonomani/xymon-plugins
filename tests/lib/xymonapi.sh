@@ -32,6 +32,14 @@ fi
 # two levels up, which is right for its tests/<dir>/ but not for a plugin's
 # tests under plugins/<name>/tests/: this file's place, tests/lib/, is the
 # same for every test.
+# install.sh probes the local LLM ports for the llm capability; the tests
+# decide the capabilities themselves, with ai_cli_on_path and XYMONAPI_RAG_LLM_MODEL.
+export XYMON_PLUGINS_NO_PROBE=1
+
+# ai_cli_on_path DIR -- a stub claude in DIR, for a PATH that has an AI CLI;
+# the capability is what the tests want, not the tool.
+ai_cli_on_path() { mkdir -p "$1" && printf '#!/bin/sh\nexit 0\n' > "$1/claude" && chmod 755 "$1/claude"; }
+
 # server_tree DIR -- make DIR what install.sh takes for a Xymon server tree:
 # the two marks it looks for, etc/xymonserver.cfg and bin/xymond, empty.
 server_tree() {
