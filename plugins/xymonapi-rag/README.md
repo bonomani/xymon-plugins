@@ -21,9 +21,9 @@ setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 - Python 3.9 or later. The modules in [`requirements.txt`](requirements.txt)
   are needed on the server, and on a machine that keeps an index of its own;
   how the install finds or makes a Python with them is in the [top
-  README](../../README.md#installing).
+  README](../../README.md#installing-a-plugin).
 
-## On the server
+## On the Xymon server
 
 ```sh
 XYMONHOME=/usr/lib/xymon/server ./install.sh install-server xymonapi-rag
@@ -56,7 +56,7 @@ Without `xymoncmd`, set `XYMONAPI_URL=unix:` followed by the socket's path.
 
 `./install.sh uninstall-server xymonapi-rag` keeps the index, `$XYMONAPI_RAG_INDEX`.
 
-## On another machine
+## On your own machine
 
 ```sh
 cd xymon-plugins                             # the code: top README, Getting the code
@@ -71,7 +71,7 @@ not 443, as [`xymonapi`'s
 README](../xymonapi/README.md#reaching-it-from-another-machine) gives it.
 `xymonapi-connect`, installed with the API's client library, gets this machine its token
 with your password once, as [`xymonapi`'s
-README](../xymonapi/README.md#on-another-machine) says, and prints the
+README](../xymonapi/README.md#on-your-own-machine) says, and prints the
 settings `xymonapi-rag` reads; the `eval` puts them in the shell.
 
 `search` uses the server's index when there is none here. `ask` hands the
