@@ -79,13 +79,20 @@ assert_equal "404" "$(api_code '/search?q=anything')" "/search with no index"
 assert_contains 'search is not set up on this server: no index' "$(api_get '/search?q=anything')" "and says so"
 assert_contains '"search":null' "$(api_get /health)" "/health reports no index"
 
+# The pages are embedded once, into a seed with no history that every index
+# file below starts from: index keeps the vectors it knows and embeds only
+# the changes, which is what those blocks are about. Embedded afresh for
+# each of them, the same pages cost a minute apiece on a CI runner.
 rc=0
-rag index > "$work/index.out" || rc=$?
+XYMONAPI_RAG_INDEX="$work/seed.npz" rag index --no-history > "$work/index.out" || rc=$?
 [ "$rc" -eq 77 ] && skip "$(cat "$work/rag.err")"
 [ "$rc" -eq 0 ] || fail "xymonapi-rag index exited with $rc: $(tail -n 5 "$work/rag.err")"
 assert_match "indexed [0-9]+ passages \([0-9]+ new\)" "$(cat "$work/index.out")" "index says what it did"
 first=$(sed -E 's/indexed ([0-9]+) passages \(([0-9]+) new\).*/\1 \2/' "$work/index.out")
 assert_equal "${first% *}" "${first#* }" "the first indexing embeds every passage"
+cp "$work/seed.npz" "$work/index.npz"
+rag index > "$work/index.out" || fail "indexing the history over the seed failed: $(tail -n 5 "$work/rag.err")"
+assert_contains "(2 new)" "$(cat "$work/index.out")" "over the seed, only the two changes are new"
 # Again, with nothing changed: every vector is kept, none embedded.
 rag index > "$work/index.out" || fail "a second index failed: $(tail -n 5 "$work/rag.err")"
 assert_contains "(0 new)" "$(cat "$work/index.out")" "a second indexing with nothing new embeds nothing"
@@ -258,6 +265,7 @@ assert_contains '(1100 new)' "$(cat "$work/index3.out")" "only the new changes a
 assert_contains 'web.example.com http' "$(rag search -k 1 --kind history 'HTTP 500 error on the login page')" "the oldest of 1102 changes is indexed: /events was read page by page"
 assert_contains '"history":1102' "$(api_get /health)" "the API reloaded the index the task rewrote"
 assert_match 'many[0-9]+\.example\.com conn' "$(api_get '/search?q=many1100.example.com+conn+red&kind=history&k=1')" "and searches it"
+cp "$work/seed.npz" "$work/index4.npz"
 XYMONAPI_RAG_INDEX="$work/index4.npz" XYMONAPI_RAG_MAX_HISTORY=50 rag index > /dev/null || fail "indexing with a cap failed: $(tail -n 5 "$work/rag.err")"
 assert_not_contains 'web.example.com' "$(XYMONAPI_RAG_INDEX="$work/index4.npz" rag search -k 3 --kind history 'HTTP 500 error on the login page')" "with XYMONAPI_RAG_MAX_HISTORY=50 the oldest is left out"
 # Names a digit apart embed much the same, so any of the newest fifty will do.
@@ -267,6 +275,7 @@ assert_match 'many1(0[5-9][0-9]|100)\.example\.com conn' "$(XYMONAPI_RAG_INDEX="
 # file -- here no XYMONHISTLOGS, which the API answers with 502 -- must fail
 # the indexing, not build an index without the texts: from the files, and
 # through the API.
+cp "$work/seed.npz" "$work/index2.npz"
 rc=0
 XYMONHISTLOGS="" XYMONAPI_RAG_INDEX="$work/index2.npz" rag index > /dev/null || rc=$?
 [ "$rc" -ne 0 ] || fail "indexing from the files succeeded with no XYMONHISTLOGS"
@@ -279,7 +288,7 @@ rc=0
 XYMONHISTDIR="" XYMONAPI_RAG_INDEX="$work/index2.npz" rag index > /dev/null || rc=$?
 [ "$rc" -ne 0 ] || fail "indexing succeeded while every /histlog answered 502"
 assert_contains 'cannot read the history' "$(cat "$work/rag.err")" "and says why"
-[ -e "$work/index2.npz" ] && fail "a failed indexing left an index behind"
+cmp -s "$work/seed.npz" "$work/index2.npz" || fail "a failed indexing wrote the index"
 
 # On the server the task needs no credential: with XYMONHISTDIR set, as
 # xymonserver.cfg sets it, index reads xymond's files and never asks the API,
@@ -294,6 +303,7 @@ if command -v htpasswd >/dev/null 2>&1; then
 	XYMONAPI_PASSWD="$work/passwd" XYMONAPI_HIDE="$work/hide" XYMONAPI_TOKENS="$work/tokens" start_api
 	export XYMONAPI_URL="http://127.0.0.1:$API_PORT"
 	unset XYMONAPI_TOKEN XYMONAPI_TOKEN_FILE
+	cp "$work/seed.npz" "$work/index5.npz"
 	XYMONAPI_HIDE="$work/hide" XYMONAPI_RAG_INDEX="$work/index5.npz" rag index > "$work/index5.out" \
 		|| fail "index on the server, with the API asking for a password, failed: $(tail -n 5 "$work/rag.err")"
 	assert_match 'indexed [0-9]+ passages' "$(cat "$work/index5.out")" "on the server, index reads the files and needs no user or token"
@@ -301,6 +311,7 @@ if command -v htpasswd >/dev/null 2>&1; then
 	assert_contains 'web.example.com http' "$hist" "and the history is in the index"
 	assert_contains '[hidden]' "$hist" "with XYMONAPI_HIDE applied as the API applies it"
 	assert_not_contains 'Internal Server Error' "$hist" "so the hidden text is not indexed"
+	cp "$work/seed.npz" "$work/index6.npz"
 	rc=0
 	XYMONHISTDIR="" XYMONAPI_RAG_INDEX="$work/index6.npz" rag index > /dev/null || rc=$?
 	[ "$rc" -ne 0 ] || fail "off the server, index with no user succeeded against an API that asks for one"
