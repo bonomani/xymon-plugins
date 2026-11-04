@@ -34,6 +34,26 @@ INSTRUCTIONS = ("Read a Xymon monitoring server: its status board, alarms, "
 TOOLS: dict = {}
 
 
+def _version() -> str:
+    """This plugin's version, for the handshake: VERSION beside it once
+    installed, the version: line of its PLUGIN file in a checkout."""
+    here = Path(__file__).resolve().parent
+    try:
+        return (here / "VERSION").read_text().strip()
+    except OSError:
+        pass
+    try:
+        for line in (here / "PLUGIN").read_text().splitlines():
+            if line.startswith("version:"):
+                return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return ""
+
+
+VERSION = _version()
+
+
 class ToolError(Exception):
     """A failure the client is told, as a tool error with this text."""
 
@@ -187,7 +207,7 @@ def answer(msg: dict) -> dict | None:
         asked = params.get("protocolVersion")
         return {"protocolVersion": asked if asked in VERSIONS else VERSIONS[0],
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "xymon", "version": ""},
+                "serverInfo": {"name": "xymon", "version": VERSION},
                 "instructions": INSTRUCTIONS}
     if method == "tools/list":
         return {"tools": [{"name": n, "description": inspect.getdoc(f),

@@ -122,7 +122,8 @@ assert_contains 'alive' "$answer" "the MCP server runs on the standard library a
 grep -q 'ModuleNotFoundError' "$work/mcp.err" && fail "the MCP server needs a module outside the standard library: $(cat "$work/mcp.err")"
 
 # The protocol's edges, each line answered in turn, none of them needing
-# the API: the version asked for when it is known, the newest otherwise;
+# the API: the version asked for when it is known, the newest otherwise,
+# with the server's own version;
 # ping; no answer to a notification; -32601 for an unknown method; -32700
 # for a line that is not JSON, after which the next is still answered; a
 # missing argument, or one of the wrong type, a tool error that names it.
@@ -140,6 +141,8 @@ grep -q 'ModuleNotFoundError' "$work/mcp.err" && fail "the MCP server needs a mo
 	|| fail "the MCP server exited with an error at the protocol's edges: $(tail -n 5 "$work/edges.err")"
 edge() { grep "\"id\":$1[,}]" "$work/edges.out" || true; }
 assert_contains '"protocolVersion":"2024-11-05"' "$(edge 1)" "a known protocol version is the one answered"
+version=$(sed -n 's/^version: *//p' "$ROOT/plugins/xymonapi-mcp/PLUGIN")
+assert_contains "\"serverInfo\":{\"name\":\"xymon\",\"version\":\"$version\"}" "$(edge 1)" "the server gives its version, from its PLUGIN file in a checkout"
 assert_contains '"protocolVersion":"2025-11-25"' "$(edge 2)" "an unknown one gets the newest"
 assert_equal '{"jsonrpc":"2.0","id":3,"result":{}}' "$(edge 3)" "ping is answered"
 assert_contains '"code":-32601' "$(edge 4)" "an unknown method is -32601"
