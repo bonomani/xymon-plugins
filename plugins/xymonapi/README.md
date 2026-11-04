@@ -35,19 +35,19 @@ numbered rules every implementation keeps.
   ignored, and with it the password the API should ask for.
 - Python 3.9 or later, with the modules in
   [`requirements.txt`](requirements.txt): how the install finds or makes a
-  Python with them is in the [top README](../../README.md#installing).
+  Python with them is in the [top README](../../README.md#installing-a-plugin).
 - `rrdtool`, for `/series`; a web server running Xymon's CGI programs at
   `XYMONSERVERCGIURL`, for `/graphs`; Apache's `htpasswd`, when a password
   file is used.
 
-## On the server
+## On the Xymon server
 
 ```sh
 XYMONHOME=/usr/lib/xymon/server ./install.sh install-server xymonapi
 ```
 
 Besides the code, the task and the manual page, which every plugin
-installs ([top README](../../README.md#installing)), it writes once the web
+installs ([top README](../../README.md#installing-a-plugin)), it writes once the web
 server snippets `$XYMONHOME/etc/xymonapi-{apache,nginx,lighttpd}.conf`, for
 [other machines](#reaching-it-from-another-machine), and keeps them after.
 Xymon's own install links `$XYMONHOME/ext` and `$XYMONHOME/etc` to wherever
@@ -142,11 +142,11 @@ themselves are plain and trusted. Whichever you choose, keep secrets out of
 the texts: `XYMONAPI_HIDE` names a file of regular expressions whose matches
 come out as `[hidden]`, in every text and in the search index.
 
-## On another machine
+## On your own machine
 
 A machine that reads the API -- a laptop, say, or the server itself when you
-work there -- needs the API's client library and a token of its own, and for that a POSIX shell, `curl` and Python 3.9 or later,
-nothing else:
+work there -- needs the API's client library and a token of its own, and for
+that a POSIX shell, `curl` and Python 3.9 or later, nothing else:
 
 ```sh
 # Only when the certificate is the server's own, not one the machine trusts:
