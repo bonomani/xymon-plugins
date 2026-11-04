@@ -9,20 +9,29 @@
 #   ./install.sh remove [PLUGIN...] [server|client|tools]
 #   ./install.sh venv [server|client|tools]         the virtualenv beside the plugins
 #
-# A plugin ships up to three profiles, one per kind of machine, and the last
-# word says which an action serves: server, the Xymon server's, the plugins'
-# tasks and the API under $XYMONHOME/ext; client, a monitored host's, which
-# nothing ships yet; tools, your own machine's, the plugins' commands under
-# PREFIX (~/.local), as yourself. The PLUGIN file lists each profile's files
-# as server-files and tools-files. Unsaid, the profile is the one for the
-# role this machine plays, detected from the tree XYMONHOME names -- set by
-# xymoncmd, the Xymon user's environment, or on the command line -- and the
-# first line says which and why: a tree with etc/xymonclient.cfg and no
-# etc/xymonserver.cfg is a monitored host, any other tree the server, no
-# XYMONHOME your own machine. Said, the profile is taken as said, so that a
-# package is staged for a server this machine is not; server still needs
-# XYMONHOME. On a Xymon machine your own commands are not installed with the
-# Xymon part unasked: the two are installed as two users.
+# A plugin ships profiles, each the part of it for one kind of place,
+# declared in its PLUGIN file as PROFILE-* keys with where it goes
+# (PROFILE-root: ext, $XYMONHOME/ext; prefix, $PREFIX/libexec/xymon-plugins)
+# and the roles of a machine that bring it (PROFILE-roles). The first three
+# are server, the Xymon server's, the plugins' tasks and the API; client, a
+# monitored host's, which nothing ships yet; tools, your own machine's, the
+# plugins' commands, as yourself. A plugin may declare another, and the
+# script learns the names from the files. A word among the arguments that
+# is a profile name says which an action serves. Unsaid, the action serves
+# every profile the machine's role brings, the role detected from the tree
+# XYMONHOME names -- set by xymoncmd, the Xymon user's environment, or on
+# the command line -- and the first line says the role, why, and the
+# profiles. Two marks tell a role, both needed and from two places, the
+# configuration under etc/ and the program under bin/: etc/xymonserver.cfg
+# and bin/xymond the server, etc/xymonclient.cfg and bin/xymonclient.sh a
+# monitored host, no mark in common; one mark of a pair is an error, none at
+# all a tree that is not Xymon's, and neither is guessed at; no XYMONHOME is
+# your own machine.
+# Said, the profile is taken as said, so that a package is staged for a
+# server this machine is not; a profile under ext still needs XYMONHOME. A
+# plugin's directory under a root holds all its profiles there, installed
+# and removed whole: one root's profiles are one user's, and one role never
+# brings your own commands with the Xymon part, the two being two users.
 #
 # With no action at all, on a terminal, the script asks: install or remove,
 # which role this machine plays, the detected one by default, and which
@@ -52,34 +61,48 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 
 die() { echo "install.sh: $*" >&2; exit 1; }
 usage() {
-	echo "usage: ./install.sh install|remove|venv [PLUGIN...] [server|client|tools] [NAME=value...]" >&2
+	echo "usage: ./install.sh install|remove PLUGIN|PLUGIN-PROFILE|PROFILE... [NAME=value...]" >&2
+	echo "       ./install.sh venv [PROFILE] [NAME=value...]" >&2
 	echo "       ./install.sh                                  on a terminal: asks what to do" >&2
-	echo "The profile, unsaid, follows the machine's role: a client tree in XYMONHOME is client, another tree server, no XYMONHOME tools." >&2
+	echo "PROFILE is one of $(echo $(profiles) | sed 's/ /, /g'). PLUGIN-PROFILE, as xymonapi-server, pins one plugin to one profile; PLUGIN alone takes the machine's, PROFILE alone every plugin of it. Nothing named installs nothing:" >&2
+	echo "etc/xymonserver.cfg and bin/xymond under XYMONHOME make the server, etc/xymonclient.cfg and bin/xymonclient.sh a monitored host, no XYMONHOME your own machine." >&2
 	exit 2
 }
 
-# profiles -- the profile names the PLUGIN files declare, as NAME-files
+# profiles -- the profile names the PLUGIN files declare, as NAME-root
 # keys, and client, which no plugin ships yet: a word among the arguments
 # that is one of them is the profile, so a plugin declaring a fourth
 # changes nothing here.
 profiles() {
-	{ sed -n 's/^\([a-z0-9]*\)-files: .*/\1/p' "$ROOT"/plugins/*/PLUGIN; echo client; } | sort -u
+	{ sed -n 's/^\([a-z0-9_]*\)-root: .*/\1/p' "$ROOT"/plugins/*/PLUGIN; echo client; } | sort -u
 }
 is_profile() { case " $(echo $(profiles)) " in *" $1 "*) return 0 ;; esac; return 1; }
 
-# The first word that is not a NAME=value setting is the action, a profile
-# name is the profile, the others the plugins. No action on a terminal is the
-# dialogue, which runs once the helpers below are defined; no action
-# elsewhere is the usage.
+# The first word that is not a NAME=value setting is the action. Of the
+# others, a profile name is the profile for every plugin not pinned, and
+# alone means every plugin of that profile; a PLUGIN-PROFILE word -- the
+# long form, xymonapi-mcp-tools -- pins that plugin to that profile whatever
+# the machine; a plugin name alone takes the machine's profiles. A word
+# that is a profile name never reaches the plugins, so no plugin may be
+# called like one. No action on a terminal is the dialogue, which runs once
+# the helpers below are defined; no action elsewhere is the usage.
 ACTION=
 NAMES=
 PROFILE=
+PINNED=
 for a in "$@"; do
 	case $a in
 		*=*) export "$a" ;;
 		*) if [ -z "$ACTION" ]; then ACTION=$a
-		   elif is_profile "$a"; then [ -z "$PROFILE" ] || die "two profiles given: $PROFILE and $a"; PROFILE=$a
-		   else NAMES="$NAMES $a"; fi ;;
+		   elif is_profile "$a"; then [ -z "$PROFILE" ] || [ "$PROFILE" = "$a" ] || die "two profiles given: $PROFILE and $a"; PROFILE=$a
+		   else
+			pinned=
+			for prof in $(profiles); do
+				case $a in *-$prof) [ -f "$ROOT/plugins/${a%-$prof}/PLUGIN" ] && pinned="${a%-$prof}:$prof" ;; esac
+			done
+			if [ -n "$pinned" ]; then PINNED="$PINNED $pinned"; NAMES="$NAMES ${pinned%%:*}"
+			else NAMES="$NAMES $a"; fi
+		   fi ;;
 	esac
 done
 DIALOGUE=
@@ -121,41 +144,129 @@ say() {
 		-e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g"
 }
 
-# detected_role -- what the tree XYMONHOME names makes this machine, named
-# by the profile it takes: client with etc/xymonclient.cfg, else server,
-# else, with no XYMONHOME, tools.
+# What makes a machine a Xymon server or a monitored host: two marks each,
+# both needed, under the tree XYMONHOME names, and none in common, so that
+# the two cannot be mistaken for each other. The two marks of a side come
+# from two places, its configuration file under etc/ and its program under
+# bin/, so that they are two pieces of evidence and not one seen twice: a
+# tree with only its etc/ copied in, or linked, shows one mark and is
+# refused. Every layout known, Debian's, the RPM's, Homebrew's and a source
+# install, keeps bin/ under XYMONHOME. A tree with both pairs is the server,
+# which always has a client.
+SERVER_CFG=etc/xymonserver.cfg; SERVER_RUN=bin/xymond
+CLIENT_CFG=etc/xymonclient.cfg; CLIENT_RUN=bin/xymonclient.sh
+
+# marks CFG RUN -- how many of a side's two marks are there.
+marks() { n=0; for m in "$@"; do [ -e "$XYMONHOME/$m" ] && n=$((n + 1)); done; echo $n; }
+
+# detected_role -- the role this machine plays, named by the profile it
+# takes: server or client when both of that role's marks are there, tools
+# with no XYMONHOME; nothing when a tree has none of the marks, or one of a
+# pair, which role_problem then explains.
 detected_role() {
-	if [ -z "$XYMONHOME" ]; then echo tools
-	elif [ -e "$XYMONHOME/etc/xymonclient.cfg" ] && [ ! -e "$XYMONHOME/etc/xymonserver.cfg" ]; then echo client
-	else echo server
+	[ -n "$XYMONHOME" ] || { echo tools; return; }
+	if [ "$(marks $SERVER_CFG $SERVER_RUN)" -eq 2 ]; then echo server
+	elif [ "$(marks $CLIENT_CFG $CLIENT_RUN)" -eq 2 ]; then echo client
 	fi
 }
 
-# profile_line PROFILE -- the first line of a run: the profile, and the
-# role of the machine that chose it, with what tells it.
-profile_line() {
+# role_problem -- why no role was detected under $XYMONHOME: a pair half
+# there is an error to look at, none at all is a tree that is not Xymon's.
+role_problem() {
+	for pair in "server:$SERVER_CFG:$SERVER_RUN" "client:$CLIENT_CFG:$CLIENT_RUN"; do
+		role=${pair%%:*}; rest=${pair#*:}; cfg=${rest%%:*}; run=${rest#*:}
+		if [ "$(marks $cfg $run)" -eq 1 ]; then
+			[ -e "$XYMONHOME/$cfg" ] && echo "$XYMONHOME has $cfg but not $run: half a Xymon $role tree, which this script does not guess at" \
+				|| echo "$XYMONHOME has $run but not $cfg: half a Xymon $role tree, which this script does not guess at"
+			return
+		fi
+	done
+	echo "$XYMONHOME is neither a Xymon server ($SERVER_CFG, $SERVER_RUN) nor a monitored host ($CLIENT_CFG, $CLIENT_RUN): say the profile, or unset XYMONHOME for your own machine"
+}
+
+# role_profiles ROLE -- the profiles the PLUGIN files give that role, as
+# PROFILE-roles keys; client, which no plugin ships yet, for the client role.
+role_profiles() {
+	{ for f in "$ROOT"/plugins/*/PLUGIN; do
+		sed -n 's/^\([a-z0-9_]*\)-roles: \(.*\)/\1 \2/p' "$f" | while read -r prof roles; do
+			case " $roles " in *" $1 "*) echo "$prof" ;; esac
+		done
+	  done; [ "$1" != client ] || echo client; } | sort -u
+}
+
+# root_of PLUGIN PROFILE -- ext or prefix, empty for a profile the plugin
+# has not. plugin_declared PLUGIN -- the profiles it declares. base_dir ROOT
+# -- where that root's plugins live.
+root_of() { field "$1" "$2-root"; }
+plugin_declared() { sed -n 's/^\([a-z0-9_]*\)-root: .*/\1/p' "$ROOT/plugins/$1/PLUGIN"; }
+base_dir() { case $1 in ext) echo "$EXTROOT" ;; prefix) echo "$TOOLSROOT" ;; esac; }
+man_dir() { case $1 in ext) echo "$DESTDIR$MANDIR" ;; prefix) echo "$DESTDIR$PREFIX/share/man" ;; esac; }
+
+# settle_profile -- PROFILES, the profiles this run serves: the one said,
+# taken as said so that a package is staged for a server this machine is
+# not; unsaid, every profile the detected role brings. Only what cannot be
+# done without is checked: a profile under ext needs XYMONHOME. client is
+# refused, since no plugin ships that profile yet. The first line says the
+# role, what told it, and the profiles.
+settle_profile() {
+	for pin in $PINNED; do
+		pl=${pin%%:*} prof=${pin#*:}
+		[ -n "$(root_of "$pl" "$prof")" ] || die "$pl has no $prof profile: its profiles are $(echo $(plugin_declared "$pl"))"
+	done
+	ROLE=$(detected_role)
+	# The profiles of the plugins not pinned: said, or the role's. With every
+	# plugin pinned, none is needed, and the role may stay undetected.
+	unpinned=
+	for n in $NAMES; do case " $PINNED " in *" $n:"*) ;; *) unpinned=1 ;; esac; done
+	[ -n "$NAMES" ] || unpinned=1
+	if [ -z "$unpinned" ]; then PROFILES=
+	elif [ -n "$PROFILE" ]; then PROFILES=$PROFILE
+	elif [ -n "$ROLE" ]; then PROFILES=$(echo $(role_profiles "$ROLE"))
+	else die "$(role_problem)"
+	fi
+	[ -n "$PROFILES" ] || [ -z "$unpinned" ] || die "$(role_line "$ROLE") No plugin here has a profile for that role."
+	all=$PROFILES; for pin in $PINNED; do all="$all ${pin#*:}"; done
+	all=$(echo $all | tr ' ' '\n' | sort -u | tr '\n' ' ')
+	case " $all " in *" client "*)
+		die "$(role_line client) No plugin ships a client profile yet; the plugins' commands go on your own machine: ./install.sh $ACTION ... tools" ;;
+	esac
+	ROOTS=
+	for prof in $all; do
+		for pl in $(all_plugins); do
+			r=$(root_of "$pl" "$prof"); [ -n "$r" ] || continue
+			case " $ROOTS " in *" $r "*) ;; *) ROOTS="$ROOTS $r" ;; esac
+		done
+	done
+	case " $ROOTS " in *" ext "*) [ -n "$XYMONHOME" ] || die "the $(echo $all | sed 's/ /, /g') profile needs XYMONHOME, the Xymon server directory: XYMONHOME=/usr/lib/xymon/server ./install.sh $ACTION ..." ;; esac
+	echo "$(role_line "$ROLE") $(profiles_phrase $all)"
+}
+
+# role_line ROLE -- the machine's role and what tells it.
+role_line() {
 	case $1 in
-		server)
-			if [ -e "$XYMONHOME/etc/xymonserver.cfg" ]; then why="$XYMONHOME/etc/xymonserver.cfg"; else why="XYMONHOME=$XYMONHOME, no etc/xymonclient.cfg there"; fi
-			echo "The server profile, for the Xymon server this machine is ($why): the plugins' tasks and the API, under $XYMONHOME/ext." ;;
-		client)
-			if [ -e "$XYMONHOME/etc/xymonclient.cfg" ]; then why=" ($XYMONHOME/etc/xymonclient.cfg)"; else why=; fi
-			echo "The client profile, for a monitored host$why." ;;
-		tools) echo "The tools profile, for your own machine: the plugins' commands, under $PREFIX." ;;
+		server) echo "This machine is the Xymon server ($SERVER_CFG, $SERVER_RUN under $XYMONHOME)." ;;
+		client) echo "This machine is a monitored host ($CLIENT_CFG, $CLIENT_RUN under $XYMONHOME)." ;;
+		tools) echo "This is your own machine." ;;
+		"") echo "No Xymon role detected under $XYMONHOME; the profile is as said." ;;
 	esac
 }
 
-# settle_profile -- PROFILE unsaid is the detected role's; said, it is
-# taken as said, so that a package is staged for a server this machine is
-# not, with only what it cannot do without: server needs XYMONHOME. client
-# is refused, since no plugin ships that profile yet.
-settle_profile() {
-	[ -n "$PROFILE" ] || PROFILE=$(detected_role)
-	case $PROFILE in
-		server) [ -n "$XYMONHOME" ] || die "the server profile needs XYMONHOME, the Xymon server directory: XYMONHOME=/usr/lib/xymon/server ./install.sh $ACTION ... server" ;;
-		client) die "$(profile_line client) No plugin ships a client profile yet; the plugins' commands go on your own machine: ./install.sh $ACTION ... tools" ;;
+# profiles_phrase PROFILE... -- "the X profile" or "the X and Y profiles",
+# each with where it goes.
+profiles_phrase() {
+	if [ $# -eq 1 ]; then printf 'The %s profile: %s.\n' "$1" "$(profile_where "$1")"
+	else
+		out=
+		for prof in "$@"; do out="$out, $prof ($(profile_where "$prof"))"; done
+		echo "The profiles${out}."
+	fi
+}
+profile_where() {
+	case $1 in
+		server) echo "the plugins' tasks and the API, under $XYMONHOME/ext" ;;
+		tools) echo "the plugins' commands, under $PREFIX" ;;
+		*) for pl in $(all_plugins); do r=$(root_of "$pl" "$1"); [ -n "$r" ] && { echo "under $(base_dir "$r")"; return; }; done ;;
 	esac
-	profile_line "$PROFILE"
 }
 
 # Every plugin, by the directories under plugins/ that hold a PLUGIN file.
@@ -231,11 +342,11 @@ dist() {
 	cp -f "$ROOT/install.sh" "$ROOT/LICENSE" "$DIST/"
 }
 
-# task PLUGIN -- its xymonlaunch task file as tasks.d/PLUGIN, @XYMONHOME@
+# task PLUGIN PROFILE -- the profile's xymonlaunch task file as tasks.d/PLUGIN, @XYMONHOME@
 # replaced, unless one is there already: the one an admin enabled is not put
 # back to DISABLED by the next install.
 task() {
-	t=$(field "$1" task); [ -n "$t" ] || return 0
+	t=$(field "$1" "$2-task"); [ -n "$t" ] || return 0
 	mkdir -p "$TASKDIR"
 	if [ -e "$TASKDIR/$1" ]; then
 		echo "keeping $TASKDIR/$1"
@@ -244,10 +355,10 @@ task() {
 	fi
 }
 
-# conf PLUGIN -- its web server snippets into $XYMONHOME/etc unless there
+# conf PLUGIN PROFILE -- the profile's web server snippets into $XYMONHOME/etc unless there
 # already: an admin's edits are kept, as a task file is.
 conf() {
-	for c in $(field "$1" conf); do
+	for c in $(field "$1" "$2-conf"); do
 		if [ -e "$ETC/$c" ]; then
 			echo "keeping $ETC/$c"
 		else
@@ -256,18 +367,18 @@ conf() {
 	done
 }
 
-# restart PLUGIN -- a process that runs the plugin's program from this
+# restart PLUGIN PROFILE -- a process that runs the profile's program from this
 # install keeps the code it loaded: stop it, and xymonlaunch starts the new.
 # Found by its command line, which names the program by its full path,
 # escaped for pgrep's regular expressions, as a directory may hold a | or a
 # dot. With DESTDIR the path is the staging one, which nothing runs from.
 restart() {
-	prog=$(field "$1" restart); [ -n "$prog" ] || return 0
+	prog=$(field "$1" "$2-restart"); [ -n "$prog" ] || return 0
 	if ! command -v pgrep >/dev/null 2>&1; then
 		echo "An API that runs keeps the old code until it is stopped; xymonlaunch then starts the new."
 		return 0
 	fi
-	pat=$(printf '%s/%s' "$EXTROOT/$1" "$prog" | sed -e 's/[][\\.*^$|+?(){}]/\\&/g')
+	pat=$(printf '%s/%s' "$(base_dir "$(root_of "$1" "$2")")/$1" "$prog" | sed -e 's/[][\\.*^$|+?(){}]/\\&/g')
 	pids=$(echo $(pgrep -f "$pat" | grep -vx "$$"))
 	[ -n "$pids" ] || return 0
 	if kill $pids 2>/dev/null; then
@@ -309,32 +420,42 @@ dialogue() {
 		*) die "neither install nor remove: '$verb'" ;;
 	esac
 	found=$(detected_role)
-	case $found in server) role=1 ;; client) role=2 ;; *) role=3 ;; esac
-	echo "Which role does this machine play? Detected: $found."
-	echo "  1. the Xymon server: the server profile, the plugins' tasks and the API, under ${XYMONHOME:-XYMONHOME}/ext"
-	echo "  2. a monitored host: the client profile (no plugin ships one yet)"
-	echo "  3. your own machine: the tools profile, the plugins' commands, under $PREFIX"
-	role=$(ask "Role" "$role")
+	case $found in server) role=1 ;; client) role=2 ;; tools) role=3 ;; *) role= ;; esac
+	if [ -n "$found" ]; then echo "Which role does this machine play? Detected: $found."
+	else echo "Which role does this machine play? Not detected: $(role_problem)"; fi
+	echo "  1. the Xymon server: $(echo $(role_profiles server) | sed 's/ /, /g'), the plugins' tasks and the API, under ${XYMONHOME:-XYMONHOME}/ext"
+	echo "  2. a monitored host: client (no plugin ships that profile yet)"
+	echo "  3. your own machine: $(echo $(role_profiles tools) | sed 's/ /, /g'), the plugins' commands, under $PREFIX"
+	role=$(ask "Role" "${role:-none}")
 	case $role in
-		1*|s*) side=server; files=server-files; root=$EXTROOT ;;
+		1*|s*) side=server ;;
 		2*|c*) side=client ;;
-		3*|t*) side=tools; files=tools-files; root=$TOOLSROOT ;;
+		3*|t*) side=tools ;;
 		*) die "neither 1, 2 nor 3: '$role'" ;;
 	esac
 	if [ "$side" = server ] && [ -z "$XYMONHOME" ]; then
 		XYMONHOME=$(ask "XYMONHOME, the Xymon server directory" /usr/lib/xymon/server)
 		export XYMONHOME
-		root=$DESTDIR$XYMONHOME/ext
+		EXTROOT=$DESTDIR$XYMONHOME/ext
 	fi
-	PROFILE=$side
-	settle_profile >/dev/null
+	[ "$side" = tools ] && XYMONHOME= && export XYMONHOME
+	[ "$side" != client ] || die "$(role_line client) No plugin ships a client profile yet."
+	# The role's profiles, as the action will take them; said as one word
+	# when the role has one profile, so the printed command needs nothing else.
+	PROFILES=$(echo $(role_profiles "$side"))
+	ROOTS=; for prof in $PROFILES; do for pl in $(all_plugins); do r=$(root_of "$pl" "$prof"); [ -n "$r" ] || continue; case " $ROOTS " in *" $r "*) ;; *) ROOTS="$ROOTS $r" ;; esac; done; done
 	offered=
 	for p in $(for p in $(all_plugins); do echo "$(depth "$p") $p"; done | sort -n | cut -d' ' -f2); do
-		[ -n "$(field "$p" $files)" ] || continue
-		[ "$verb" = install ] || [ -e "$root/$p" ] || continue
+		has=
+		for r in $ROOTS; do
+			[ -n "$(plugin_profiles "$p" "$r" "$PROFILES")" ] || continue
+			[ "$verb" = install ] || [ -e "$(base_dir "$r")/$p" ] || continue
+			has=1
+		done
+		[ -n "$has" ] || continue
 		offered="$offered $p"
 	done
-	[ -n "$offered" ] || die "nothing to $verb in that profile: no plugin installed in $root"
+	[ -n "$offered" ] || die "nothing to $verb for that role: no plugin installed for it"
 	echo "Plugins, all of them unless you name some:"
 	for p in $offered; do
 		printf '  %-16s %s\n' "$p" "$(field "$p" summary)"
@@ -353,15 +474,21 @@ dialogue() {
 	else
 		for n in $chosen; do
 			for d in $(dependents "$n"); do
-				[ -e "$root/$d" ] || continue
+				inst=; for r in $ROOTS; do [ -e "$(base_dir "$r")/$d" ] && inst=1; done
+				[ -n "$inst" ] || continue
 				case " $chosen " in *" $d "*) ;; *) chosen="$chosen $d"; echo "With $d, installed here, which needs $n." ;; esac
 			done
 		done
 	fi
-	[ "$(echo $chosen)" = "$(echo $offered)" ] && [ "$verb" = install ] && chosen=
-	echo "Running: $([ "$side" != server ] || echo "XYMONHOME=$XYMONHOME ")./install.sh $verb $(echo $chosen) $side"
+	# The command, in long words, one per plugin and profile: what it does
+	# is then plain to read, and it runs the same on any machine.
+	words=
+	for n in $chosen; do
+		for prof in $PROFILES; do [ -n "$(root_of "$n" "$prof")" ] && words="$words $n-$prof"; done
+	done
+	echo "Running: $([ "$side" != server ] || echo "XYMONHOME=$XYMONHOME ")./install.sh $verb $(echo $words)"
 	echo
-	exec "$ROOT/install.sh" "$verb" $chosen "$side"
+	exec "$ROOT/install.sh" "$verb" $words
 }
 
 # venv_auto PLUGIN ROOT MODULES NOTE -- the last step of installing a
@@ -380,13 +507,13 @@ dialogue() {
 venv_auto() {
 	plugin=$1 root=$2 modules=$3 note=$4
 	[ -n "$modules" ] || return 0
-	# The hint, as typed for this profile.
-	target="./install.sh venv $PROFILE"
+	# The hint, as typed for this run: the profile, when the run serves one.
+	target="./install.sh venv"; [ "$(echo $PROFILES | wc -w)" -ne 1 ] || target="$target $PROFILES"
 	if [ -x "$root/venv/bin/python3" ]; then
 		missing=$("$root/venv/bin/python3" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $modules)
 		[ -z "$missing" ] && return 0
 		if offer "The virtualenv $root/venv lacks $missing, which $plugin needs${note:+ ($note)}. Install them into it, from PyPI?"; then
-			"$ROOT/install.sh" venv "$PROFILE" || exit 1
+			"$ROOT/install.sh" venv $PROFILE || exit 1
 		else
 			echo "The virtualenv $root/venv lacks $missing, which this plugin needs: $target installs them."
 		fi
@@ -412,7 +539,7 @@ venv_auto() {
 		"$py" -m venv --system-site-packages "$root/venv" || exit 1
 		echo "Made $root/venv from $py ($("$py" -V 2>&1)), which has the modules this plugin needs ($modules): the plugins there run with it."
 	elif [ -n "$newest" ] && offer "$plugin needs $modules, which no Python here has${note:+ ($note)}. Make a virtualenv at $root/venv with $newest, and install them from PyPI?"; then
-		PYTHON=$newest "$ROOT/install.sh" venv "$PROFILE" || exit 1
+		PYTHON=$newest "$ROOT/install.sh" venv $PROFILE || exit 1
 	else
 		echo "No virtualenv at $root/venv, and no Python with the modules this plugin needs ($modules): $target${newest:+ PYTHON=$newest} makes one and installs them; without it, the python3 on PATH must have them."
 	fi
@@ -433,44 +560,62 @@ venv() {
 	echo "The plugins in $1 run with $1/venv/bin/python3 ($("$1/venv/bin/python3" -V))."
 }
 
+# A plugin's directory under a root holds every profile of it that lives
+# there, and is installed and removed whole: the profiles of one root are
+# one user's. install_plugin PLUGIN ROOT PROFILES installs the plugin's
+# profiles among PROFILES that live under ROOT, after the plugins it needs,
+# which take the same profiles, so that a plugin pinned to a profile brings
+# what it needs in that profile.
 DONE=
-install_server() {
-	case " $DONE " in *" $1 "*) return 0 ;; esac
-	for n in $(field "$1" needs); do install_server "$n"; done
-	[ -n "$(field "$1" server-files)" ] || die "$1 has nothing to install on the server"
-	ext=$EXTROOT/$1
-	fresh "$ext" || exit 1
-	copy "$1" server "$ext"
-	version "$1" "$ext"
-	dist "$1"
-	manual "$1" "$(field "$1" server-manual)" "$DESTDIR$MANDIR"
-	task "$1"
-	conf "$1"
-	say "$1" installed
-	restart "$1"
-	venv_auto "$1" "$EXTROOT" "$(field "$1" server-modules)" ""
-	DONE="$DONE $1"
+install_plugin() {
+	case " $DONE " in *" $1:$2 "*) return 0 ;; esac
+	for n in $(field "$1" needs); do install_plugin "$n" "$2" "$3"; done
+	profs=$(plugin_profiles "$1" "$2" "$3")
+	[ -n "$profs" ] || return 0
+	dir=$(base_dir "$2")/$1
+	fresh "$dir" || exit 1
+	modules= note=
+	for prof in $profs; do
+		copy "$1" "$prof" "$dir"
+		manual "$1" "$(field "$1" "$prof-manual")" "$(man_dir "$2")"
+		modules="$modules $(field "$1" "$prof-modules")"
+		[ -n "$note" ] || note=$(field "$1" "$prof-venv-note")
+		command_for "$1" "$prof"
+		task "$1" "$prof"
+		conf "$1" "$prof"
+	done
+	version "$1" "$dir"
+	[ "$2" != ext ] || dist "$1"
+	for prof in $profs; do say "$1" "$prof-installed"; done
+	for prof in $profs; do restart "$1" "$prof"; done
+	venv_auto "$1" "$(base_dir "$2")" "$(echo $modules)" "$note"
+	DONE="$DONE $1:$2"
 }
 
-install_tools() {
-	case " $DONE " in *" $1 "*) return 0 ;; esac
-	for n in $(field "$1" needs); do install_tools "$n"; done
-	[ -n "$(field "$1" tools-files)" ] || die "$1 has nothing to install on your own machine"
-	dir=$TOOLSROOT/$1
-	fresh "$dir" || exit 1
-	mkdir -p "$BIN" "$TOOLSMAN1"
-	copy "$1" tools "$dir"
-	version "$1" "$dir"
-	set -- "$1" $(field "$1" command)
-	if [ $# -eq 3 ]; then
-		# The command runs the script from where it is installed: PREFIX as
-		# given, without DESTDIR, quoted.
-		printf '#!/bin/sh\nexec "%s/libexec/xymon-plugins/%s/%s" "$@"\n' "$PREFIX" "$1" "$3" > "$BIN/$2"
-		chmod 755 "$BIN/$2"
-	fi
-	manual "$1" "$(field "$1" tools-manual)" "$DESTDIR$PREFIX/share/man"
-	venv_auto "$1" "$TOOLSROOT" "$(field "$1" tools-modules)" "$(field "$1" venv-note)"
-	DONE="$DONE $1"
+# plugin_profiles PLUGIN ROOT PROFILES -- the plugin's profiles, among
+# PROFILES, that live under ROOT.
+plugin_profiles() {
+	for prof in $3; do [ "$(root_of "$1" "$prof")" = "$2" ] && echo "$prof"; done
+	return 0
+}
+
+# wanted PLUGIN -- the profiles asked of the plugin: the ones it is pinned
+# to, else PROFILES.
+wanted() {
+	w=
+	for pin in $PINNED; do [ "${pin%%:*}" = "$1" ] && w="$w ${pin#*:}"; done
+	echo "${w:-$PROFILES}"
+}
+
+# command_for PLUGIN PROFILE -- the profile's command in $PREFIX/bin, running
+# the script from where it is installed: PREFIX as given, without DESTDIR,
+# quoted.
+command_for() {
+	set -- "$1" $(field "$1" "$2-command")
+	[ $# -eq 3 ] || return 0
+	mkdir -p "$BIN"
+	printf '#!/bin/sh\nexec "%s/libexec/xymon-plugins/%s/%s" "$@"\n' "$PREFIX" "$1" "$3" > "$BIN/$2"
+	chmod 755 "$BIN/$2"
 }
 
 # needed PLUGIN DIR -- refuse to remove the plugin while one installed in DIR
@@ -482,24 +627,28 @@ needed() {
 	return 0
 }
 
-remove_server() {
-	needed "$1" "$EXTROOT"
-	needed "$1" "$DIST/plugins"
-	rm -rf "$EXTROOT/$1" "$DIST/plugins/$1"
-	m=$(field "$1" server-manual)
-	[ -n "$m" ] && rm -f "$DESTDIR$MANDIR/man${m##*.}/$m"
-	[ -n "$(field "$1" task)" ] && rm -f "$TASKDIR/$1"
-	say "$1" removed
-}
-
-remove_tools() {
-	needed "$1" "$TOOLSROOT"
-	rm -rf "$TOOLSROOT/$1"
-	set -- "$1" $(field "$1" command)
-	[ $# -eq 3 ] && rm -f "$BIN/$2"
-	m=$(field "$1" tools-manual)
-	[ -n "$m" ] && rm -f "$TOOLSMAN1/$m"
-	say "$1" removed-tools
+# remove_plugin PLUGIN ROOT PROFILES -- the plugin's directory under ROOT, with the
+# manual pages, commands and tasks of its profiles there; refused while an
+# installed plugin needs it.
+remove_plugin() {
+	profs=$(plugin_profiles "$1" "$2" "$3")
+	[ -n "$profs" ] || return 0
+	dir=$(base_dir "$2")/$1
+	[ -e "$dir" ] || return 0
+	needed "$1" "$(base_dir "$2")"
+	[ "$2" != ext ] || needed "$1" "$DIST/plugins"
+	rm -rf "$dir"
+	[ "$2" != ext ] || rm -rf "$DIST/plugins/$1"
+	for prof in $profs; do
+		m=$(field "$1" "$prof-manual")
+		[ -n "$m" ] && rm -f "$(man_dir "$2")/man${m##*.}/$m"
+		set -- "$1" "$2" "$prof" $(field "$1" "$prof-command")
+		[ $# -eq 5 ] && rm -f "$BIN/$4"
+		set -- "$1" "$2"
+		[ -n "$(field "$1" "$prof-task")" ] && rm -f "$TASKDIR/$1"
+		say "$1" "$prof-removed"
+	done
+	return 0
 }
 
 [ -z "$DIALOGUE" ] || dialogue
@@ -507,31 +656,31 @@ remove_tools() {
 # The plugins named, each checked, or every plugin; for a removal, the
 # deepest first, so that none is removed while one installed needs it.
 for n in $NAMES; do known "$n"; done
-if [ -n "$NAMES" ]; then LIST=$NAMES; else LIST=$(all_plugins); fi
+if [ -n "$NAMES" ]; then LIST=$(echo $NAMES | tr ' ' '\n' | awk '!seen[$0]++')
+elif [ -n "$PROFILE" ] || [ "$ACTION" = venv ]; then LIST=$(all_plugins)
+elif [ "$ACTION" = install ] || [ "$ACTION" = remove ]; then
+	die "nothing named, nothing done: name the plugins -- the plugins are $(echo $(all_plugins)) -- or a profile for all of them, or run ./install.sh with no words on a terminal and be asked"
+fi
 deepest_first() {
 	for n in $LIST; do echo "$(depth "$n") $n"; done | sort -rn | cut -d' ' -f2
 }
 
 settle_profile
-# A profile a PLUGIN file declares but this script has no installer for yet.
-case $PROFILE in server|tools) ;; *) die "no installer for the $PROFILE profile yet" ;; esac
-case $ACTION-$PROFILE in
-	install-server)
-		for n in $LIST; do install_server "$n"; done ;;
-	install-tools)
-		for n in $LIST; do install_tools "$n"; done ;;
-	remove-server)
-		for n in $(deepest_first); do remove_server "$n"; done
-		[ -n "$NAMES" ] || rm -rf "$EXTROOT/venv" ;;
-	remove-tools)
-		for n in $(deepest_first); do remove_tools "$n"; done
-		if [ -z "$NAMES" ]; then
-			rm -rf "$TOOLSROOT/venv"
-			rmdir "$TOOLSROOT" 2>/dev/null || true
-		fi ;;
-	venv-server)
-		venv "$EXTROOT" ;;
-	venv-tools)
-		venv "$TOOLSROOT" ;;
+case $ACTION in
+	install)
+		for r in $ROOTS; do for n in $LIST; do install_plugin "$n" "$r" "$(wanted "$n")"; done; done
+		for n in $NAMES; do
+			case " $DONE " in *" $n:"*) ;; *) die "$n has no $(echo $(wanted "$n") | sed 's/ /, /g') profile" ;; esac
+		done ;;
+	remove)
+		for r in $ROOTS; do
+			for n in $(deepest_first); do remove_plugin "$n" "$r" "$(wanted "$n")"; done
+			if [ -z "$NAMES" ]; then
+				rm -rf "$(base_dir "$r")/venv"
+				[ "$r" != prefix ] || rmdir "$TOOLSROOT" 2>/dev/null || true
+			fi
+		done ;;
+	venv)
+		for r in $ROOTS; do venv "$(base_dir "$r")"; done ;;
 	*) usage ;;
 esac

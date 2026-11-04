@@ -76,11 +76,16 @@ move, how a change is made, tested and reviewed, is in
 - **Branches.** `stable` is the newest code every test passed, which CI
   moves forward; `main` holds every change as it lands. Install from
   `stable`.
-- **Install actions** are `install`, `remove` and `venv`. A plugin ships up
-  to three profiles, `server`, `client` and `tools`, one per kind of machine,
-  and the last word names the one an action serves. Unsaid, the profile
-  follows the role the machine plays, detected one per run, server first,
-  then monitored host, then your own machine, and said in the first line. No
+- **Install actions** are `install`, `remove` and `venv`. A plugin ships
+  profiles, each its part for one kind of place, declared in its `PLUGIN`
+  file with where it goes and which roles of a machine bring it: `server`,
+  `client` and `tools` are the first three, and a plugin may declare its own.
+  `PLUGIN-PROFILE`, as `xymonapi-mcp-tools`, is the long form: that plugin,
+  that profile, whatever the machine. A plugin name alone is the short form,
+  and a profile word alone means every plugin of it. Unsaid, the action serves every profile the
+  machine's role brings, the role detected one per run from two marks under
+  `XYMONHOME`, both needed, server first, then monitored host, then your own
+  machine with no `XYMONHOME`, and said in the first line. No
   plugin ships a client profile until the first check that installs on a
   monitored host.
 - **Words.** "Client" is Xymon's client; a program that calls the Xymon API
@@ -129,8 +134,11 @@ XYMONHOME=/usr/lib/xymon/server ./install.sh install NAME server   # the plugin'
 ./install.sh install NAME tools                                    # its tools profile, your own commands
 ```
 
-The profile may be left out: the script then takes the one for the role it
-detects from the tree `XYMONHOME` names, and says which in its first line. With no `NAME`, every
+`NAME` is a plugin, `NAME-PROFILE` a plugin pinned to one profile, as
+`xymonapi-mcp-tools`, and a profile word alone every plugin of it. With a
+plugin alone the script serves every profile the role it detects brings,
+the role read from the tree `XYMONHOME` names, and says which in its first
+line. Nothing named installs nothing: name the plugins, or run the dialogue. With no `NAME`, every
 plugin of that role. What each command puts where,
 Python and the virtualenv, enabling, updating and removing are in
 [`plugins/README.md`](plugins/README.md#installing-a-plugin); each plugin's

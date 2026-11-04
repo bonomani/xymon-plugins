@@ -10,15 +10,19 @@ manual: xymonapi-rag.1
 
 # How ./install.sh installs it: see xymonapi's PLUGIN file.
 needs: xymonapi
+server-root: ext
+server-roles: server
 server-files: xymonrag.py xymonapi-rag.sh requirements.txt
 server-manual: xymonapi-rag.1
 server-modules: fastembed numpy
-task: xymonapi-rag.tasks.DIST
-removed: Removed xymonapi-rag. Kept: its index, $XYMONAPI_RAG_INDEX, and xymonapi.
+server-task: xymonapi-rag.tasks.DIST
+server-removed: Removed xymonapi-rag. Kept: its index, $XYMONAPI_RAG_INDEX, and xymonapi.
+tools-root: prefix
+tools-roles: tools
 tools-files: xymonrag.py xymonapi-rag.sh requirements.txt
 tools-manual: xymonapi-rag.1
 tools-modules: fastembed numpy
-venv-note: only to keep an index on this machine: search and ask through the server need none
-command: xymonapi-rag xymonapi-rag.sh
+tools-venv-note: only to keep an index on this machine: search and ask through the server need none
+tools-command: xymonapi-rag xymonapi-rag.sh
 executable: xymonapi-rag.sh
-removed-tools: Removed xymonapi-rag. Kept: xymonapi's client, and any index here, $XYMONAPI_RAG_INDEX.
+tools-removed: Removed xymonapi-rag. Kept: xymonapi's client, and any index here, $XYMONAPI_RAG_INDEX.

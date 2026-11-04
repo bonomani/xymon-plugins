@@ -32,6 +32,12 @@ fi
 # two levels up, which is right for its tests/<dir>/ but not for a plugin's
 # tests under plugins/<name>/tests/: this file's place, tests/lib/, is the
 # same for every test.
+# server_tree DIR -- make DIR what install.sh takes for a Xymon server tree:
+# the two marks it looks for, etc/xymonserver.cfg and bin/xymond, empty.
+server_tree() {
+	mkdir -p "$1/etc" "$1/bin" && : > "$1/etc/xymonserver.cfg" && : > "$1/bin/xymond"
+}
+
 find_root() {
 	cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd
 }

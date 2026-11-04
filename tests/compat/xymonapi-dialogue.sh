@@ -44,8 +44,8 @@ rc=0
 [ "$rc" -eq 0 ] || fail "the dialogue installing everything failed with $rc: $(tail -n 5 "$work/all.log")"
 assert_contains "Which role does this machine play?" "$(cat "$work/all.log")" "the dialogue asks the role"
 assert_contains "Detected: tools." "$(cat "$work/all.log")" "with no XYMONHOME, tools is detected"
-assert_contains "3. your own machine: the tools profile, the plugins' commands, under $prefix" "$(cat "$work/all.log")" "naming PREFIX"
-assert_contains "Running: ./install.sh install  tools" "$(cat "$work/all.log")" "and says the action the answers spell"
+assert_contains "3. your own machine: tools, the plugins' commands, under $prefix" "$(cat "$work/all.log")" "naming PREFIX"
+assert_contains "Running: ./install.sh install xymonapi-tools xymonapi-mcp-tools xymonapi-rag-tools xymonapi-agent-tools" "$(cat "$work/all.log")" "and says the action the answers spell"
 for p in xymonapi xymonapi-mcp xymonapi-rag xymonapi-agent; do
 	assert_file_exists "$prefix/libexec/xymon-plugins/$p/VERSION"
 done
@@ -57,7 +57,7 @@ rc=0
 	-- "$ROOT/install.sh" PREFIX="$prefix" "$lacks" >"$work/one.log" 2>&1 || rc=$?
 [ "$rc" -eq 0 ] || fail "the dialogue installing xymonapi-mcp failed with $rc: $(tail -n 5 "$work/one.log")"
 assert_contains "With xymonapi, which xymonapi-mcp needs." "$(cat "$work/one.log")" "a plugin chosen alone names what it brings"
-assert_contains "Running: ./install.sh install xymonapi-mcp xymonapi tools" "$(cat "$work/one.log")" "and the action runs both"
+assert_contains "Running: ./install.sh install xymonapi-mcp-tools xymonapi-tools" "$(cat "$work/one.log")" "and the action runs both"
 assert_file_exists "$prefix/libexec/xymon-plugins/xymonapi/VERSION"
 assert_file_exists "$prefix/libexec/xymon-plugins/xymonapi-mcp/VERSION"
 [ -e "$prefix/libexec/xymon-plugins/xymonapi-rag" ] && fail "a plugin not chosen was installed"
@@ -70,19 +70,20 @@ rc=0
 [ "$rc" -eq 0 ] || fail "the dialogue removing xymonapi failed with $rc: $(tail -n 5 "$work/remove.log")"
 assert_contains "Plugins [xymonapi xymonapi-mcp]" "$(cat "$work/remove.log")" "a removal offers the installed plugins only"
 assert_contains "With xymonapi-mcp, installed here, which needs xymonapi." "$(cat "$work/remove.log")" "and names the dependent it takes along"
-assert_contains "Running: ./install.sh remove xymonapi xymonapi-mcp tools" "$(cat "$work/remove.log")" "then runs the removal"
+assert_contains "Running: ./install.sh remove xymonapi-tools xymonapi-mcp-tools" "$(cat "$work/remove.log")" "then runs the removal"
 [ -e "$prefix/libexec/xymon-plugins/xymonapi" ] && fail "xymonapi stayed after the dialogue removed it"
 [ -e "$prefix/libexec/xymon-plugins/xymonapi-mcp" ] && fail "xymonapi-mcp stayed after the dialogue removed what it needs"
 
-# The Xymon server, detected from XYMONHOME: the role defaults to 1. A
-# scratch XYMONHOME holds no etc/xymonclient.cfg, so it is a server tree.
+# The Xymon server, detected from XYMONHOME: the role defaults to 1. The
+# scratch XYMONHOME gets the two server marks.
 home=$work/server
+server_tree "$home"
 rc=0
 "$py" "$ROOT/tests/lib/answer.py" 'Install or remove? [install]' '' 'Role [1]' '' 'Plugins [' 'xymonapi' '[y/N] ' 'N' \
 	-- "$ROOT/install.sh" XYMONHOME="$home" MANDIR="$work/man" "$lacks" >"$work/server.log" 2>&1 || rc=$?
 [ "$rc" -eq 0 ] || fail "the dialogue installing on the server failed with $rc: $(tail -n 5 "$work/server.log")"
-assert_contains "Detected: server." "$(cat "$work/server.log")" "with XYMONHOME naming a tree without xymonclient.cfg, server is detected"
-assert_contains "Running: XYMONHOME=$home ./install.sh install xymonapi server" "$(cat "$work/server.log")" "and the action is the server's"
+assert_contains "Detected: server." "$(cat "$work/server.log")" "with XYMONHOME naming a tree with both server marks, server is detected"
+assert_contains "Running: XYMONHOME=$home ./install.sh install xymonapi-server" "$(cat "$work/server.log")" "and the action is the server's"
 assert_file_exists "$home/ext/xymonapi/VERSION"
 assert_file_exists "$home/etc/tasks.d/xymonapi"
 

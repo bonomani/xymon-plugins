@@ -8,27 +8,39 @@ summary: a read-only HTTP and JSON interface to a Xymon server, as one of its xy
 requires: on the server, xymon >= 4.3.31 (main); python >= 3.9
 manual: xymonapi.8
 
-# How ./install.sh installs it. server-* and tools-* are each side's: the
-# files copied beside the plugin's others, the manual page, the modules its
-# Python needs (offered at install time), the plugins it needs first.
-# executable lists the files made 755, the others 644; command is the
-# tools' command in $PREFIX/bin and the script it runs; task, conf and
-# restart are the server's xymonlaunch task, web server snippets kept once
-# written, and the program whose running process an install stops. The
-# messages may name @ETC@, @TASKDIR@ and @XYMONHOME@.
+# How ./install.sh installs it. A plugin ships profiles, one per kind of
+# place, each a set of PROFILE-* keys; the script learns the profile names
+# from the files, so a plugin may declare one of its own, in letters,
+# digits and underscores: the dash is what joins a plugin's name to a
+# profile's in xymonapi-mcp-tools. PROFILE-root is
+# where it goes: ext, $XYMONHOME/ext/NAME on a Xymon machine; prefix,
+# $PREFIX/libexec/xymon-plugins/NAME on your own machine, as yourself.
+# PROFILE-roles names the roles of a machine that bring the profile when
+# none is said: server, client, tools. Then the files copied beside the
+# plugin's others, the manual page, the modules its Python needs (offered
+# at install time), the command put in $PREFIX/bin and the script it runs,
+# the xymonlaunch task, the web server snippets kept once written, the
+# program whose running process an install stops, a note for the venv
+# offer, and the messages after an install and a removal, which may name
+# @ETC@, @TASKDIR@ and @XYMONHOME@. executable lists the files made 755,
+# the others 644; needs, the plugins installed first, beside it.
+server-root: ext
+server-roles: server
 server-files: app.py xymon.py xymonapi_client.py tokens.py openapi.yaml requirements.txt xymonapi.sh
 server-manual: xymonapi.8
 server-modules: fastapi uvicorn yaml
-task: xymonapi.tasks.DIST
-conf: xymonapi-apache.conf xymonapi-nginx.conf xymonapi-lighttpd.conf
-restart: app.py
-installed: Installed. Enable the API: remove DISABLED from @TASKDIR@/xymonapi. For other machines, include one of
-installed:   @ETC@/xymonapi-{apache,nginx,lighttpd}.conf in the web server, or give the API xymond's certificate: see xymonapi(8).
-removed: Removed xymonapi. Kept, for you to remove: @ETC@/xymonapi-{apache,nginx,lighttpd}.conf --
-removed:   take its Include out of the web server first -- and the tokens file, $XYMONAPI_TOKENS
-removed:   ($XYMONVAR/xymonapi/tokens by default).
+server-task: xymonapi.tasks.DIST
+server-conf: xymonapi-apache.conf xymonapi-nginx.conf xymonapi-lighttpd.conf
+server-restart: app.py
+server-installed: Installed. Enable the API: remove DISABLED from @TASKDIR@/xymonapi. For other machines, include one of
+server-installed:   @ETC@/xymonapi-{apache,nginx,lighttpd}.conf in the web server, or give the API xymond's certificate: see xymonapi(8).
+server-removed: Removed xymonapi. Kept, for you to remove: @ETC@/xymonapi-{apache,nginx,lighttpd}.conf --
+server-removed:   take its Include out of the web server first -- and the tokens file, $XYMONAPI_TOKENS
+server-removed:   ($XYMONVAR/xymonapi/tokens by default).
+tools-root: prefix
+tools-roles: tools
 tools-files: xymonapi_client.py xymonapi-connect.sh
 tools-manual: xymonapi-connect.1
-command: xymonapi-connect xymonapi-connect.sh
+tools-command: xymonapi-connect xymonapi-connect.sh
 executable: xymonapi.sh xymonapi-connect.sh
-removed-tools: Removed xymonapi's client. Kept: the tokens in ~/.config/xymon-api/, which the API's /tokens revokes.
+tools-removed: Removed xymonapi's client. Kept: the tokens in ~/.config/xymon-api/, which the API's /tokens revokes.
