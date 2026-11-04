@@ -38,7 +38,8 @@ XYMONAPI_TOKEN_FILE when there is a token, XYMONAPI_CA when a certificate is
 used, and XYMONAPI_PYTHON when it is set. A registration of that name is
 replaced. For a client that is not installed, it prints the command to run
 later. When the connection fails it registers nothing and exits with
-xymonapi-connect's status; when a client refuses the registration, with 1.
+xymonapi-connect's status; when a client refuses the registration, it says
+which, registers the others all the same, and exits with 1.
 
 .SH TOOLS
 .IP "\fBhealth\fR"

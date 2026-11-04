@@ -8,8 +8,9 @@
 # token kept -- and registers the MCP server with Claude Code and Codex: the
 # installed launcher as the command, with the API's address and the token
 # file; XYMONAPI_PYTHON only when it is set; the certificate only when one
-# is used. It leaves a virtualenv beside the plugins alone, and where a
-# client is not installed, prints the command to run later.
+# is used. It leaves a virtualenv beside the plugins alone; where a client
+# is not installed, prints the command to run later; and where one fails,
+# says which, registers the other all the same, and exits 1.
 #
 # claude and codex are stubs that record their arguments. Skips where the API
 # cannot run (tests/lib/xymonapi.sh). Needs the xymon client of the Xymon
@@ -92,6 +93,19 @@ out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="" \
 assert_contains "codex is not here; to register xymon with it later:" "$out" "a client not installed is said"
 assert_contains "codex mcp add xymon --env XYMONAPI_URL=$url" "$out" "with the command to run"
 assert_contains "XYMONAPI_URL=$url" "$(cat "$work/claude.args")" "and the other is registered"
+
+# Codex installed but failing: said by name, with the command, and Claude
+# Code is still registered; the exit code says one failed.
+printf '#!/bin/sh\necho "codex: broken" >&2; exit 3\n' > "$work/stub/codex"; chmod 755 "$work/stub/codex"
+: > "$work/claude.args"
+rc=0
+out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="" \
+	"$mcp_bin" register "$url" < /dev/null 2>&1) || rc=$?
+assert_equal "1" "$rc" "register fails when a client's registration fails"
+assert_contains "could not register xymon with codex, which exited 3:" "$out" "and says which client, by name"
+assert_contains "codex mcp add xymon --env XYMONAPI_URL=$url" "$out" "with the command that failed"
+assert_contains "XYMONAPI_URL=$url" "$(cat "$work/claude.args")" "and the other client is registered all the same"
+rm "$work/stub/codex"
 
 # A refused password: nothing registered.
 : > "$work/claude.args"
