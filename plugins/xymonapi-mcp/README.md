@@ -1,12 +1,18 @@
 # xymonapi-mcp
 
-An MCP server: it gives an AI client that speaks the Model Context Protocol
+An MCP server: it gives an AI tool that speaks the Model Context Protocol
 -- Claude Code, Claude Desktop, Codex, opencode and others -- read-only tools
 over the [Xymon API](../xymonapi/README.md): `health`, `states`, `alarms`,
 `entities`, `status`, `series`, and two searches, `search_docs` and
-`search_history`, which ask the API's `/search`. It runs where the client
-runs.
+`search_history`, which ask the API's `/search`.
 Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
+
+- **On the Xymon server**: nothing runs; the plugin is staged for `/plugins`.
+- **On your own machine**: the MCP server, which your AI tool starts and
+  talks to over stdin and stdout. It is a server in MCP's vocabulary and a
+  command in this tree's: it runs where the AI tool runs, the Xymon server
+  included, and reads the API as any API client does. The model is the AI
+  tool's own; this plugin has none.
 
 ## Needs
 
@@ -18,7 +24,7 @@ Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 - Python 3.9 or later, and nothing else: it speaks the protocol with the
   standard library.
 
-## On the machine where the AI client runs
+## On your own machine, where the AI tool runs
 
 ```sh
 cd xymon-plugins                             # the code: top README, Getting the code
@@ -33,8 +39,8 @@ each way of reaching it. `register` connects this machine to the API with
 `xymonapi-connect` -- your password once, for a token of its own, as
 [`xymonapi`'s README](../xymonapi/README.md#on-another-machine) says -- then
 registers the server with Claude Code and Codex as `xymon`. Then ask your AI
-client "which hosts are red?". `register URL xymon-lab` names a second
-server; a client that is neither of those two is [registered by
+tool "which hosts are red?". `register URL xymon-lab` names a second
+server; an AI tool that is neither of those two is [registered by
 hand](#registering-it-by-hand).
 
 On the Xymon server itself, give `register` the API's socket instead of a
@@ -51,9 +57,9 @@ this machine's token.
 `XYMONHOME=... ./install.sh install xymonapi-mcp` installs the API first, when it is not there,
 and stages this plugin in what the API serves at `/plugins`, for the
 machines above to install it from, at the server's version. It installs no
-command on the server: an MCP server runs where the AI client runs.
+command on the server: an MCP server runs where the AI tool runs.
 
-An AI client that runs on the server machine itself is one of those
+An AI tool that runs on the server machine itself is one of those
 machines: run `./install.sh install-client xymonapi-mcp` there as well, as yourself, and
 `register` with the API's socket, as above.
 
@@ -71,7 +77,7 @@ claude mcp add --scope user xymon \
 For Codex, the same with `--env` for `-e` and no scope:
 `codex mcp add xymon --env ... -- ~/.local/bin/xymonapi-mcp`.
 
-Most other clients read this JSON: Claude Desktop in
+Most other AI tools read this JSON: Claude Desktop in
 `claude_desktop_config.json`, Gemini CLI in `~/.gemini/settings.json`,
 Cursor in `~/.cursor/mcp.json`; VS Code reads `.vscode/mcp.json`, with
 `servers` for `mcpServers`. JSON expands nothing, so write the paths in full:
@@ -105,10 +111,10 @@ as a list, and `environment` for `env`.
 
 ## What it cannot do
 
-- A client in a web browser -- claude.ai, ChatGPT -- cannot use it: it
+- An AI tool in a web browser -- claude.ai, ChatGPT -- cannot use it: it
   reaches an MCP server from its provider's cloud, so the server would have
   to be open to the internet. Claude Desktop runs on your machine instead.
-- An online client sends what the tools return to its provider. With a
+- An online AI tool sends what the tools return to its provider. With a
   local model -- opencode with LM Studio or Ollama, for instance -- nothing
   leaves your network; a model too small reads the answers wrong.
 - The two searches answer an error until the server has an index.

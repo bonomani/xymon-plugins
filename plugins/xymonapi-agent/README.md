@@ -17,10 +17,19 @@ that relays questions from a phone.
 Every command, backend and setting is in
 [`xymonapi-agent.1`](xymonapi-agent.1).
 
+- **On your own machine**: the `xymonapi-agent` command, which runs an AI
+  CLI you have installed and logged in. The model is that CLI's; this plugin
+  has none and no API key.
+- **On the Xymon server**: `/ask`, off by default: the API runs the same
+  command as the Xymon user, which then needs an AI CLI and a backend of its
+  own -- a hosted provider with a key, or a local model on this or another
+  machine of yours -- named in a profile of that user ([A language
+  model](../../README.md#a-language-model)).
+
 ## Needs
 
 - **[`xymonapi-mcp`](../xymonapi-mcp/README.md)** beside it, which
-  `./install.sh install-client xymonapi-agent` installs first, with `xymonapi`'s client -- and so a
+  `./install.sh install-client xymonapi-agent` installs first, with `xymonapi`'s client library -- and so a
   running [`xymonapi`](../xymonapi/README.md) on the Xymon server, reached as
   that README says. For the two search tools, `search_docs` and
   `search_history`, the server also runs

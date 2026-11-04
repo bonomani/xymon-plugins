@@ -7,15 +7,15 @@ xymonapi-mcp \- MCP server for the Xymon API
 .B "xymonapi-mcp register URL [NAME]"
 
 .SH DESCRIPTION
-xymonapi-mcp gives an AI client that speaks the Model Context Protocol --
+xymonapi-mcp gives an AI tool that speaks the Model Context Protocol --
 Claude Desktop, Claude Code, Codex and others -- tools to read a Xymon server. The
-client starts it and talks to it over stdin and stdout. Each tool is one
+AI tool starts it and talks to it over stdin and stdout. Each tool is one
 request to a running
 .I xymonapi(8),
-so the client gets what the API answers at that moment: nothing is stored,
+so the AI tool gets what the API answers at that moment: nothing is stored,
 and nothing in Xymon is changed. Every tool is marked read-only.
 
-It runs where the client runs, which need not be the Xymon server, and needs
+It runs where the AI tool runs, which need not be the Xymon server, and needs
 Python 3.9 or later and nothing else: it speaks the protocol with the
 standard library, and the searches too are the API's. Without that Python
 it says so on stderr and exits with status 77. It writes nothing but protocol
@@ -36,9 +36,9 @@ registers the server with Claude Code and with Codex under NAME,
 xymon by default: this launcher as the command, with XYMONAPI_URL,
 XYMONAPI_TOKEN_FILE when there is a token, XYMONAPI_CA when a certificate is
 used, and XYMONAPI_PYTHON when it is set. A registration of that name is
-replaced. For a client that is not installed, it prints the command to run
+replaced. For an AI tool that is not installed, it prints the command to run
 later. When the connection fails it registers nothing and exits with
-xymonapi-connect's status; when a client refuses the registration, it says
+xymonapi-connect's status; when an AI tool refuses the registration, it says
 which, registers the others all the same, and exits with 1.
 
 .SH TOOLS
@@ -70,8 +70,8 @@ no index.
 .SH SECURITY
 search_history returns status texts that the monitored hosts wrote, each
 marked as data, not instructions; a host that is broken into can still write
-there words meant to steer the client's model. Every tool here only reads,
-but an AI client that also has tools that change things should be watched
+there words meant to steer the AI tool's model. Every tool here only reads,
+but an AI tool that also has tools that change things should be watched
 when it acts on a history it found.
 
 The user and password are sent in the clear over http://: across a network,
