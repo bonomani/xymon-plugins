@@ -27,7 +27,8 @@ work=$(mktempdir)
 register_cleanup 'stop_process "$API_PID"'
 
 # Every server-side plugin, as an admin installs them.
-"$ROOT/install.sh" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
+server_tree "$work/inst"
+"$ROOT/install.sh" install server XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
 	|| fail "install.sh install failed: $(tail -n 5 "$work/install.log")"
 # The MCP server and the agent are beside the API too, for its /ask.
 for p in xymonapi-mcp xymonapi-agent; do

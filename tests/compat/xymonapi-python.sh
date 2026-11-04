@@ -60,14 +60,15 @@ for p in xymonapi-mcp xymonapi-rag; do
 		|| fail "install.sh install of $p failed: $(tail -n 5 "$work/install-$p.log")"
 done
 [ -e "$lib/venv" ] && fail "a virtualenv was made with no Python that has the modules"
-assert_contains "no Python with the modules this plugin needs (fastembed numpy): ./install.sh venv PYTHON=$work/lacks/python3" \
+assert_contains "no Python with the modules this plugin needs (fastembed numpy): ./install.sh venv tools PYTHON=$work/lacks/python3" \
 	"$(cat "$work/install-xymonapi-rag.log")" "installing a plugin that needs modules, with none that has them, names the Python ./install.sh venv would use"
 assert_not_contains "[y/N]" "$(cat "$work/install-xymonapi-rag.log")" "and, with no terminal, asks nothing"
 assert_not_contains "virtualenv" "$(cat "$work/install-xymonapi-mcp.log")" "a plugin that needs no modules says nothing of it"
 # On the server the hint names the server's command, not the client's.
+server_tree "$work/server"
 "$ROOT/install.sh" install xymonapi XYMONHOME="$work/server" MANDIR="$work/man" PYTHON="$work/lacks/python3" >"$work/install.log" 2>&1 \
 	|| fail "install.sh install of xymonapi failed: $(tail -n 5 "$work/install.log")"
-assert_contains "(fastapi uvicorn yaml): XYMONHOME=... ./install.sh venv PYTHON=$work/lacks/python3" \
+assert_contains "(fastapi uvicorn yaml): ./install.sh venv server PYTHON=$work/lacks/python3" \
 	"$(cat "$work/install.log")" "installing on the server names ./install.sh venv"
 
 fake "$lib/venv/bin" venv
@@ -196,7 +197,7 @@ for yn in y N; do
 		assert_contains "venvpy -m pip install -q -r $pre/libexec/xymon-plugins/xymonapi-rag/requirements.txt" "$(cat "$work/python.log")" "y makes it and installs the modules into it"
 	else
 		[ -e "$pre/libexec/xymon-plugins/venv" ] && fail "N made a virtualenv"
-		assert_contains "./install.sh venv PYTHON=$work/maker/python3 makes one" "$(cat "$work/offer-$yn.log")" "N leaves the hint"
+		assert_contains "./install.sh venv tools PYTHON=$work/maker/python3 makes one" "$(cat "$work/offer-$yn.log")" "N leaves the hint"
 	fi
 done
 # A virtualenv there that lacks them: "y" installs them into it.

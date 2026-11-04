@@ -40,28 +40,50 @@ fetched without checking the certificate could be anyone's.
 
 Every plugin installs the same way, with `./install.sh` at the
 repository's top -- a POSIX shell script, needing no `make` -- and each
-README says only what is particular to it. A plugin has up to two sides, the
-Xymon server's and your own machine's ([Where things run](../README.md#where-things-run)),
-and you install the one the machine plays. Run with no word on a terminal,
-`./install.sh` asks: install or remove, which role this machine plays --
-the Xymon server when `XYMONHOME` is set, your own machine otherwise --
-and which plugins, Enter taking each default; a plugin chosen alone brings
-what it needs, and a plugin removed takes the installed plugins that need
-it, each named. It then runs the command the answers spell, saying which,
-which are the ones below: the actions are `install`, `remove` and `venv`,
-and `XYMONHOME` tells the side, set for the server's part, unset for your
-own machine's. On a server machine, `XYMONHOME= ./install.sh install`
-installs your own commands. Nothing installs on a monitored host, Xymon's
-client, yet.
+README says only what is particular to it. A plugin ships profiles, each
+its part for one kind of place ([Where things run](../README.md#where-things-run)),
+declared in its `PLUGIN` file as `PROFILE-*` keys: where it goes
+(`PROFILE-root`: `ext`, under `$XYMONHOME/ext`; `prefix`, under
+`$PREFIX/libexec/xymon-plugins`), which roles of a machine bring it
+(`PROFILE-roles`), its files, manual page, modules, command, task, snippets
+and messages. `server`, the Xymon server's, `client`, a monitored host's,
+which no plugin ships yet, and `tools`, your own machine's, are the first
+three; a plugin may declare another, and the script learns the names from
+the files. You install the profiles for the role the machine plays. Run with no word on a terminal,
+`./install.sh` asks: install or remove, which role this machine plays, the
+detected one by default, and which plugins, Enter taking each default; a
+plugin chosen alone brings what it needs, and a plugin removed takes the
+installed plugins that need it, each named. It then runs the command the
+answers spell, saying which, which are the ones below: the actions are
+`install`, `remove` and `venv`, each plugin named short, `xymonapi-mcp`,
+or long, `xymonapi-mcp-tools`, the plugin pinned to one profile whatever
+the machine; a profile word alone means every plugin of it, and nothing
+named does nothing. Short, the action serves every profile the machine's
+role brings, the role detected from the
+tree `XYMONHOME` names, one per run, each role by two marks both needed --
+`etc/xymonserver.cfg` and `bin/xymond` make the server, `etc/xymonclient.cfg`
+and `bin/xymonclient.sh` a monitored host, two places so that they are two
+pieces of evidence, no `XYMONHOME` your own machine;
+one mark of a pair is an error, none a tree that is not Xymon's, and neither
+is guessed at -- and the first line says the role, why, and the profiles.
+Said, the profile is taken as said, so that a package is staged for a
+machine other than this one; a profile under `ext` still needs `XYMONHOME`.
+A plugin's directory under a root holds every profile of it that lives
+there, installed and removed whole. The tools profile is your own commands under your own
+home, so it is installed as yourself, in your own shell, on any machine:
+`./install.sh install NAME-tools` on the Xymon server puts them beside the
+server profile, which is installed as the Xymon user, and on a monitored
+host, where the short form is refused, it is the one thing to install. No plugin ships a client profile yet:
+`client` says so and stops.
 
-| side | where, as whom | command | puts |
+| profile | where, as whom | command | puts |
 |---|---|---|---|
-| the Xymon server | the Xymon server, as the user that may write its directory, usually root | `XYMONHOME=/usr/lib/xymon/server ./install.sh install NAME` | the code in `$XYMONHOME/ext/NAME/`, its task in `$XYMONHOME/etc/tasks.d/`, written `DISABLED`, its manual page under `MANDIR` (`/usr/share/man`) |
-| your own machine | any machine that reads the API, the server included, as yourself | `./install.sh install NAME` | the code in `$PREFIX/libexec/xymon-plugins/NAME/`, its command in `$PREFIX/bin`, its manual page in `$PREFIX/share/man/man1`; `PREFIX` is `~/.local` |
+| `server` | the Xymon server, as the user that may write its directory, usually root | `XYMONHOME=/usr/lib/xymon/server ./install.sh install NAME server` | the code in `$XYMONHOME/ext/NAME/`, its task in `$XYMONHOME/etc/tasks.d/`, written `DISABLED`, its manual page under `MANDIR` (`/usr/share/man`) |
+| `tools` | any machine that reads the API, the server included, as yourself | `./install.sh install NAME tools` | the code in `$PREFIX/libexec/xymon-plugins/NAME/`, its command in `$PREFIX/bin`, its manual page in `$PREFIX/share/man/man1`; `PREFIX` is `~/.local` |
 
 A plugin that needs another installs it first, so one command is enough,
-and with no `NAME` the same two commands install every plugin of a side.
-Settings are taken from the environment or as `NAME=value` arguments. `DESTDIR` stages either side for a package. The server install also
+and with no `NAME` the same two commands install every plugin of a profile.
+Settings are taken from the environment or as `NAME=value` arguments. `DESTDIR` stages a profile for a package. The server install also
 copies each plugin into what the API serves at `/plugins`, for other
 machines to install from.
 
@@ -78,7 +100,7 @@ interpreter and fetching nothing. When no Python has them, or the virtualenv
 there lacks some, the install run from a terminal offers to make or complete
 it, installing the modules from PyPI -- the one virtualenv of that side,
 with the modules of every plugin installed there; without a terminal, or
-answered no, it says so, and `./install.sh venv PYTHON=...`, with
+answered no, it says so, and `./install.sh venv PROFILE PYTHON=...`, with
 `XYMONHOME` set on the server, does it later. The
 launchers run with `XYMONAPI_PYTHON` when it is set, else with that
 virtualenv, else with the `python3` on PATH, asking nothing; a command that
@@ -96,7 +118,7 @@ code it loaded: the API's install stops the API, saying so, and xymonlaunch
 starts the new; a task that runs from time to time, as the index, takes the
 new code at its next run.
 
-**Removing.** `./install.sh remove NAME`, with `XYMONHOME` set on the
+**Removing.** `./install.sh remove NAME PROFILE`, with `XYMONHOME` set on the
 server, removes that plugin alone, and refuses
 while another installed plugin needs it, naming it; with no `NAME`, every
 plugin of the side and the virtualenv beside them. Each says what it keeps.

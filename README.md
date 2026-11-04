@@ -76,10 +76,18 @@ move, how a change is made, tested and reviewed, is in
 - **Branches.** `stable` is the newest code every test passed, which CI
   moves forward; `main` holds every change as it lands. Install from
   `stable`.
-- **Install actions** are `install`, `remove` and `venv`, and the side they
-  serve is the role the machine plays, told by `XYMONHOME`: set, the Xymon
-  server's part; unset, your own machine's. Nothing installs on a monitored
-  host, Xymon's client, until the first check that does.
+- **Install actions** are `install`, `remove` and `venv`. A plugin ships
+  profiles, each its part for one kind of place, declared in its `PLUGIN`
+  file with where it goes and which roles of a machine bring it: `server`,
+  `client` and `tools` are the first three, and a plugin may declare its own.
+  `PLUGIN-PROFILE`, as `xymonapi-mcp-tools`, is the long form: that plugin,
+  that profile, whatever the machine. A plugin name alone is the short form,
+  and a profile word alone means every plugin of it. Unsaid, the action serves every profile the
+  machine's role brings, the role detected one per run from two marks under
+  `XYMONHOME`, both needed, server first, then monitored host, then your own
+  machine with no `XYMONHOME`, and said in the first line. No
+  plugin ships a client profile until the first check that installs on a
+  monitored host.
 - **Words.** "Client" is Xymon's client; a program that calls the Xymon API
   is an API client; Claude Code, Codex, opencode and the like are AI tools.
 - **Manual pages.** Section 8 for what runs on the server, section 1 for the
@@ -117,17 +125,21 @@ would bring.
 ```
 
 On a terminal, with no word, the script asks what to do: install or remove,
-which role this machine plays -- the Xymon server when `XYMONHOME` is set,
-your own machine otherwise -- and which plugins. Enter takes each default,
-and the answers run one of the commands below, said first, for you to type
-next time:
+which role this machine plays, the detected one by default, and which
+plugins. Enter takes each default, and the answers run one of the commands
+below, said first, for you to type next time:
 
 ```sh
-XYMONHOME=/usr/lib/xymon/server ./install.sh install NAME   # the Xymon server's part
-./install.sh install NAME                                   # your own machine's
+XYMONHOME=/usr/lib/xymon/server ./install.sh install NAME server   # the plugin's server profile
+./install.sh install NAME tools                                    # its tools profile, your own commands
 ```
 
-With no `NAME`, every plugin of that side. What each command puts where,
+`NAME` is a plugin, `NAME-PROFILE` a plugin pinned to one profile, as
+`xymonapi-mcp-tools`, and a profile word alone every plugin of it. With a
+plugin alone the script serves every profile the role it detects brings,
+the role read from the tree `XYMONHOME` names, and says which in its first
+line. Nothing named installs nothing: name the plugins, or run the dialogue. With no `NAME`, every
+plugin of that role. What each command puts where,
 Python and the virtualenv, enabling, updating and removing are in
 [`plugins/README.md`](plugins/README.md#installing-a-plugin); each plugin's
 README says only what is particular to it.

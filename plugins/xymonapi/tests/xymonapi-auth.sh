@@ -39,7 +39,8 @@ grep -q '^bob:\$2y\$' "$work/htpasswd" || fail "htpasswd did not write bob as bc
 
 # The API as ./install.sh install lays it out, with a release's VERSION beside it,
 # so that /health has one to give and the script one to install.
-"$ROOT/install.sh" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
+server_tree "$work/inst"
+"$ROOT/install.sh" install server XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
 	|| fail "install.sh install failed: $(tail -n 5 "$work/install.log")"
 version=xymonapi/v9.9.9
 printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"

@@ -30,7 +30,8 @@ htpasswd -cbB "$work/htpasswd" alice secret 2>/dev/null
 
 # The API as ./install.sh install lays it out, with a release's VERSION beside it,
 # so that /health has one to give and the script one to install.
-"$ROOT/install.sh" install XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
+server_tree "$work/inst"
+"$ROOT/install.sh" install server XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/install.log" 2>&1 \
 	|| fail "install.sh install failed: $(tail -n 5 "$work/install.log")"
 version=xymonapi/v9.9.9
 printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
@@ -47,7 +48,7 @@ api_at() {
 	start_api
 }
 
-"$ROOT/install.sh" install PREFIX="$work/client" >"$work/client.log" 2>&1 \
+"$ROOT/install.sh" install tools PREFIX="$work/client" >"$work/client.log" 2>&1 \
 	|| fail "install.sh install failed: $(tail -n 5 "$work/client.log")"
 assert_file_exists "$work/client/libexec/xymon-plugins/xymonapi-mcp/VERSION"
 floor=$(sed -n 's/^requires: xymonapi >= \([0-9.]*\).*/\1/p' "$ROOT/plugins/xymonapi-mcp/PLUGIN")
