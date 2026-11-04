@@ -81,8 +81,16 @@ register() {
 `opts "$flag"`
 EOF
 	if command -v "$client" >/dev/null 2>&1; then
-		"$@" -- "$cmd" || exit 1
-		echo "registered $name with $client"
+		# A client that fails is said, by name, and the others still get
+		# their registration: one half done and silence told a user neither
+		# which tool failed nor that the other had succeeded.
+		if "$@" -- "$cmd"; then
+			echo "registered $name with $client"
+		else
+			echo "could not register $name with $client, which exited $?:" >&2
+			printf ' %s' "$@" -- "$cmd" >&2; echo >&2
+			failed=1
+		fi
 	else
 		echo "$client is not here; to register $name with it later:"
 		printf ' %s' "$@" -- "$cmd"; echo
@@ -92,3 +100,4 @@ claude mcp remove --scope user "$name" >/dev/null 2>&1 || true
 register claude -e claude mcp add --scope user "$name"
 codex mcp remove "$name" >/dev/null 2>&1 || true
 register codex --env codex mcp add "$name"
+exit ${failed:-0}
