@@ -28,6 +28,49 @@ admin. [`openapi.yaml`](openapi.yaml), also served at `/openapi.json`, is the
 contract: each path's exact answers, the closed list of errors, and the
 numbered rules every implementation keeps.
 
+## The API and what builds on it
+
+Three plugins build on the API, and the four are one family:
+
+| plugin | on the Xymon server | on your own machine | needs |
+|---|---|---|---|
+| `xymonapi` | the API, as one of xymonlaunch's tasks | `xymonapi-connect`, which gets this machine a token, and the client library the other plugins use | xymon >= 4.3.31 (main) on the server; python >= 3.9 |
+| [`xymonapi-mcp`](../xymonapi-mcp/README.md) | nothing runs: the plugin is staged for `/plugins` | an MCP server that gives an AI tool read-only tools over the API | xymonapi >= 0.1.0 beside it; the API's socket on the server, or the API over the network; python >= 3.9 |
+| [`xymonapi-rag`](../xymonapi-rag/README.md) | the daily index of Xymon's manual pages and history, served at `/search` | `xymonapi-rag search` and `ask`: the same search, by meaning, from anywhere | xymonapi >= 0.1.0 beside it; python >= 3.9; a language model only for `ask` |
+| [`xymonapi-agent`](../xymonapi-agent/README.md) | `/ask`: the API answers a question in words, off by default | `xymonapi-agent`: one command that asks an AI CLI -- Claude Code, Codex or opencode, headless -- with the MCP server as its only tool | xymonapi-mcp >= 0.1.0 beside it; one of the AI CLIs, installed and logged in; python >= 3.9 |
+
+The API is the line between the Xymon server and your own machine. On the
+server, the API, the daily index and `/ask` are started by xymonlaunch as
+the Xymon user, read xymond's own files, and need no credential. On your own
+machine, `xymonapi-connect`, the MCP server your AI tool starts,
+`xymonapi-rag search` and `xymonapi-agent` go through the API, with a token
+or, on the server itself, its socket. **No language model is needed for the
+monitoring data to reach your AI tool**: only `xymonapi-agent`, `/ask` and
+`xymonapi-rag ask` call one.
+
+### A language model
+
+None of the plugins needs one to do its work. The API, the MCP server, the
+index and the search run without any. Three things call a model, and each
+says whose:
+
+- **Your AI tool's**, with the MCP server: the model is whatever Claude
+  Code, Codex, opencode or Claude Desktop runs -- a subscription, an API key
+  of yours, or a local model. The Xymon server knows nothing about it. What
+  the tools return, status texts included, goes to that tool's provider;
+  with a local model it stays on your machine.
+- **The server's**, for `/ask`: the Xymon user runs an AI CLI of its own,
+  and needs a backend for it, of one of three kinds -- a hosted provider
+  with an API key; a local model on the server itself, through Ollama or LM
+  Studio; or a local model on another machine of yours, reached by URL. A
+  profile under the Xymon user's `~/.config/xymonapi-agent/agents/` names
+  it, as [`xymonapi-agent`'s README](../xymonapi-agent/README.md#agents-another-xymon-another-tool-set)
+  shows; `xymonapi-agent doctor`, run as that user, says whether it
+  answers. With none, `/ask` stays off and everything else works.
+- **A model you run**, for `xymonapi-rag ask`: an OpenAI-compatible
+  endpoint, Ollama by default, named by `XYMONAPI_RAG_LLM_URL`; no tools,
+  no CLI.
+
 ## Requirements
 
 - A Xymon server built from Xymon's current `main`: the API's settings go in
@@ -35,7 +78,7 @@ numbered rules every implementation keeps.
   ignored, and with it the password the API should ask for.
 - Python 3.9 or later, with the modules in
   [`requirements.txt`](requirements.txt): how the install finds or makes a
-  Python with them is in the [top README](../../README.md#installing-a-plugin).
+  Python with them is in the [top README](../README.md#installing-a-plugin).
 - `rrdtool`, for `/series`; a web server running Xymon's CGI programs at
   `XYMONSERVERCGIURL`, for `/graphs`; Apache's `htpasswd`, when a password
   file is used.
@@ -47,7 +90,7 @@ XYMONHOME=/usr/lib/xymon/server ./install.sh install-server xymonapi
 ```
 
 Besides the code, the task and the manual page, which every plugin
-installs ([top README](../../README.md#installing-a-plugin)), it writes once the web
+installs ([top README](../README.md#installing-a-plugin)), it writes once the web
 server snippets `$XYMONHOME/etc/xymonapi-{apache,nginx,lighttpd}.conf`, for
 [other machines](#reaching-it-from-another-machine), and keeps them after.
 Xymon's own install links `$XYMONHOME/ext` and `$XYMONHOME/etc` to wherever
