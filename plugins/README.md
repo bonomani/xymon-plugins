@@ -42,9 +42,15 @@ Every plugin installs the same way, with `./install.sh` at the
 repository's top -- a POSIX shell script, needing no `make` -- and each
 README says only what is particular to it. A plugin has up to two sides, the
 Xymon server's and your own machine's ([Where things run](../README.md#where-things-run)),
-and you install the one the machine plays: the actions are `install`,
-`remove` and `venv`, and `XYMONHOME` tells the side, set for the server's
-part, unset for your own machine's. On a server machine, `XYMONHOME= ./install.sh install`
+and you install the one the machine plays. Run with no word on a terminal,
+`./install.sh` asks: install or remove, which role this machine plays --
+the Xymon server when `XYMONHOME` is set, your own machine otherwise --
+and which plugins, Enter taking each default; a plugin chosen alone brings
+what it needs, and a plugin removed takes the installed plugins that need
+it, each named. It then runs the command the answers spell, saying which,
+which are the ones below: the actions are `install`, `remove` and `venv`,
+and `XYMONHOME` tells the side, set for the server's part, unset for your
+own machine's. On a server machine, `XYMONHOME= ./install.sh install`
 installs your own commands. Nothing installs on a monitored host, Xymon's
 client, yet.
 

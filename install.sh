@@ -4,6 +4,7 @@
 # Install, update and remove the plugins, on the Xymon server or on another
 # machine, with nothing but a POSIX shell and the usual tools: no make.
 #
+#   ./install.sh                     on a terminal: asks what to do, and does it
 #   ./install.sh install [PLUGIN...]
 #   ./install.sh remove [PLUGIN...]
 #   ./install.sh venv                the virtualenv beside the plugins
@@ -15,6 +16,12 @@
 # under PREFIX (~/.local). On a server machine, XYMONHOME= ./install.sh
 # install installs your own commands. Nothing installs on a monitored host,
 # Xymon's client, yet.
+#
+# With no action at all, on a terminal, the script asks: install or remove,
+# which role this machine plays, the detected one by default, and which
+# plugins, Enter taking each default; it then runs the action those answers
+# spell, saying which, so the words are there to copy for next time.
+# Without a terminal, no action means the usage.
 #
 # With no PLUGIN, every plugin of that side. A plugin that needs another
 # installs it first, and a removal is refused while one installed needs
@@ -39,11 +46,13 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 die() { echo "install.sh: $*" >&2; exit 1; }
 usage() {
 	echo "usage: ./install.sh install|remove|venv [PLUGIN...] [NAME=value...]   the Xymon server's part with XYMONHOME set, else your own machine's" >&2
+	echo "       ./install.sh                                                on a terminal: asks what to do" >&2
 	exit 2
 }
 
 # The first word that is not a NAME=value setting is the action, the
-# others the plugins.
+# others the plugins. No action on a terminal is the dialogue, which runs
+# once the helpers below are defined; no action elsewhere is the usage.
 ACTION=
 NAMES=
 for a in "$@"; do
@@ -52,7 +61,11 @@ for a in "$@"; do
 		*) if [ -z "$ACTION" ]; then ACTION=$a; else NAMES="$NAMES $a"; fi ;;
 	esac
 done
-[ -n "$ACTION" ] || usage
+DIALOGUE=
+if [ -z "$ACTION" ]; then
+	[ -t 0 ] && [ -t 1 ] || usage
+	DIALOGUE=1
+fi
 
 XYMONHOME=${XYMONHOME:-}
 DESTDIR=${DESTDIR:-}
@@ -215,6 +228,83 @@ offer() {
 	return 1
 }
 
+# ask QUESTION DEFAULT -- on a terminal, the answer to QUESTION, DEFAULT
+# when Enter alone is typed.
+ask() {
+	printf '%s [%s] ' "$1" "$2" >&2
+	read -r answer
+	[ -n "$answer" ] && echo "$answer" || echo "$2"
+}
+
+# dialogue -- the questions ./install.sh asks when given no word on a
+# terminal, then the action they spell, run as if its words had been typed.
+# The role defaults to the one XYMONHOME detects: set, the Xymon server;
+# unset, your own machine. The plugins offered are those of that role and,
+# for a removal, those installed; a plugin unticked takes with it the ones
+# that need it, and a plugin removed takes its installed dependents, each
+# named, since that is what the actions themselves insist on.
+dialogue() {
+	echo "The Xymon plugins. Enter takes the answer in brackets."
+	verb=$(ask "Install or remove?" install)
+	case $verb in
+		i*) verb=install ;;
+		r*) verb=remove ;;
+		*) die "neither install nor remove: '$verb'" ;;
+	esac
+	if [ -n "$XYMONHOME" ]; then role=1; else role=2; fi
+	echo "Which role does this machine play?"
+	echo "  1. the Xymon server: the plugins' tasks and the API, under ${XYMONHOME:-XYMONHOME}/ext"
+	echo "  2. your own machine: the plugins' commands, under $PREFIX"
+	role=$(ask "Role" "$role")
+	case $role in
+		1*) side=server; files=server-files; root=$EXTROOT ;;
+		2*) side=tools; files=tools-files; root=$TOOLSROOT ;;
+		*) die "neither 1 nor 2: '$role'" ;;
+	esac
+	if [ "$side" = server ] && [ -z "$XYMONHOME" ]; then
+		XYMONHOME=$(ask "XYMONHOME, the Xymon server directory" /usr/lib/xymon/server)
+		root=$DESTDIR$XYMONHOME/ext
+	fi
+	# The side reaches the action as XYMONHOME: set for the server's, empty
+	# for your own machine's, whatever the environment held.
+	[ "$side" = server ] || XYMONHOME=
+	export XYMONHOME
+	offered=
+	for p in $(for p in $(all_plugins); do echo "$(depth "$p") $p"; done | sort -n | cut -d' ' -f2); do
+		[ -n "$(field "$p" $files)" ] || continue
+		[ "$verb" = install ] || [ -e "$root/$p" ] || continue
+		offered="$offered $p"
+	done
+	[ -n "$offered" ] || die "nothing to $verb for that role: no plugin installed in $root"
+	echo "Plugins, all of them unless you name some:"
+	for p in $offered; do
+		printf '  %-16s %s\n' "$p" "$(field "$p" summary)"
+	done
+	chosen=$(ask "Plugins" "$(echo $offered)")
+	for n in $chosen; do
+		known "$n"
+		case " $offered " in *" $n "*) ;; *) die "$n is not among the plugins to $verb here" ;; esac
+	done
+	if [ "$verb" = install ]; then
+		for n in $chosen; do
+			for d in $(field "$n" needs); do
+				case " $chosen " in *" $d "*) ;; *) chosen="$chosen $d"; echo "With $d, which $n needs." ;; esac
+			done
+		done
+	else
+		for n in $chosen; do
+			for d in $(dependents "$n"); do
+				[ -e "$root/$d" ] || continue
+				case " $chosen " in *" $d "*) ;; *) chosen="$chosen $d"; echo "With $d, installed here, which needs $n." ;; esac
+			done
+		done
+	fi
+	[ "$(echo $chosen)" = "$(echo $offered)" ] && [ "$verb" = install ] && chosen=
+	echo "Running: ${XYMONHOME:+XYMONHOME=$XYMONHOME }./install.sh $verb $(echo $chosen)"
+	echo
+	exec "$ROOT/install.sh" "$verb" $chosen
+}
+
 # venv_auto PLUGIN ROOT MODULES NOTE -- the last step of installing a
 # plugin that needs the Python modules MODULES (their import names), which
 # downloads nothing unless asked. With no virtualenv at ROOT/venv yet: the
@@ -352,6 +442,8 @@ remove_tools() {
 	[ -n "$m" ] && rm -f "$TOOLSMAN1/$m"
 	say "$1" removed-tools
 }
+
+[ -z "$DIALOGUE" ] || dialogue
 
 # The plugins named, each checked, or every plugin; for a removal, the
 # deepest first, so that none is removed while one installed needs it.
