@@ -44,6 +44,7 @@ assert_equal "000" "$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "http:
 
 
 # Files named explicitly, elsewhere.
+stop_process "$API_PID"; API_PID=""
 cp "$work/home/etc/tls/xymond.pem" "$work/other.pem"; cp "$work/home/etc/tls/xymond.key" "$work/other.key"
 unset XYMONHOME
 XYMONAPI_TLS_CERT="$work/other.pem" XYMONAPI_TLS_KEY="$work/other.key" start_api
