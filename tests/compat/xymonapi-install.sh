@@ -15,8 +15,8 @@
 # under PREFIX, with two commands in bin that run them from there, and
 # xymonapi's client alone beside them, not the API. Installing
 # again replaces each plugin's directory, so a file no longer shipped is
-# gone, and says to restart the API; the client's virtualenv beside the
-# plugins is kept. A plugin installed alone brings the plugins it needs
+# gone; a running API it stops, confirming xymonlaunch started the new one;
+# the client's virtualenv beside the plugins is kept. A plugin installed alone brings the plugins it needs
 # beside it: xymonapi-rag on the server, the API with its client. The
 # uninstall refuses a plugin another installed one needs, removes each
 # plugin's files, manual page, task and snippets, and keeps the data,
@@ -80,7 +80,7 @@ mode=$(ls -lL "$task" | cut -c1-10)
 assert_equal "-rw-r--r--" "$mode" "the task file's mode under umask 077"
 
 # An update replaces each plugin's directory: a file the new version no
-# longer ships does not stay behind, and the install says to restart the API.
+# longer ships does not stay behind.
 echo 'stale' > "$home/ext/xymonapi/gone.py"
 echo 'stale' > "$home/ext/xymonapi-rag/gone.py"
 "$ROOT/install.sh" install-server XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
@@ -92,6 +92,58 @@ assert_file_exists "$home/ext/xymonapi/app.py"
 # running here it stops nothing, and asks no step of the admin.
 assert_not_contains "Stopped" "$(cat "$work/update.log")" "with no API running, the install stops nothing"
 assert_not_contains "pkill" "$(cat "$work/update.log")" "and asks no pkill of the admin"
+
+# A running API keeps the old code until stopped: an install stops it and
+# confirms xymonlaunch started the new one, naming its PID, rather than
+# promising a restart. A stand-in carries the app.py path in its command
+# line, as the real API does, so the install's pgrep -f finds it; on TERM it
+# starts a replacement at the same path, a new PID, as xymonlaunch would.
+# Where nothing respawns it, the install says so after the wait, which
+# XYMON_PLUGINS_RESPAWN_WAIT shortens here.
+if command -v pgrep >/dev/null 2>&1; then
+	cat >"$work/fakeapi" <<'EOF'
+#!/bin/sh
+# $1 the app.py path, here in the command line for pgrep -f; $2, when set,
+# respawns once on TERM, at the same path, as xymonlaunch restarts the task.
+# The sleep is one second at a time and killed on the way out, so a stopped
+# stand-in leaves nothing behind for tests/final to find.
+sp=
+if [ -n "$2" ]; then
+	trap '[ -n "$sp" ] && kill "$sp" 2>/dev/null; sh "$0" "$1" "" & exit 0' TERM
+else
+	trap '[ -n "$sp" ] && kill "$sp" 2>/dev/null; exit 0' TERM
+fi
+while :; do sleep 1 & sp=$!; wait "$sp"; done
+EOF
+	chmod +x "$work/fakeapi"
+	apppath="$home/ext/xymonapi/app.py"
+
+	# Confirmed: the stand-in respawns, so the install names the new PID.
+	sh "$work/fakeapi" "$apppath" respawn & oldpid=$!
+	register_cleanup stop_process "$oldpid"
+	n=0; while ! pgrep -f "$apppath" >/dev/null 2>&1 && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+	XYMON_PLUGINS_RESPAWN_WAIT=10 "$ROOT/install.sh" install-server xymonapi XYMONHOME="$home" MANDIR="$work/man" \
+		>"$work/respawn.log" 2>&1 || fail "install over a running API failed: $(tail -n 5 "$work/respawn.log")"
+	assert_contains "xymonlaunch started the new one (PID" "$(cat "$work/respawn.log")" \
+		"the install confirms the respawn and names the new PID"
+	newpid=$(first_line "$(pgrep -f "$apppath" | grep -vx "$oldpid" || true)")
+	[ -n "$newpid" ] || fail "no respawned stand-in to confirm"
+	assert_contains "PID $newpid)" "$(cat "$work/respawn.log")" "the PID named is the respawned process"
+	stop_process "$oldpid"
+	stop_process $(pgrep -f "$apppath" || true)
+
+	# Not confirmed: the stand-in does not respawn, and nothing else does,
+	# so after the wait the install reports the API was not restarted.
+	sh "$work/fakeapi" "$apppath" & lone=$!
+	register_cleanup stop_process "$lone"
+	n=0; while ! pgrep -f "$apppath" >/dev/null 2>&1 && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+	XYMON_PLUGINS_RESPAWN_WAIT=2 "$ROOT/install.sh" install-server xymonapi XYMONHOME="$home" MANDIR="$work/man" \
+		>"$work/norespawn.log" 2>&1 || fail "install over an unrespawned API failed: $(tail -n 5 "$work/norespawn.log")"
+	assert_contains "had not restarted it after 2s" "$(cat "$work/norespawn.log")" \
+		"the install reports the API was not restarted, rather than promising it"
+	stop_process "$lone"
+	stop_process $(pgrep -f "$apppath" || true)
+fi
 
 # The admin enables the API, and the next install must not undo it.
 echo '# mine' >> "$task"

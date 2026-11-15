@@ -704,7 +704,8 @@ selinux() {
 }
 
 # restart PLUGIN -- a process that runs the plugin's program from this
-# install keeps the code it loaded: stop it, and xymonlaunch starts the new.
+# install keeps the code it loaded: stop it, and confirm xymonlaunch starts
+# the new.
 # Found by its command line, which names the program by its full path,
 # escaped for pgrep's regular expressions, as a directory may hold a | or a
 # dot. With DESTDIR the path is the staging one, which nothing runs from.
@@ -718,7 +719,26 @@ restart() {
 	pids=$(echo $(pgrep -f "$pat" | grep -vx "$$"))
 	[ -n "$pids" ] || return 0
 	if kill $pids 2>/dev/null; then
-		echo "Stopped the API that ran the old code (PID $pids): xymonlaunch starts the new one."
+		# Confirm the respawn rather than promise it: xymonlaunch restarts
+		# the task within half a minute, as a process at the same path whose
+		# PID is none of those just stopped. Where xymonlaunch is not running
+		# to respawn it, none appears and the wait ends saying so.
+		# XYMON_PLUGINS_RESPAWN_WAIT, the seconds to wait, is for the tests.
+		new=
+		i=0; waitsecs=${XYMON_PLUGINS_RESPAWN_WAIT:-35}
+		while [ "$i" -lt "$waitsecs" ]; do
+			sleep 1
+			for p in $(pgrep -f "$pat" | grep -vx "$$"); do
+				case " $pids " in *" $p "*) ;; *) new=$p; break ;; esac
+			done
+			[ -n "$new" ] && break
+			i=$((i + 1))
+		done
+		if [ -n "$new" ]; then
+			echo "Stopped the API that ran the old code (PID $pids); xymonlaunch started the new one (PID $new)."
+		else
+			echo "Stopped the API that ran the old code (PID $pids); xymonlaunch had not restarted it after ${waitsecs}s: check that xymonlaunch is running." >&2
+		fi
 	else
 		echo "Could not stop the API that runs the old code (PID $pids): stop it with kill $pids, and xymonlaunch starts the new one." >&2
 	fi
