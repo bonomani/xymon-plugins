@@ -21,6 +21,9 @@ import time
 prompt = sys.argv[1].encode()
 pid, fd = pty.fork()
 if pid == 0:
+    # Ctrl-C as a person's terminal delivers it: a shell running this in
+    # the background, "&", leaves SIGINT ignored, and so would the command.
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
     os.execvp(sys.argv[2], sys.argv[2:])
 
 

@@ -313,7 +313,8 @@ plugin on the server, with what that part does, by the `server-short:`
 line of its `PLUGIN`, and the plugins it needs named; turn one
 on or off; update the server's plugins, saying which it repairs; remove
 one that no installed plugin needs; take away what a plugin gone left
-(S31); install a plugin's tools, said by its `tools-short:` line; update
+(S31), with `--yes`, what is left being shown already and the command
+asked once; install a plugin's tools, said by its `tools-short:` line; update
 them, the same; take away what one left there; or nothing, the default, Enter. It prints the command those
 answers spell, the installation in it by `--xymon-home`, asks
 `Proceed? [Y/n]`, runs exactly that command and nothing else, and stops;
