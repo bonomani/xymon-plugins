@@ -386,7 +386,8 @@ only: its task link, `etc/tasks.d/NAME.cfg` (S13); the link to its manual page
 in `MANDIR` (S20); its command in `$PREFIX/bin` (S4); its copy in the stage
 `/plugins` serves (S19); the virtualenv beside the plugins (S26); and its
 SELinux module (S23). The command itself writes, besides, only the
-installation used last (S25). While it runs, a plugin writes only: its
+installation used last (S25): no file of its own, not even a temporary one,
+anywhere else. While it runs, a plugin writes only: its
 sockets, in its directory of Xymon's runtime directory (S22); its log, in
 Xymon's log directory; and what its `PLUGIN` file declares -- a `data:`
 line for each directory it keeps for the administrator or the person,
