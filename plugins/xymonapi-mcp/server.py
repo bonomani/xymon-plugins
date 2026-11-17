@@ -90,7 +90,8 @@ def api(path: str, **params: str | None) -> dict:
         # address of that moment: one changed since is not seen here.
         if e.status is None:
             raise ToolError(f"{e}. This server keeps the address it started with: if it "
-                            "changed since, restart the AI tool") from e
+                            "changed since, restart the AI tool, or reconnect its MCP server: /mcp "
+                            "in Claude Code") from e
         raise ToolError(str(e)) from e
     # An API older than this client was written for: said with every answer,
     # so the model can tell the user; never updated from here.
