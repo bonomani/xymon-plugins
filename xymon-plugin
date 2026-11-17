@@ -618,6 +618,67 @@ manual() {
 	rm -f "$sec/$2" && ln -s "$5/$2" "$sec/$2" || exit 1
 }
 
+# mf_file ACTUAL NAME [admin] -- a MANIFEST line for a file written: its
+# cksum and size, and NAME, its path as installed (S29).
+mf_file() {
+	c=$(cksum < "$1") || exit 1
+	printf 'file\t%s\t%s' "$c" "$2"
+	[ -z "${3:-}" ] || printf '\t%s' "$3"
+	echo
+}
+
+# mf_link ACTUAL NAME -- a MANIFEST line for a link made: NAME, and where
+# it points.
+mf_link() { printf 'link\t%s\t%s\n' "$2" "$(readlink "$1")"; }
+
+# mf_dir DIR ADMIN -- the lines for every file and link under the plugin's
+# directory DIR, MANIFEST aside, by their path from it; the names in ADMIN,
+# the task file and the snippets, marked the administrator's to edit.
+mf_dir() {
+	(cd "$1" && find . \( -type f -o -type l \) ! -name MANIFEST ! -name .MANIFEST.new) \
+		| sed -e 's|^\./||' | LC_ALL=C sort | while IFS= read -r f; do
+		if [ -L "$1/$f" ]; then mf_link "$1/$f" "$f"
+		else case " $2 " in *" $f "*) mf_file "$1/$f" "$f" admin ;; *) mf_file "$1/$f" "$f" ;; esac
+		fi
+	done
+}
+
+# manifest DIR -- write what the lines on standard input say into
+# DIR/MANIFEST, the install's last step: a new file, moved in place.
+manifest() {
+	cat > "$1/.MANIFEST.new" && chmod 644 "$1/.MANIFEST.new" && mv -f "$1/.MANIFEST.new" "$1/MANIFEST" || exit 1
+}
+
+# manifest_server PLUGIN -- S29 for the server part: the plugin's directory,
+# the copy /plugins serves, and the manual page's link, by their paths as
+# installed, without DESTDIR. The task link and a SELinux module loaded are
+# states, not files, and stay out.
+manifest_server() {
+	{
+		mf_dir "$EXTROOT/$1" "tasks.cfg $(field "$1" conf)"
+		for f in $(cd "$DIST/plugins/$1" && ls); do
+			mf_file "$DIST/plugins/$1/$f" "$XYMONHOME/ext/xymon-plugins-dist/plugins/$1/$f"
+		done
+		pg=$(field "$1" server-manual)
+		if [ -n "$pg" ]; then
+			sec=$(inside "$MANDIR/man${pg##*.}") || exit 1
+			[ ! -L "$sec/$pg" ] || mf_link "$sec/$pg" "$MANDIR/man${pg##*.}/$pg"
+		fi
+	} | manifest "$EXTROOT/$1"
+}
+
+# manifest_tools PLUGIN -- S29 for your tools: the plugin's directory, its
+# command and its manual page's link.
+manifest_tools() {
+	{
+		mf_dir "$TOOLSROOT/$1" ""
+		set -- "$1" $(field "$1" command)
+		[ $# -ne 3 ] || [ ! -f "$BIN/$2" ] || mf_file "$BIN/$2" "$PREFIX/bin/$2"
+		pg=$(field "$1" tools-manual)
+		[ -z "$pg" ] || [ ! -L "$TOOLSMAN1/$pg" ] || mf_link "$TOOLSMAN1/$pg" "$PREFIX/share/man/man1/$pg"
+	} | manifest "$TOOLSROOT/$1"
+}
+
 # declared PLUGINFILE -- the names a PLUGIN file gives to stage, one per
 # line: itself, README.md, each side's files and manual page, the task and
 # the snippets. Read with globbing off; the callers check each is a plain
@@ -1280,6 +1341,7 @@ install_server() {
 	[ -z "$was_task" ] || [ -n "$(field "$1" task)" ] || drop_task "$1"
 	task "$1"
 	conf "$1"
+	manifest_server "$1"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$ext/VERSION") in $XYMONHOME/ext/$1."
 	[ -n "${UPDATING:-}" ] || say "$1" installed
@@ -1329,6 +1391,7 @@ install_tools() {
 		chmod 755 "$BIN/$2"
 	fi
 	manual "$1" "$(field "$1" tools-manual)" "$dir" "$PREFIX/share/man" "$PREFIX/libexec/xymon-plugins/$1"
+	manifest_tools "$1"
 	venv_auto "$1" "$TOOLSROOT" "$(field "$1" tools-modules)" --tools "$(field "$1" venv-note)"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$dir/VERSION") in $PREFIX/libexec/xymon-plugins/$1."
