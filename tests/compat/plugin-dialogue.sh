@@ -77,6 +77,14 @@ assert_contains "-- broken: app.py changed" "$out" "[S27] with what verify finds
 assert_contains "left by gone, gone: the staged copy" "$out" "[S27] what a plugin gone left is said"
 assert_contains "update the server's plugins, which repairs xymonapi" "$out" "[S27] the update that repairs it is offered"
 assert_contains "take away what gone left on the server" "$out" "[S27] and the clean that takes the rest away"
+# Chosen, it is confirmed once: the dialogue showed what is left, and its
+# command is clean --yes.
+c=$(printf '%s\n' "$out" | tr -d '\r' | sed -n 's/^ *\([0-9]*\)) take away what gone left on the server$/\1/p')
+[ -n "$c" ] || fail "[S27] no choice to take away what gone left"
+dialogue 'Use it? [Y/n] ' '' 'What do you want to do? [0] ' "$c" 'Proceed? [Y/n] ' ''
+assert_contains "clean --server --xymon-home $s --yes gone" "$out" "[S27] the clean chosen is clean --yes"
+assert_not_contains "Proceed? [y/N]" "$out" "[S27] asked once, not again by clean"
+[ ! -e "$s/ext/xymon-plugins-dist/plugins/gone" ] || fail "[S27] the clean chosen took nothing away: $out"
 "$ROOT/xymon-plugin" remove --server xymonapi XYMONHOME="$s" </dev/null >/dev/null 2>&1 || fail "remove failed"
 rm -rf "$s/ext/xymon-plugins-dist"
 

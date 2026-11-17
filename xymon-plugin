@@ -1953,9 +1953,9 @@ dialogue() {
 		done
 		ga=
 		for t in $(printf '%s\n' "$LEFT_S" | cut -f1); do
-			if [ "$t" = '*' ]; then ga=1; else add "take away what $t left on the server" "$me clean --server$hx $t"; fi
+			if [ "$t" = '*' ]; then ga=1; else add "take away what $t left on the server" "$me clean --server$hx --yes $t"; fi
 		done
-		[ -z "$ga" ] || add "take away what no plugin uses on the server" "$me clean --server$hx --all"
+		[ -z "$ga" ] || add "take away what no plugin uses on the server" "$me clean --server$hx --all --yes"
 	fi
 	tany=
 	for n in $(ordered tools); do
@@ -1966,9 +1966,9 @@ dialogue() {
 	[ -z "$tany" ] || add "update your tools${REPAIR_T:+, which repairs$REPAIR_T}" "$me update --tools"
 	ga=
 	for t in $(printf '%s\n' "$LEFT_T" | cut -f1); do
-		if [ "$t" = '*' ]; then ga=1; else add "take away what $t left in your tools" "$me clean --tools $t"; fi
+		if [ "$t" = '*' ]; then ga=1; else add "take away what $t left in your tools" "$me clean --tools --yes $t"; fi
 	done
-	[ -z "$ga" ] || add "take away what no plugin uses in your tools" "$me clean --tools --all"
+	[ -z "$ga" ] || add "take away what no plugin uses in your tools" "$me clean --tools --all --yes"
 	echo
 	echo "What do you want to do?"
 	echo "  0) nothing"
@@ -2173,6 +2173,7 @@ case $VERB in
 			# The stage served at /plugins, with no plugin left in it, goes.
 			if [ -d "$DIST" ] && [ ! -L "$DIST" ] && [ -z "$(ls -A "$DIST/plugins" 2>/dev/null)" ]; then
 				rm -rf "$DIST" || exit 1
+				echo "Removed the stage /plugins serves, which no plugin uses now."
 			fi
 		else
 			[ -n "$NAMES" ] || LIST=$(with_installed "$TOOLSROOT")

@@ -130,6 +130,7 @@ assert_contains "Removed the virtualenv, which no plugin uses now." "$(cat "$wor
 x install --server xymonapi XYMONHOME="$home"
 mkdir -p "$home/ext/venv/bin"
 x remove --server xymonapi XYMONHOME="$home"
+assert_contains "Removed the stage /plugins serves, which no plugin uses now." "$(cat "$work/x.log")" "[S8] the stage's going is said too"
 [ ! -e "$home/ext/venv" ] && [ ! -e "$home/ext/xymon-plugins-dist" ] || fail "[S8] the server's last removal left the virtualenv or the stage"
 
 # The person's data stays.
