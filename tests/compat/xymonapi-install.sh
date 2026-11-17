@@ -71,7 +71,7 @@ assert_file_exists "$work/man/man8/xymonapi.8"
 
 task=$home/ext/xymonapi/tasks.cfg
 assert_file_exists "$task"
-if [ -e "$home/etc/tasks.d/xymonapi" ] || [ -L "$home/etc/tasks.d/xymonapi" ]; then fail "[S5] the install turned the task on: etc/tasks.d/xymonapi is there"; fi
+if [ -e "$home/etc/tasks.d/xymonapi.cfg" ] || [ -L "$home/etc/tasks.d/xymonapi.cfg" ]; then fail "[S5] the install turned the task on: etc/tasks.d/xymonapi.cfg is there"; fi
 grep -q 'DISABLED' "$task" && fail "[S5] the task file carries DISABLED, which the link replaces: $(cat "$task")"
 grep -q "^[[:space:]]*ENVFILE $home/etc/xymonserver.cfg\$" "$task" \
 	|| fail "ENVFILE does not name this server's xymonserver.cfg: $(grep ENVFILE "$task")"
@@ -101,7 +101,7 @@ cp "$task" "$work/enabled"
 	|| fail "installing a second time failed: $(tail -n 5 "$work/reinstall.log")"
 cmp -s "$work/enabled" "$task" \
 	|| fail "[S7] a second install changed the task file the admin had enabled: $(cat "$task")"
-[ -L "$home/etc/tasks.d/xymonapi" ] || fail "[S7] a second install turned off the task the admin had enabled"
+[ -L "$home/etc/tasks.d/xymonapi.cfg" ] || fail "[S7] a second install turned off the task the admin had enabled"
 
 # A server directory with a space, an & and a | in its name: the paths are
 # quoted, and the replacement sed makes in the task files is escaped.
@@ -249,7 +249,7 @@ for p in xymonapi; do
 done
 "$ROOT/xymon-plugin" remove --server --all XYMONHOME="$home" MANDIR="$work/man" >"$work/uninstall.log" 2>&1 \
 	|| fail "xymon-plugin remove --server failed: $(tail -n 5 "$work/uninstall.log")"
-for f in ext/xymonapi ext/xymonapi-mcp ext/xymonapi-rag etc/tasks.d/xymonapi etc/tasks.d/xymonapi-rag; do
+for f in ext/xymonapi ext/xymonapi-mcp ext/xymonapi-rag etc/tasks.d/xymonapi.cfg etc/tasks.d/xymonapi-rag.cfg; do
 	if [ -e "$home/$f" ] || [ -L "$home/$f" ]; then fail "[S8] xymon-plugin remove --server left $f"; fi
 done
 { [ -e "$work/man/man8/xymonapi.8" ] || [ -L "$work/man/man8/xymonapi.8" ]; } && fail "[S8] xymon-plugin remove --server left the manual page xymonapi.8"

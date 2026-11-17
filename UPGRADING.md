@@ -5,6 +5,17 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## A task's link becomes tasks.d/NAME.cfg, from November 2026
+
+A plugin's task is on when `etc/tasks.d/NAME.cfg` links to its task file;
+the link was `tasks.d/NAME`. A packaged Xymon may read only the files of
+`tasks.d/` that end in `.cfg`, where Xymon's own reads them all. The next
+`./xymon-plugin update --server`, or `enable`, renames the link an older
+install made, and the task stays on: nothing to do. What breaks: a script
+that names `tasks.d/xymonapi`. Also: `enable` now refuses a server whose
+`tasks.cfg` has no `directory` line for `tasks.d/`, and says the line to
+add; `--force` makes the link where the server reads it another way.
+
 ## The client's directory becomes ~/.config/xymonapi, from xymonapi 6.0.0
 
 `xymonapi-connect` keeps the API's URL, its token and a certificate in

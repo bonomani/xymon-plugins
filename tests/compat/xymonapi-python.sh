@@ -215,7 +215,7 @@ assert_contains "its Python lacks fastapi" "$(XYMONAPI_PYTHON="$work/nomods" "$R
 rc=0; out=$(XYMONAPI_PYTHON="$work/nomods" "$ROOT/xymon-plugin" enable --server xymonapi XYMONHOME="$s" </dev/null 2>&1) || rc=$?
 [ "$rc" -ne 0 ] || fail "[S26] enable turned on a plugin whose Python lacks its modules"
 assert_contains "update --server --venv xymonapi makes them" "$out" "[S26] and enable refuses it, naming what makes them"
-[ -L "$s/etc/tasks.d/xymonapi" ] && fail "the refused enable made the link anyway"
+[ -L "$s/etc/tasks.d/xymonapi.cfg" ] && fail "the refused enable made the link anyway"
 
 # A virtualenv there that lacks them: "y" installs them into it.
 pre=$work/offer-lacks

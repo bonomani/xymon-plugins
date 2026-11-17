@@ -29,7 +29,7 @@
 # on it with a warning, as it may lack what 4.3.32 brought. A plugin that
 # needs another installs it first, part by part, and a removal is refused
 # while one installed needs the plugin removed. An install starts nothing: a
-# server task is on when tasks.d/PLUGIN, a link to it, is there, which
+# server task is on when tasks.d/PLUGIN.cfg, a link to it, is there, which
 # enable makes and disable removes. update replaces each plugin's directory
 # as a whole, and keeps the admin's task files, whether each is on, web
 # server snippets and data. Settings come from the environment, or as
@@ -716,23 +716,59 @@ prune_dist() {
 	done
 }
 
-# ours PLUGIN -- refuse a tasks.d/PLUGIN that is a link to something other
-# than the plugin's task file: it is not ours to change.
+# ours PLUGIN -- refuse a tasks.d/PLUGIN.cfg, or the tasks.d/PLUGIN an
+# install before that name made, that is a link to something other than the
+# plugin's task file: it is not ours to change.
 ours() {
-	if [ -L "$TASKDIR/$1" ] && [ "$(readlink "$TASKDIR/$1")" != "$XYMONHOME/ext/$1/tasks.cfg" ]; then
-		die "$TASKDIR/$1 is a link to $(readlink "$TASKDIR/$1"), not $1's task: left alone"
+	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
+		if [ -L "$l" ] && [ "$(readlink "$l")" != "$XYMONHOME/ext/$1/tasks.cfg" ]; then
+			die "$l is a link to $(readlink "$l"), not $1's task: left alone"
+		fi
+	done
+}
+
+# is_on PLUGIN -- true when its task link is there, under its name or the
+# one an install before it made.
+is_on() { [ -L "$TASKDIR/$1.cfg" ] || [ -L "$TASKDIR/$1" ]; }
+
+# old_link PLUGIN -- the task link is tasks.d/PLUGIN.cfg: a packaged Xymon
+# may read only the files of tasks.d/ that end so, where Xymon's own
+# tasks.cfg reads them all. An install before this name made
+# tasks.d/PLUGIN: that link, or the file an editor left in its place, takes
+# the new name, the task staying on. Called after ours, so a link here is
+# the plugin's own. With both there, the new name is the one read on every
+# Xymon: the old link goes, and a file at the old name is left, and said.
+old_link() {
+	o=$TASKDIR/$1 n=$TASKDIR/$1.cfg
+	[ -L "$o" ] || [ -f "$o" ] || return 0
+	if [ -e "$n" ] || [ -L "$n" ]; then
+		if [ -L "$o" ]; then rm -f "$o"; else echo "xymon-plugin: $o is left as it is: $n is $1's task" >&2; fi
+		return 0
 	fi
+	mv "$o" "$n" || exit 1
+	echo "$o is now $n: a packaged Xymon may read only the files of tasks.d/ that end in .cfg"
+}
+
+# reads_tasks -- true when the server's tasks.cfg reads tasks.d/, by a
+# directory line naming it, as Xymon's own has it: xymonlaunch then has a
+# task whose link is there. With no tasks.cfg, and under DESTDIR, there is
+# nothing to look at.
+reads_tasks() {
+	[ -z "$DESTDIR" ] || return 0
+	c=$(inside "$XYMONHOME/etc/tasks.cfg") || exit 1
+	[ -f "$c" ] || return 0
+	grep -q '^[[:space:]]*\(optional[[:space:]]\{1,\}\)\{0,1\}directory[[:space:]]\{1,\}\(.*/\)\{0,1\}tasks\.d/\{0,1\}[[:space:]]*$' "$c"
 }
 
 # task PLUGIN -- its xymonlaunch task file, @XYMONHOME@ replaced, kept in
 # the plugin's directory as ext/PLUGIN/tasks.cfg. The task is on when
-# tasks.d/PLUGIN, a link to that file, is there: removing ext/PLUGIN by hand
+# tasks.d/PLUGIN.cfg, a link to that file, is there: removing ext/PLUGIN by hand
 # then takes the task with it, since xymonlaunch skips a link that points
 # nowhere and stops the task at its next reload, where a copy in tasks.d
 # would have it log that it cannot start the task, forever. A first install
 # makes no link. A later one keeps the task file as the admin left it --
 # install_server sets it aside before it replaces the directory -- and
-# whether the task is on. A regular file at tasks.d/PLUGIN wins over the
+# whether the task is on. A regular file at tasks.d/PLUGIN.cfg wins over the
 # one set aside, as it is the one xymonlaunch was reading: the copy an older
 # install made there, or what an editor that writes by renaming, "sed -i"
 # among them, left where the link was. It is moved into the directory, and
@@ -741,9 +777,10 @@ ours() {
 task() {
 	t=$(field "$1" task); [ -n "$t" ] || return 0
 	tf=$EXTROOT/$1/tasks.cfg
-	link=$TASKDIR/$1
+	link=$TASKDIR/$1.cfg
 	ours "$1"
 	mkdir -p "$TASKDIR"
+	old_link "$1"
 	on=
 	if [ -f "$link" ] && [ ! -L "$link" ]; then
 		on=1
@@ -776,17 +813,29 @@ enable() {
 	[ -n "$(held "$EXTROOT" "$1" task)" ] || die "$1 has no task to enable"
 	[ -f "$EXTROOT/$1/tasks.cfg" ] || die "$1 is not installed in $EXTROOT"
 	ours "$1"
-	[ -L "$TASKDIR/$1" ] || [ ! -d "$TASKDIR/$1" ] || die "$TASKDIR/$1 is a directory, not $1's task: left alone"
-	[ -L "$TASKDIR/$1" ] && { echo "$1 is on already"; return 0; }
+	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
+		[ -L "$l" ] || [ ! -d "$l" ] || die "$l is a directory, not $1's task: left alone"
+	done
+	old_link "$1"
+	[ -L "$TASKDIR/$1.cfg" ] && { echo "$1 is on already"; return 0; }
+	# Before the link: a server whose tasks.cfg does not read tasks.d/
+	# would not have the task, whatever is linked there.
+	if ! reads_tasks; then
+		[ -n "$FORCE" ] || die "$XYMONHOME/etc/tasks.cfg does not read tasks.d/, so xymonlaunch would not have $1's task: add the line
+  directory $XYMONHOME/etc/tasks.d
+as Xymon's own tasks.cfg has it; --force makes the link all the same, where the server reads tasks.d/ another way"
+		echo "xymon-plugin: $XYMONHOME/etc/tasks.cfg does not read tasks.d/: $1's link is made all the same, as --force asks, and its task may not start" >&2
+	fi
 	mkdir -p "$TASKDIR"
-	ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$1" || exit 1
+	ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$1.cfg" || exit 1
 	echo "$1 is on: xymonlaunch reads it within half a minute and starts it; one that keeps failing it holds for ten minutes after five restarts"
 }
 disable() {
 	[ -n "$(held "$EXTROOT" "$1" task)" ] || die "$1 has no task to disable"
 	ours "$1"
-	[ -L "$TASKDIR/$1" ] || { echo "$1 is off already"; return 0; }
-	rm -f "$TASKDIR/$1"
+	is_on "$1" || { echo "$1 is off already"; return 0; }
+	rm -f "$TASKDIR/$1.cfg"
+	[ ! -L "$TASKDIR/$1" ] || rm -f "$TASKDIR/$1"
 	echo "$1 is off: xymonlaunch stops it within half a minute"
 }
 
@@ -807,7 +856,7 @@ status() {
 	v=$(sed -e 's|^.*/v||' "$2/$3/VERSION")
 	state=
 	if [ "$1" = server ] && [ -n "$(held "$2" "$3" task)" ]; then
-		if [ -L "$TASKDIR/$3" ]; then state=", on"; else state=", off"; fi
+		if is_on "$3"; then state=", on"; else state=", off"; fi
 	fi
 	# A server part whose Python lacks its modules is said, as enable
 	# refuses it.
@@ -1310,16 +1359,19 @@ drop_command() {
 	return 0
 }
 
-# drop_task PLUGIN -- remove tasks.d/PLUGIN: the link to the plugin's task
-# file, or the file there, a copy an older install made or the task an
-# editor left in the link's place; never a link to something else. And the
-# task file an install set aside.
+# drop_task PLUGIN -- remove tasks.d/PLUGIN.cfg, and the tasks.d/PLUGIN an
+# install before that name made: the link to the plugin's task file, or
+# the file there, a copy an older install made or the task an editor left
+# in the link's place; never a link to something else. And the task file
+# an install set aside.
 drop_task() {
-	if [ -L "$TASKDIR/$1" ]; then
-		[ "$(readlink "$TASKDIR/$1")" = "$XYMONHOME/ext/$1/tasks.cfg" ] && rm -f "$TASKDIR/$1"
-	else
-		rm -f "$TASKDIR/$1"
-	fi
+	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
+		if [ -L "$l" ]; then
+			[ "$(readlink "$l")" = "$XYMONHOME/ext/$1/tasks.cfg" ] && rm -f "$l"
+		elif [ ! -d "$l" ]; then
+			rm -f "$l"
+		fi
+	done
 	rm -f "$EXTROOT/.$1.tasks.cfg"
 }
 
@@ -1395,7 +1447,7 @@ dialogue() {
 			v=$(installed "$EXTROOT" "$n") || continue
 			st=
 			if [ -n "$(held "$EXTROOT" "$n" task)" ]; then
-				if [ -L "$TASKDIR/$n" ]; then st=", on"; else st=", off"; fi
+				if is_on "$n"; then st=", on"; else st=", off"; fi
 			fi
 			echo "  $n $v$st"
 		done
@@ -1433,7 +1485,7 @@ dialogue() {
 			installed "$EXTROOT" "$n" >/dev/null || continue
 			any=1
 			[ -n "$(held "$EXTROOT" "$n" task)" ] || continue
-			if [ -L "$TASKDIR/$n" ]; then add "turn $n off" "$me disable --server$hx $n"
+			if is_on "$n"; then add "turn $n off" "$me disable --server$hx $n"
 			else add "turn $n on" "$me enable --server$hx $n"; fi
 		done
 		[ -z "$any" ] || add "update the server's plugins" "$me update --server$hx"
