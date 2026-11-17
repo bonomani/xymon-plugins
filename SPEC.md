@@ -308,18 +308,19 @@ Off a terminal, S17.
 
 **S24. One command: a verb, and the part it acts on.**
 `xymon-plugin` takes a verb -- `install`, `update`, `enable`, `disable`,
-`remove`, `status`, `venv` -- and the part it acts on, `--server` or
+`remove`, `status`, `verify` -- and the part it acts on, `--server` or
 `--tools`, the latter alone. An action of the `install.sh` it replaces, as
 `install-server`, is refused, naming the new form; so is `--client`, until
 a plugin has a client part. Without a part named, on a terminal, the
 server part is said and acted on; off one, a verb that changes something
-is refused; `status` covers both. `install` and `remove` need a plugin
+is refused; `status` and `verify` cover both. `install` and `remove` need a plugin
 named, or `--all`. `install` refuses a plugin installed already, and
 `update` one that is not; `--all`, and a plugin one needs, pass over those
 installed, saying so. `enable` and `disable` refuse the tools, and a plugin
 named with no task. Run as root, a verb that changes the tools is refused
-unless `DESTDIR` or `PREFIX` is given. `--server` with `--tools` is refused,
-`status` saying that it shows both with neither, another verb giving the
+unless `DESTDIR` or `PREFIX` is given; `verify`, which changes nothing, is
+not. `--server` with `--tools` is refused, `status` and `verify` saying
+that they cover both with neither, another verb giving the
 two commands to run. `update` says what it updated, without the help a
 first install gives.
 
@@ -399,6 +400,42 @@ Xymon user can write, so it decides nothing alone: a removal takes away
 what S20 allows, no more. A plugin installed before it existed has none
 until it is updated. The `data:` and `writes:` lines of the `PLUGIN` copy
 say what the plugin's own commands may have written since (S28).
+
+**S30. `verify` says what differs from what was installed.**
+`verify --server` and `verify --tools` change nothing. They say, one line
+each, `broken:`, `untidy:`, `edited:` or `ok:`, the plugin, what differs,
+and the command that puts it right:
+`broken: xymonapi: app.py changed: ./xymon-plugin update --server xymonapi`.
+For each plugin of the part, or those named, what its `MANIFEST` (S29)
+and its files disagree on. Broken, as the plugin may no longer do what was
+installed: a file missing; a file changed that is not the administrator's
+to edit; a link outside the directory gone, or pointing elsewhere; a file
+in the plugin's directory that the manifest does not name and that can run
+or be imported -- one with an execute bit, or named `*.py`, `*.pyc`,
+`*.pth`, `*.so` or `*.sh` -- and a `__pycache__` there, the launchers
+writing no bytecode, so that the code Python runs is the code installed;
+any file in the copy `/plugins` serves that the manifest does not name,
+as it goes to other machines; the task link, which `MANIFEST` leaves out,
+there and pointing elsewhere than the plugin's task file; a SELinux module
+its `PLUGIN` names not loaded where SELinux is active, by `semodule -l`;
+and a Python module the plugin needs missing from the Python it runs with,
+or older than its `requirements.txt` asks -- what is checked of the
+virtualenv, which `MANIFEST` leaves out. Untidy, as it works all the same:
+any other file in the plugin's directory that the manifest does not name;
+and a plugin with no `MANIFEST`, installed before it was kept, which an
+update records. A file the manifest marks the administrator's is said
+edited, and is neither. Then, with no plugin named, what is left in the
+part that belongs to no plugin installed, untidy too: a task link, a
+manual page's link or a command of a plugin whose directory is gone (S9);
+a staged copy of one; a stage or a virtualenv with no plugin beside it.
+Each line names `update` for a plugin's files, `update --venv` for its
+modules, and `clean` for what is left. It exits 0 when nothing is broken
+or untidy, 3 when something is broken, whatever else is untidy, and 4 when
+something is untidy and nothing broken. It needs no terminal, and, as
+`status`, covers every installation found when none is named (S25).
+`MANIFEST` lying where the Xymon user can write, `verify` finds what was
+changed by mistake or left behind, not what someone able to write there
+and to rewrite `MANIFEST` too has hidden.
 
 ### Getting the code
 
@@ -561,33 +598,6 @@ brings its test.
   `SUDO_USER`'s under `sudo`, else the account's that runs it; when it is gone, there is no default, and
   the command says so. `status --tools` run as root reads the tools of
   that person too.
-- **`verify` says what differs from what was installed.** `verify
-  --server` and `verify --tools` change nothing. They say two things,
-  apart. First, for each plugin of the part, or those named, what its
-  `MANIFEST` and its files disagree on, one line each. Broken, as the
-  plugin may no longer do what was installed: a file missing; a file
-  changed that is not the administrator's to edit; a link outside the
-  directory gone, or pointing elsewhere; a command that is no longer the
-  one installed; the task link, which `MANIFEST` leaves out (S29), there
-  and pointing elsewhere than the plugin's task file; a SELinux module its
-  `PLUGIN` names not loaded where SELinux is active, by `semodule -l`; and
-  a file in the plugin's directory that the manifest
-  does not name and that can run or be imported -- one with an execute
-  bit, or named `*.py`, `*.pyc`, `*.pth`, `*.so` or `*.sh`. Untidy, as it
-  works all the same: any other file there that the manifest does not
-  name. What Python writes for itself, a `__pycache__` directory and the
-  `*.pyc` in it, is passed over. A file the manifest marks the
-  administrator's is said edited, and is neither; a plugin with no
-  manifest is said not checked, and is neither. Then, with no plugin
-  named, what is left in the part that belongs to no plugin installed,
-  untidy too: a task link, a manual page's link or a command of a plugin
-  whose directory is gone (S9); a staged copy of one; a stage or a
-  virtualenv with no plugin beside it. Each line names the command that
-  puts it right: `update` for a plugin's files, `clean` for what is left.
-  It exits 0 when nothing is broken or untidy, 3 when something is
-  broken, whatever else is untidy, and 4 when something is untidy and
-  nothing broken. It needs no terminal, and, as `status`, lists every
-  installation found when none is named (S25).
 - **`clean` takes away what no installed plugin owns.** `clean --server`
   and `clean --tools` need a name, or `--all`, as `remove` does (S24).
   They remove what `verify` lists as left, and nothing else: never a file
@@ -609,16 +619,15 @@ brings its test.
   `verify` does for what is untidy. With nothing left, it says so and
   exits 0. What it could not prove a plugin's it leaves, and says.
 - **Once those four are built, the rules in force follow.** S24's verbs
-  gain `verify` and `clean`: `status` and `verify` cover both parts
-  without a selector; `install`, `remove` and `clean` need a plugin named,
+  gain `clean`; `install`, `remove` and `clean` need a plugin named,
   or `--all`; run as root, `clean --tools` is refused as a verb that
-  changes the tools, `verify --tools` is not. S27's dialogue offers to
+  changes the tools. S27's dialogue offers to
   check what is installed and, when something is left that no plugin
   owns, to take it away. S8 ends: the removal of the last plugin of a
   part takes away what the plugins shared there, the virtualenv, and on
   the server the stage `/plugins` serves -- today only `--all` does. S9's
   link left behind is taken away by the next removal, or `clean`. The
-  usage gains `verify`, `clean` and `--yes`.
+  usage gains `clean` and `--yes`.
 - **Open, to decide.**
   - where the search index lies on a server: `$XDG_CACHE_HOME/xymonapi-rag/`
     today, which the item above allows as `data:`, or under `$XYMONVAR`,

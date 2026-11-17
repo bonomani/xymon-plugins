@@ -60,7 +60,7 @@ move and how a change is made is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 ## Conventions
 
 - **`xymon-plugin`'s verbs** -- `install`, `update`, `enable`, `disable`,
-  `remove`, `status`, `venv` -- take the part they act on: `--server` on the
+  `remove`, `status`, `verify` -- take the part they act on: `--server` on the
   Xymon server, `--tools` on your own machine, alone. `--client` is refused
   until a plugin has a client part: a client is Xymon's, on a monitored
   host, and that part arrives with the first check that installs there.
