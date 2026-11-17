@@ -1238,6 +1238,22 @@ for line in open(sys.argv[1]):
 sys.stdout.write(", ".join(old))' "$2" 2>/dev/null || :
 }
 
+# plugin_python ROOT -- the Python a plugin of the part at ROOT runs with
+# (S26): XYMONAPI_PYTHON, else the virtualenv beside the plugins, else
+# python3.
+plugin_python() {
+	if [ -n "${XYMONAPI_PYTHON:-}" ]; then printf '%s\n' "$XYMONAPI_PYTHON"
+	elif [ -x "$1/venv/bin/python3" ]; then printf '%s\n' "$1/venv/bin/python3"
+	else echo python3; fi
+}
+
+# lacking PYTHON MODULE... -- the modules, by their import names, PYTHON
+# cannot import; all of them when it does not run.
+lacking() {
+	lp=$1; shift
+	"$lp" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' "$@" 2>/dev/null || echo "$*"
+}
+
 # missing_modules PLUGIN -- the server modules its PLUGIN copy names that
 # the Python its launcher runs with lacks, and those it has older than the
 # plugin's requirements.txt asks: XYMONAPI_PYTHON, else the virtualenv
@@ -1247,10 +1263,9 @@ missing_modules() {
 	[ -z "$DESTDIR" ] || return 0
 	mods=$(held "$EXTROOT" "$1" server-modules)
 	[ -n "$mods" ] || return 0
-	py=${XYMONAPI_PYTHON:-}
-	[ -n "$py" ] || { [ -x "$EXTROOT/venv/bin/python3" ] && py=$EXTROOT/venv/bin/python3; } || py=python3
-	lacks=$("$py" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $mods 2>/dev/null) \
-		|| lacks=$mods
+	py=$(plugin_python "$EXTROOT")
+	# shellcheck disable=SC2086
+	lacks=$(lacking "$py" $mods)
 	olds=$(old_modules "$py" "$EXTROOT/$1/requirements.txt")
 	printf '%s\n' "$lacks${lacks:+${olds:+, }}$olds"
 }
@@ -1285,7 +1300,8 @@ venv_auto() {
 		return 0
 	fi
 	if [ -x "$root/venv/bin/python3" ]; then
-		missing=$("$root/venv/bin/python3" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $modules)
+		# shellcheck disable=SC2086
+		missing=$(lacking "$root/venv/bin/python3" $modules)
 		olds=$(old_modules "$root/venv/bin/python3" "$root/$plugin/requirements.txt")
 		missing=$missing${missing:+${olds:+, }}$olds
 		[ -z "$missing" ] && return 0
@@ -1311,7 +1327,8 @@ venv_auto() {
 			[ -n "$real" ] || continue
 			[ -x "$real" ] && p=$real
 			[ -n "$newest" ] || newest=$p
-			"$p" -c 'import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in sys.argv[1:]))' $modules 2>/dev/null || continue
+			# shellcheck disable=SC2086
+			[ -z "$(lacking "$p" $modules)" ] || continue
 			# One that has them, but older than the plugin is tested
 			# with, is not one that has them.
 			[ -z "$(old_modules "$p" "$root/$plugin/requirements.txt")" ] || continue
@@ -1685,17 +1702,17 @@ verify_plugin() {
 	# The Python modules it needs: there, and not older than requirements.txt asks.
 	mods=$(held "$root" "$n" "$part-modules")
 	if [ -n "$mods" ] && [ -z "$DESTDIR" ]; then
-		py=${XYMONAPI_PYTHON:-}
-		[ -n "$py" ] || { [ -x "$root/venv/bin/python3" ] && py=$root/venv/bin/python3; } || py=python3
-		lacks=$("$py" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $mods 2>/dev/null) || lacks=$mods
+		py=$(plugin_python "$root")
+		# shellcheck disable=SC2086
+		lacks=$(lacking "$py" $mods)
 		[ -z "$lacks" ] || v_broken "$n: the Python modules $lacks are missing from $py: ./xymon-plugin update --$part --venv $n"
 	fi
 	# Those it does without: missing, a note, counted for nothing.
 	opt=$(held "$root" "$n" "$part-optional-modules")
 	if [ -n "$opt" ] && [ -z "$DESTDIR" ]; then
-		py=${XYMONAPI_PYTHON:-}
-		[ -n "$py" ] || { [ -x "$root/venv/bin/python3" ] && py=$root/venv/bin/python3; } || py=python3
-		lacks=$("$py" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $opt 2>/dev/null) || lacks=$opt
+		py=$(plugin_python "$root")
+		# shellcheck disable=SC2086
+		lacks=$(lacking "$py" $opt)
 		vn=$(held "$root" "$n" venv-note)
 		[ -z "$lacks" ] || echo "note: $n: without the Python modules $lacks${vn:+, $vn}: ./xymon-plugin update --$part --venv $n"
 	fi
