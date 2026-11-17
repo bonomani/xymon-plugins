@@ -639,6 +639,7 @@ mf_link() { printf 'link\t%s\t%s\n' "$2" "$(readlink "$1")"; }
 mf_dir() {
 	(cd "$1" && find . \( -type f -o -type l \) ! -name MANIFEST ! -name .MANIFEST.new) \
 		| sed -e 's|^\./||' | LC_ALL=C sort | while IFS= read -r f; do
+		case " $2 " in *" ${f%.new} "*|*" ${f%.old} "*) [ "$f" = "${f%.new}" ] && [ "$f" = "${f%.old}" ] || continue ;; esac
 		if [ -L "$1/$f" ]; then mf_link "$1/$f" "$f"
 		else case " $2 " in *" $f "*) mf_file "$1/$f" "$f" admin ;; *) mf_file "$1/$f" "$f" ;; esac
 		fi
@@ -837,6 +838,61 @@ reads_tasks() {
 # among them, left where the link was. It is moved into the directory, and
 # linked. Older installs said off with a DISABLED line in the file: a file
 # with one is off, its line taken out and its link removed.
+# merge PLUGIN NAME NEW -- the administrator's file NAME in the plugin's
+# directory, kept as it was, met with NEW, this version's, and with the
+# version it started from, set aside as .PLUGIN.NAME.shipped: unedited, it
+# takes this version's; edited, and this version's the same as before, it
+# stays; both changed, with no conflict, on a terminal both changes are
+# shown and merged on y, the file before kept as NAME.old; on N, off a
+# terminal, under DESTDIR, on a conflict, or with no diff3 or no version to
+# start from, it stays, and this version's is written beside it as
+# NAME.new. .shipped/NAME is left the version it now starts from. MCHANGED
+# is set when the file changed.
+merge() {
+	md=$EXTROOT/$1/$2 mb=$EXTROOT/.$1.$2.shipped ms=$EXTROOT/$1/.shipped/$2
+	mkdir -p "$EXTROOT/$1/.shipped" || exit 1
+	rm -f "$md.new" || exit 1
+	if cmp -s "$md" "$3"; then
+		cp -f "$3" "$ms" && rm -f "$mb" || exit 1
+	elif [ ! -f "$mb" ]; then
+		cp -f "$3" "$md.new" && chmod 644 "$md.new" && cp -f "$3" "$ms" || exit 1
+		echo "$md is kept as yours; this version's differs, and is beside it: diff $md $md.new"
+	elif cmp -s "$md" "$mb"; then
+		# Unlinked first: written as a new file, never into one a hard
+		# link shares with a file outside the plugin's directory.
+		rm -f "$md" && cp -f "$3" "$md" && chmod 644 "$md" && cp -f "$3" "$ms" && rm -f "$mb" || exit 1
+		echo "$md, unedited, is replaced by this version's"
+		MCHANGED=1
+	elif cmp -s "$mb" "$3"; then
+		mv -f "$mb" "$ms" || exit 1
+	else
+		mm=$EXTROOT/.$1.$2.merged
+		if command -v diff3 >/dev/null 2>&1 && diff3 -m "$md" "$mb" "$3" > "$mm" 2>/dev/null; then
+			if [ -z "$DESTDIR" ] && [ -t 0 ] && [ -t 1 ]; then
+				echo "$md: you edited it, and this version changes it too."
+				echo "  Your change:"
+				diff "$mb" "$md" | sed -e 's/^/    /'
+				echo "  This version's change:"
+				diff "$mb" "$3" | sed -e 's/^/    /'
+				if offer "  They merge without conflict. Apply both?"; then
+					rm -f "$md.old" && mv -f "$md" "$md.old" && mv -f "$mm" "$md" && chmod 644 "$md" \
+						&& cp -f "$3" "$ms" && rm -f "$mb" || exit 1
+					echo "$md has both changes; yours before is $md.old: remove it once checked"
+					MCHANGED=1
+					return 0
+				fi
+			fi
+			rm -f "$mm"
+			cp -f "$3" "$md.new" && chmod 644 "$md.new" && mv -f "$mb" "$ms" || exit 1
+			echo "$md is kept as yours; this version's, which merges with it without conflict, is beside it: diff $md $md.new"
+		else
+			rm -f "$mm"
+			cp -f "$3" "$md.new" && chmod 644 "$md.new" && mv -f "$mb" "$ms" || exit 1
+			echo "$md is kept as yours; this version's changes the same lines, and is beside it: diff $md $md.new"
+		fi
+	fi
+}
+
 task() {
 	t=$(field "$1" task); [ -n "$t" ] || return 0
 	tf=$EXTROOT/$1/tasks.cfg
@@ -845,18 +901,23 @@ task() {
 	mkdir -p "$TASKDIR"
 	old_link "$1"
 	on=
+	this=$EXTROOT/.$1.tasks.cfg.this
+	sed -e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g" "$ROOT/plugins/$1/$t" > "$this" || exit 1
 	if [ -f "$link" ] && [ ! -L "$link" ]; then
 		on=1
 		rm -f "$EXTROOT/.$1.tasks.cfg"
 		mv "$link" "$tf" || exit 1
 		echo "keeping $link, moved to $tf"
+		merge "$1" tasks.cfg "$this"
 	elif [ -f "$EXTROOT/.$1.tasks.cfg" ]; then
 		[ -L "$link" ] && on=1
 		mv "$EXTROOT/.$1.tasks.cfg" "$tf" || exit 1
-		echo "keeping $tf"
+		merge "$1" tasks.cfg "$this"
 	else
-		sed -e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g" "$ROOT/plugins/$1/$t" > "$tf" && chmod 644 "$tf"
+		cp -f "$this" "$tf" && chmod 644 "$tf" || exit 1
+		mkdir -p "$EXTROOT/$1/.shipped" && cp -f "$this" "$EXTROOT/$1/.shipped/tasks.cfg" || exit 1
 	fi
+	rm -f "$this" "$EXTROOT/.$1.tasks.cfg.shipped"
 	if grep -q '^[[:space:]]*DISABLED[[:space:]]*$' "$tf"; then
 		on=
 		sed -e '/^[[:space:]]*DISABLED[[:space:]]*$/d' "$tf" > "$tf.new" && mv "$tf.new" "$tf" && chmod 644 "$tf" || exit 1
@@ -1080,8 +1141,12 @@ conf() {
 			echo "$dst, unedited, is replaced by this version's"
 			changed=1
 		else
-			if [ -f "$old" ]; then mv "$old" "$base/$c" || exit 1; fi
-			echo "$dst is kept as edited; this version's differs: compare it with $ROOT/plugins/$1/$c, @XYMONHOME@ being $XYMONHOME${RUNDIR:+ and @XYMONRUNDIR@ $RUNDIR}"
+			this=$EXTROOT/.$1.$c.this
+			stock "$1" "$c" > "$this" || exit 1
+			MCHANGED=
+			merge "$1" "$c" "$this"
+			rm -f "$this"
+			[ -z "$MCHANGED" ] || changed=1
 			# Kept, it may name a runtime directory moved since.
 			if [ -n "$RUNDIR" ] && grep -q '@XYMONRUNDIR@' "$ROOT/plugins/$1/$c" && ! grep -qF "$RUNDIR/" "$dst"; then
 				echo "$dst does not name $RUNDIR, Xymon's runtime directory: a socket it names may be one that is no more"
@@ -1311,6 +1376,12 @@ install_server() {
 	# A link where one is set aside would take it elsewhere: removed first.
 	if [ -L "$EXTROOT/.$1.tasks.cfg" ]; then rm -f "$EXTROOT/.$1.tasks.cfg" || exit 1; fi
 	if [ -f "$ext/tasks.cfg" ]; then mv "$ext/tasks.cfg" "$EXTROOT/.$1.tasks.cfg" || exit 1; fi
+	# And the task file as the install before wrote it, which merge meets
+	# it with: a real directory and a real file only.
+	rm -f "$EXTROOT/.$1.tasks.cfg.shipped" || exit 1
+	if [ -d "$ext/.shipped" ] && [ ! -L "$ext/.shipped" ] && [ -f "$ext/.shipped/tasks.cfg" ] && [ ! -L "$ext/.shipped/tasks.cfg" ]; then
+		mv "$ext/.shipped/tasks.cfg" "$EXTROOT/.$1.tasks.cfg.shipped" || exit 1
+	fi
 	# A snippet the install before wrote that this version has no more goes
 	# with fresh: a change the web server has to reload for, as conf says.
 	GONE=
@@ -1566,6 +1637,13 @@ verify_plugin() {
 			| sed -e 's|^\./||' | LC_ALL=C sort > "${TMPDIR:-/tmp}/xymon-plugin-here.$$"
 		while IFS= read -r f; do
 			grep -Fxq -- "$f" "${TMPDIR:-/tmp}/xymon-plugin-named.$$" && continue
+			adm=" tasks.cfg $(held "$root" "$n" conf) "
+			case $adm in
+				*" ${f%.new} "*) [ "$f" != "${f%.new}" ] && { v_untidy "$n: $f, this version's beside yours: compare, then remove it"; continue; } ;;
+			esac
+			case $adm in
+				*" ${f%.old} "*) [ "$f" != "${f%.old}" ] && { v_untidy "$n: $f, yours before the merge: compare, then remove it"; continue; } ;;
+			esac
 			case $f in
 				__pycache__|*/__pycache__) v_broken "$n: $f, bytecode no install wrote: $fix" ;;
 				*/__pycache__/*|__pycache__/*) ;;
