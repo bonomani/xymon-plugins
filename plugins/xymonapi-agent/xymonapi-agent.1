@@ -74,8 +74,8 @@ For each backend, whether its command is on PATH and how far it is held
 to the MCP servers; then which answer for the agent, in order, or why none
 does; and where each of the agent's MCP servers is expected.
 .IP "\fBdoctor\fR [\fB--json\fR]"
-Asks the agent to call the xymon health tool once and answer with the
-version it gives, and passes when the answer holds one, as 5.0.1:
+Asks the agent to call the xymon health tool once and answer with its
+api.version, the API's, and passes when the answer holds a version, as 7.0.0:
 something only that tool can have said. An error is not one, whatever
 digits it has. Exits 1 otherwise, with the answer printed, as
 when the MCP server did not start or the backend was denied it; and says

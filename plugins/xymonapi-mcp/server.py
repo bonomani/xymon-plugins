@@ -103,7 +103,9 @@ def api(path: str, **params: str | None) -> dict:
 
 @tool
 def health() -> dict:
-    """Whether xymond answers, and its version."""
+    """This API's version (api.version), whether xymond answers and its
+    version (xymond.alive, xymond.version), the relay's state and the
+    search index's."""
     return api("/health")
 
 

@@ -16,6 +16,19 @@ that names `tasks.d/xymonapi`. Also: `enable` now refuses a server whose
 `tasks.cfg` has no `directory` line for `tasks.d/`, and says the line to
 add; `--force` makes the link where the server reads it another way.
 
+## /health says each version under what it is the version of, from xymonapi 7.0.0
+
+`/health` gave `version`, the API's, and `server_version`, xymond's answer
+to a ping, with `alive` for whether xymond answered: names that did not say
+whose, and `version` in two forms, `6.0.1` or `xymonapi/v6.0.1`. It now
+gives `api.version`, always `X.Y.Z`, and `xymond.alive`, `xymond.version`
+(`4.3.32-dev`) and `xymond.answer` (`xymond 4.3.32-dev`); `version`,
+`server_version` and the top-level `alive` are gone. What to do: a script
+reading `/health` reads the new fields; update the server and every
+machine's tools together (`./xymon-plugin update --server`, then
+`--tools`): a client of this version reads no version from an older API,
+and says no difference of versions with it.
+
 ## The client's directory becomes ~/.config/xymonapi, from xymonapi 6.0.0
 
 `xymonapi-connect` keeps the API's URL, its token and a certificate in

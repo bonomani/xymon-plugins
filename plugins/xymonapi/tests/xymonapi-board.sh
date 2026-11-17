@@ -102,8 +102,9 @@ export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:$PORT" XYMONAPI_HIDE="$work/hide"
 start_api
 
 health=$(api_get /health)
-assert_contains '"alive":true' "$health" "/health while xymond runs"
-assert_contains '"server_version":"xymond' "$health" "/health names the xymond it asked"
+assert_contains '"xymond":{"alive":true' "$health" "/health while xymond runs"
+assert_contains '"answer":"xymond' "$health" "/health gives the xymond it asked, as it answered"
+assert_contains '"api":{"version":' "$health" "/health gives the API's version under api"
 
 red=$(api_get '/states?entity=red.example.com&test=conn')
 assert_contains '"id":"red.example.com:conn"' "$red" "/states for the red host"

@@ -85,8 +85,8 @@ COORDINATOR_PROMPT = (
     "each what it alone can answer, in its own terms, and merge the answers "
     "into one, naming which agent said what. Ask no agent twice the same "
     "thing, and none that cannot know.")
-DOCTOR_QUESTION = ("Call the xymon health tool once and answer with exactly the "
-                   "version it gives, nothing else.")
+DOCTOR_QUESTION = ("Call the xymon health tool once and answer with exactly its "
+                   "api.version, the API's version, nothing else.")
 # A version in an answer: X.Y.Z standing by itself, so not three numbers of
 # an address (127.0.0.1) or of a longer dotted one.
 VERSION = re.compile(r"(?<![\d.])\d+\.\d+\.\d+(?!\.?\d)")

@@ -81,7 +81,7 @@ tar -xzf "$work/plugins.tgz" -C "$work/unpacked" || fail "/plugins' answer is no
 assert_equal "xymon-plugins" "$(ls "$work/unpacked")" "rooted at xymon-plugins/"
 grep -rqF "$(first_line "$(cut -d: -f2 "$work/htpasswd")")" "$work/unpacked" && fail "[C4] /plugins gave the password file's contents"
 [ -n "$(find "$work/unpacked" -type f -name tokens)" ] && fail "[C4] /plugins gave a tokens file"
-assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user"
+assert_contains "\"api\":{\"version\":\"${version##*/v}\"}" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user, a release tag as its X.Y.Z"
 # The process names its directory in its command line, which is what a
 # restart finds it by: pkill -f "$XYMONHOME/ext/xymonapi/".
 grep -qx "$API_PID" <<<"$(pgrep -f "$work/inst/ext/xymonapi/" || true)" \
@@ -103,11 +103,11 @@ API_PID=""
 printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"   # the test's own, which the install replaced
 start_api
 url="http://127.0.0.1:$API_PORT/xymon/api/v1/health"
-assert_not_contains "$version" "$(curl -s "$url")" "and not to a stranger"
+assert_not_contains "${version##*/v}" "$(curl -s "$url")" "and not to a stranger"
 # The version of the code that runs: an install the API was not restarted
 # for, which writes a new VERSION beside it, does not change it.
 printf 'xymonapi/v9.9.10\n' > "$work/inst/ext/xymonapi/VERSION"
-assert_contains "\"version\":\"$version\"" "$(curl -s -u alice:secret "$url")" "/health keeps the version the process started with"
+assert_contains "\"api\":{\"version\":\"${version##*/v}\"}" "$(curl -s -u alice:secret "$url")" "/health keeps the version the process started with"
 printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
 # Every field /health gives is one the spec lists for it: a field renamed in
 # the code and not in openapi.yaml is a contract the API does not keep.

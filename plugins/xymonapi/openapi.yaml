@@ -393,11 +393,22 @@ components:
 
     Health:
       type: object
-      required: [alive, search]
+      required: [api, xymond, relay, search]
       properties:
-        alive: { type: boolean }
-        server_version: { type: string, description: "xymond's answer to a ping, e.g. \"xymond 4.3.30\"." }
-        version: { type: string, description: "The version this API was installed from: its release tag, xymonapi/vX.Y.Z, when the install ran on one, else the X.Y.Z of its PLUGIN file; absent when it was not installed. xymonapi-connect compares it with the client's own." }
+        api:
+          type: object
+          required: [version]
+          description: This API.
+          properties:
+            version: { type: string, nullable: true, description: "The version of the code this process runs, X.Y.Z -- a release tag, xymonapi/vX.Y.Z, given as its X.Y.Z; null when it was not installed. xymonapi-connect compares it with the client's own." }
+        xymond:
+          type: object
+          required: [alive, version, answer]
+          description: The xymond this API asks.
+          properties:
+            alive:   { type: boolean, description: "Whether xymond answered a ping." }
+            version: { type: string, nullable: true, description: "Its version, X.Y.Z and what follows it, from its answer: 4.3.32-dev; null when it did not answer, or named none." }
+            answer:  { type: string, nullable: true, description: "Its answer to the ping as it came: \"xymond 4.3.32-dev\"." }
         relay:
           type: string
           enum: [disabled, listening, refused]
