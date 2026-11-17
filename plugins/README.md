@@ -73,7 +73,8 @@ machines to install from.
 
 **Python.** Every plugin runs on Python 3.9 or later. Only those that need
 modules beyond the standard library -- the `server-modules` and `tools-modules`
-lines of its `PLUGIN` -- make
+lines of its `PLUGIN`, and `tools-optional-modules` for those a part does
+without, `venv-note` saying what they add -- make
 or complete a virtualenv; the others ask nothing about one, and run with it
 when it is there. For a plugin that needs modules, when the machine already
 has a Python with them -- the newest of `python3.14` down to `python3` on

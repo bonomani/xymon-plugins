@@ -1394,7 +1394,7 @@ install_tools() {
 	fi
 	manual "$1" "$(field "$1" tools-manual)" "$dir" "$PREFIX/share/man" "$PREFIX/libexec/xymon-plugins/$1"
 	manifest_tools "$1"
-	venv_auto "$1" "$TOOLSROOT" "$(field "$1" tools-modules)" --tools "$(field "$1" venv-note)"
+	venv_auto "$1" "$TOOLSROOT" "$(echo $(field "$1" tools-modules) $(field "$1" tools-optional-modules))" --tools "$(field "$1" venv-note)"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$dir/VERSION") in $PREFIX/libexec/xymon-plugins/$1."
 	# Said once, and not under DESTDIR, where PATH is the build machine's.
@@ -1604,8 +1604,20 @@ verify_plugin() {
 		py=${XYMONAPI_PYTHON:-}
 		[ -n "$py" ] || { [ -x "$root/venv/bin/python3" ] && py=$root/venv/bin/python3; } || py=python3
 		lacks=$("$py" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $mods 2>/dev/null) || lacks=$mods
-		olds=$(old_modules "$py" "$dir/requirements.txt")
 		[ -z "$lacks" ] || v_broken "$n: the Python modules $lacks are missing from $py: ./xymon-plugin update --$part --venv $n"
+	fi
+	# Those it does without: missing, a note, counted for nothing.
+	opt=$(held "$root" "$n" "$part-optional-modules")
+	if [ -n "$opt" ] && [ -z "$DESTDIR" ]; then
+		py=${XYMONAPI_PYTHON:-}
+		[ -n "$py" ] || { [ -x "$root/venv/bin/python3" ] && py=$root/venv/bin/python3; } || py=python3
+		lacks=$("$py" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $opt 2>/dev/null) || lacks=$opt
+		vn=$(held "$root" "$n" venv-note)
+		[ -z "$lacks" ] || echo "note: $n: without the Python modules $lacks${vn:+, $vn}: ./xymon-plugin update --$part --venv $n"
+	fi
+	# Any it has, needed or not, older than requirements.txt asks: broken.
+	if [ -n "$mods$opt" ] && [ -z "$DESTDIR" ]; then
+		olds=$(old_modules "$py" "$dir/requirements.txt")
 		[ -z "$olds" ] || v_broken "$n: older Python modules than it is tested with, $olds: ./xymon-plugin update --$part --venv $n"
 	fi
 	[ $((BROKEN + UNTIDY)) -ne "$before" ] || echo "ok: $n"

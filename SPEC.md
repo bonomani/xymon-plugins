@@ -346,7 +346,10 @@ it is read from `SUDO_USER`'s and not written.
 
 **S26. The Python environment comes with install and update.**
 There is no verb for it: `install` and `update` make or complete the
-virtualenv beside the plugins a plugin's modules need. On a terminal they
+virtualenv beside the plugins a plugin's modules need, and those it does
+without that its `PLUGIN` names as optional, `venv-note` saying what they
+add: `tools-optional-modules: fastembed numpy` for a local search index,
+where search asks the server without them. On a terminal they
 ask before fetching modules from PyPI; off one they fetch none unless
 `--venv` is given, and say how to make it; `PYTHON=` names a Python that
 has the modules already, from which it is made with nothing fetched; under
@@ -403,7 +406,7 @@ say what the plugin's own commands may have written since (S28).
 
 **S30. `verify` says what differs from what was installed.**
 `verify --server` and `verify --tools` change nothing. They say, one line
-each, `broken:`, `untidy:`, `edited:` or `ok:`, the plugin, what differs,
+each, `broken:`, `untidy:`, `edited:`, `note:` or `ok:`, the plugin, what differs,
 and the command that puts it right:
 `broken: xymonapi: app.py changed: ./xymon-plugin update --server xymonapi`.
 For each plugin of the part, or those named, what its `MANIFEST` (S29)
@@ -428,8 +431,11 @@ edited, and is neither. Then, with no plugin named, what is left in the
 part that belongs to no plugin installed, untidy too: a task link, a
 manual page's link or a command of a plugin whose directory is gone (S9);
 a staged copy of one; a stage or a virtualenv with no plugin beside it.
-Each line names `update` for a plugin's files, `update --venv` for its
-modules, and `clean` for what is left. It exits 0 when nothing is broken
+A module the plugin names as optional (S26) is no finding when missing:
+a `note:` line says what it adds, counted for nothing, as an edited file
+is; one there and older than `requirements.txt` asks is broken all the
+same. Each line names `update` for a plugin's files, `update --venv` for
+its modules, and `clean` for what is left. It exits 0 when nothing is broken
 or untidy, 3 when something is broken, whatever else is untidy, and 4 when
 something is untidy and nothing broken. It needs no terminal, and, as
 `status`, covers every installation found when none is named (S25).
