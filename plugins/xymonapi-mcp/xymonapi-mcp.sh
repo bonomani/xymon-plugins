@@ -107,5 +107,5 @@ codex mcp remove "$name" >/dev/null 2>&1 || true
 register codex --env codex mcp add "$name"
 # An AI tool reads its MCP servers when it starts: one running sees a
 # registration only once restarted.
-[ -z "${registered:-}" ] || echo "An AI tool already running sees this only once restarted: restart it to use $XYMONAPI_URL."
+[ -z "${registered:-}" ] || echo "An AI tool already running sees this only once restarted: restart it, or reconnect its MCP server (/mcp in Claude Code), to use $XYMONAPI_URL."
 exit ${failed:-0}

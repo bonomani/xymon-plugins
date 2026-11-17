@@ -83,7 +83,7 @@ out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="$py
 assert_contains "XYMONAPI_PYTHON=$py" "$(cat "$work/claude.args")" "XYMONAPI_PYTHON set: Claude Code is given it"
 assert_contains "XYMONAPI_PYTHON=$py" "$(cat "$work/codex.args")" "and Codex"
 assert_not_contains "password for" "$out" "a working token: nothing asked"
-assert_contains "already running sees this only once restarted: restart it to use $url" "$out" "and an AI tool running is said to need a restart"
+assert_contains "already running sees this only once restarted: restart it, or reconnect its MCP server (/mcp in Claude Code), to use $url" "$out" "and an AI tool running is said to need a restart"
 
 # Codex not installed: the command to run later is printed.
 rm "$work/stub/codex"; : > "$work/claude.args"
