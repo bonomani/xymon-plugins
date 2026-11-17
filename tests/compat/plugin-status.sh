@@ -56,5 +56,14 @@ prefix=$work/tools
 "$ROOT/xymon-plugin" install --tools xymonapi PREFIX="$prefix" >"$work/tools.log" 2>&1 || fail "install-tools failed: $(tail -n 5 "$work/tools.log")"
 out=$("$ROOT/xymon-plugin" status --tools xymonapi PREFIX="$prefix" 2>&1)
 assert_contains "xymonapi: $here installed; this checkout has $here" "$out" "[S15] status-tools: installed, its version, no on or off"
+assert_not_contains "other code" "$out" "[S15] the same code is not said to differ"
+# At the same version, a checkout whose code differs from what MANIFEST
+# says was installed says so, naming the update.
+other=$work/other
+mkdir -p "$other"
+cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$other/"
+echo "# changed" >> "$other/plugins/xymonapi/xymonapi_client.py"
+out=$("$other/xymon-plugin" status --tools xymonapi PREFIX="$prefix" 2>&1)
+assert_contains "xymonapi: $here installed; this checkout has $here, with other code: ./xymon-plugin update --tools xymonapi" "$out" "[S15] at the same version, other code is said, naming the update"
 
 pass "status-server and status-tools say what is installed, at which version, whether its task is on, and whether this checkout is newer, changing nothing"
