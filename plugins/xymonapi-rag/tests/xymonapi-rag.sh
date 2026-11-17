@@ -76,7 +76,13 @@ rag() { "$ROOT/plugins/xymonapi-rag/xymonapi-rag.sh" "$@" 2> "$work/rag.err"; }
 
 # Before there is an index: the API says so, and /health says there is none.
 assert_equal "404" "$(api_code '/search?q=anything')" "/search with no index"
-assert_contains 'search is not set up on this server: no index' "$(api_get '/search?q=anything')" "and says so"
+# Without numpy, the API says that instead; the index below then skips.
+if "${XYMONAPI_PYTHON:-python3}" -c 'import numpy' 2>/dev/null; then
+	assert_contains 'search is not set up on this server: no index' "$(api_get '/search?q=anything')" "and says so"
+else
+	assert_contains 'search is not set up on this server: the Python modules in xymonapi-rag/requirements.txt are missing (numpy)' \
+		"$(api_get '/search?q=anything')" "and, numpy missing, names it"
+fi
 assert_contains '"search":null' "$(api_get /health)" "/health reports no index"
 
 # The pages are embedded once, into a seed with no history that every index
