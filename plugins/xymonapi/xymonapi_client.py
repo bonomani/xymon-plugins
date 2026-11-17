@@ -10,7 +10,9 @@ socket, XYMONAPI_SOCKET or $XYMONRUNDIR/xymonapi/local/api.sock
 there -- the plugins' tasks on the server have both settings -- then the
 API `xymonapi-connect URL` last connected this user to, kept in
 ~/.config/xymonapi/xymon.url, with its token and CA beside it, each unless
-set; and http://127.0.0.1:1986 otherwise.
+set; and http://127.0.0.1:1986 otherwise. XYMONAPI_NAME names another
+connection kept there than xymon, NAME.url; a process that lives on, as
+the MCP server, reads that URL anew at each call.
 XYMONAPI_TOKEN_FILE names a file holding a client token -- the one
 xymonapi-connect(1) keeps -- sent when the API asks for a user: the token
 is this machine's own, revoked on its own (xymonapi(8), TOKENS). It is the
@@ -45,8 +47,14 @@ from urllib.parse import quote, unquote, urlencode, urlsplit
 CONF = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "xymonapi"
 
 
-def _kept_url(name: str = "xymon") -> str:
+# The connection's name, whose URL, token and CA xymonapi-connect keeps
+# under CONF: XYMONAPI_NAME, which xymonapi-mcp register gives, else xymon.
+NAME = os.environ.get("XYMONAPI_NAME") or "xymon"
+
+
+def _kept_url(name: str = "") -> str:
     """The URL xymonapi-connect kept for NAME, or "" when there is none."""
+    name = name or NAME
     try:
         return (CONF / f"{name}.url").read_text(encoding="utf-8").strip().rstrip("/")
     except (OSError, UnicodeError):
@@ -62,7 +70,18 @@ def _default_url() -> str:
     return _kept_url() or "http://127.0.0.1:1986"
 
 
-URL = (os.environ.get("XYMONAPI_URL") or _default_url()).rstrip("/")
+def where() -> str:
+    """Where the API is: XYMONAPI_URL, else the API's socket on this
+    machine, else the URL kept for NAME, else the API's own port here."""
+    return (os.environ.get("XYMONAPI_URL") or _default_url()).rstrip("/")
+
+
+URL = where()
+# A process that lives on, as the MCP server, sets it: with no XYMONAPI_URL,
+# each call reads where the API is anew, so that a connect to another URL
+# since is seen at the next call. xymonapi-connect, which sets URL to the
+# one it is given, leaves it off.
+FOLLOW = False
 # Whether URL is the one kept: its token and CA go with it, to no other.
 _KEPT = not os.environ.get("XYMONAPI_URL") and urlsplit(URL).scheme != "unix" \
     and URL == _kept_url()
@@ -206,6 +225,9 @@ MAX_BODY = 16 * 1024 * 1024
 
 def api(path: str, **params: str | None) -> dict:
     """GET PATH under /xymon/api/v1 and return the JSON it answers."""
+    global URL
+    if FOLLOW and not os.environ.get("XYMONAPI_URL"):
+        URL = where()
     # http, https and the API's own socket: urllib also reads file:// and ftp:// URLs.
     if urlsplit(URL).scheme not in ("http", "https", "unix"):
         raise APIError(f"XYMONAPI_URL must be an http:// or https:// URL, or unix:PATH, not {URL!r}")

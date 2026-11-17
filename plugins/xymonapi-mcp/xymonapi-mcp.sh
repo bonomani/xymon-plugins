@@ -47,7 +47,7 @@ command -v "$PYTHON" >/dev/null 2>&1 || {
 	exit 77
 }
 
-[ "${1:-}" = register ] || exec "$PYTHON" "$here/server.py"
+[ "${1:-}" = register ] || exec "$PYTHON" "$here/server.py" "$@"
 
 # register URL [NAME]
 case ${2:-} in -h|--help) echo "usage: xymonapi-mcp register URL [NAME]"; exit 0 ;; esac
@@ -71,7 +71,9 @@ cmd=`cd "$here" && pwd`/xymonapi-mcp.sh
 
 # The settings an AI client gives the server, as -e or --env options.
 opts() {
-	printf '%s\n' "$1" "XYMONAPI_URL=$XYMONAPI_URL"
+	# The connection's name, not its URL: the server reads the URL kept for
+	# it at each call, so that a register to another URL is seen at once.
+	printf '%s\n' "$1" "XYMONAPI_NAME=$name"
 	[ -n "$XYMONAPI_TOKEN_FILE" ] && printf '%s\n' "$1" "XYMONAPI_TOKEN_FILE=$XYMONAPI_TOKEN_FILE"
 	[ -n "$XYMONAPI_CA" ] && printf '%s\n' "$1" "XYMONAPI_CA=$XYMONAPI_CA"
 	[ -n "${XYMONAPI_PYTHON:-}" ] && printf '%s\n' "$1" "XYMONAPI_PYTHON=$XYMONAPI_PYTHON"
@@ -107,5 +109,8 @@ codex mcp remove "$name" >/dev/null 2>&1 || true
 register codex --env codex mcp add "$name"
 # An AI tool reads its MCP servers when it starts: one running sees a
 # registration only once restarted.
-[ -z "${registered:-}" ] || echo "An AI tool already running sees this only once restarted: restart it, or reconnect its MCP server (/mcp in Claude Code), to use $XYMONAPI_URL."
+# A server already running reads the URL at each call; an AI tool that had
+# none registered, or one registered with XYMONAPI_URL before this, sees
+# the registration only once restarted.
+[ -z "${registered:-}" ] || echo "An AI tool already running reaches $XYMONAPI_URL at its next call; one that had no xymon server, or had one registered with XYMONAPI_URL, sees it once restarted: /mcp in Claude Code."
 exit ${failed:-0}
