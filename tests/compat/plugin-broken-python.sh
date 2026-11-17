@@ -82,8 +82,16 @@ XYMONAPI_PYTHON= "$ROOT/xymon-plugin" update --server xymonapi XYMONHOME="$work/
 	</dev/null > "$work/remake2.log" 2>&1 || rc=$?
 [ "$rc" -eq 0 ] || fail "[S26] the update failed: $(tail -n 3 "$work/remake2.log")"
 assert_contains "has no Python that runs: it is made anew." "$(cat "$work/remake2.log")" "[S26] the broken virtualenv is said"
-assert_contains "which has the modules this plugin needs" "$(cat "$work/remake2.log")" "[S26] and made from a Python that has them, nothing fetched"
-"$work/server/ext/venv/bin/python3" -c 'import sys' || fail "[S26] the virtualenv made anew has no Python that runs"
+# That Python a virtualenv itself, as here in CI, one made from it would see
+# its base Python's modules, not its own: none is made, and that is said.
+if "$have" -c 'import sys; sys.exit(sys.prefix == sys.base_prefix)'; then
+	assert_contains "Made no virtualenv at $work/server/ext/venv from $have: it is itself one" "$(cat "$work/remake2.log")" "[S26] a virtualenv made from one would lack its modules: none is made, said"
+	assert_contains "XYMONAPI_PYTHON=$have" "$(cat "$work/remake2.log")" "[S26] naming how to run with it"
+	[ ! -e "$work/server/ext/venv" ] || fail "[S26] a virtualenv lacking the modules was left"
+else
+	assert_contains "which has the modules this plugin needs" "$(cat "$work/remake2.log")" "[S26] and made from a Python that has them, nothing fetched"
+	"$work/server/ext/venv/bin/python3" -c 'import fastapi' || fail "[S26] the virtualenv made anew lacks the modules"
+fi
 assert_not_contains "from PyPI" "$(cat "$work/remake2.log")" "[S26] nothing offered to fetch"
 
 pass "an empty file is not taken for a Python: no virtualenv is claimed, and venv-server says it made none, and an install whose Python cannot make one goes on"
