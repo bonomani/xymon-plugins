@@ -90,7 +90,11 @@ PYTHONPATH="$work/old" v 3 --server XYMONHOME="$home"
 assert_contains "older Python modules than it is tested with, fastapi>=" "$out" "[S30] a module older than requirements.txt asks is broken"
 assert_contains "./xymon-plugin update --server --venv xymonapi" "$out" "[S30] naming update --venv"
 
-# Untidy alone: exit 4.
+# Untidy alone: exit 4; a name with a space in it, as any other.
+: > "$ext/my notes.txt"
+v 4 --server XYMONHOME="$home"
+assert_contains "untidy: xymonapi: my notes.txt is not what was installed" "$out" "[S30] a file added whose name has a space is untidy"
+rm "$ext/my notes.txt"
 : > "$ext/notes.txt"
 v 4 --server XYMONHOME="$home"
 assert_contains "untidy: xymonapi: notes.txt is not what was installed" "$out" "[S30] a file added that does not run is untidy, exit 4"

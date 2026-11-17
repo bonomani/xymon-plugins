@@ -306,29 +306,29 @@ declared_ok() {
 	for n in $(field "$1" server-needs) $(field "$1" tools-needs) $(field "$1" client-needs); do
 		own="$own${n%%:*} "
 	done
-	field "$1" data > "${TMPDIR:-/tmp}/xymon-plugin-data.$$"
 	while IFS= read -r d; do
 		[ -n "$d" ] || continue
 		case $d in
 			'$XYMONVAR/'*/|'$XDG_CONFIG_HOME/'*/|'$XDG_CACHE_HOME/'*/|'$XDG_STATE_HOME/'*/) ;;
-			*) rm -f "${TMPDIR:-/tmp}/xymon-plugin-data.$$"
-			   die "$1's data: $d is no directory S28 allows: \$XYMONVAR/NAME/, \$XDG_CONFIG_HOME/NAME/, \$XDG_CACHE_HOME/NAME/ or \$XDG_STATE_HOME/NAME/" ;;
+			*) die "$1's data: $d is no directory S28 allows: \$XYMONVAR/NAME/, \$XDG_CONFIG_HOME/NAME/, \$XDG_CACHE_HOME/NAME/ or \$XDG_STATE_HOME/NAME/" ;;
 		esac
 		n=${d#*/}; n=${n%/}
-		case $n in ''|*/*) rm -f "${TMPDIR:-/tmp}/xymon-plugin-data.$$"; die "$1's data: $d names no single directory" ;; esac
-		case $own in *" $n "*) ;; *) rm -f "${TMPDIR:-/tmp}/xymon-plugin-data.$$"; die "$1's data: $d is in the name of $n, which is neither $1 nor a plugin it needs" ;; esac
-	done < "${TMPDIR:-/tmp}/xymon-plugin-data.$$"
-	field "$1" writes > "${TMPDIR:-/tmp}/xymon-plugin-data.$$"
+		case $n in ''|*/*) die "$1's data: $d names no single directory" ;; esac
+		case $own in *" $n "*) ;; *) die "$1's data: $d is in the name of $n, which is neither $1 nor a plugin it needs" ;; esac
+	done <<EOF
+$(field "$1" data)
+EOF
 	while IFS= read -r w; do
 		[ -n "$w" ] || continue
 		case $w in
 			?*' ('?*')') ;;
-			*) rm -f "${TMPDIR:-/tmp}/xymon-plugin-data.$$"; die "$1's writes: $w is not a file, then the command that changes it in parentheses" ;;
+			*) die "$1's writes: $w is not a file, then the command that changes it in parentheses" ;;
 		esac
 		f=${w% (*}
-		case $f in */|*' '*) rm -f "${TMPDIR:-/tmp}/xymon-plugin-data.$$"; die "$1's writes: $w names no single file" ;; esac
-	done < "${TMPDIR:-/tmp}/xymon-plugin-data.$$"
-	rm -f "${TMPDIR:-/tmp}/xymon-plugin-data.$$"
+		case $f in */|*' '*) die "$1's writes: $w names no single file" ;; esac
+	done <<EOF
+$(field "$1" writes)
+EOF
 	for n in $(field "$1" server-needs) $(field "$1" tools-needs) $(field "$1" client-needs); do
 		n=${n%%:*}
 		[ ! -f "$ROOT/plugins/$n/PLUGIN" ] || declared_ok "$n"
@@ -412,7 +412,7 @@ client_of() {
 # client tree a server found names as its own is part of that server, not
 # told apart. It only tells what is here: nothing is chosen from it.
 xymon_trees() {
-	{
+	trees=$({
 		printf '%s\n' "${XYMON_PLUGINS_TREES:-}" | tr ':' '\n'
 		# XYMON_PLUGINS_TREES_ONLY, for the tests: the trees named above, and
 		# none of this machine's.
@@ -436,17 +436,21 @@ xymon_trees() {
 		[ -n "$c" ] || continue
 		k=$(marks "$t")
 		case $k in server|client) printf '%s %s %s\n' "$c" "$k" "$t" ;; esac
-	done | awk '!seen[$1]++ { print }' > "${TMPDIR:-/tmp}/xymon-plugin-trees.$$"
+	done | awk '!seen[$1]++ { print }')
 	owned=
 	while read -r c k t; do
 		[ "$k" = server ] || continue
 		o=$(client_of "$t"); [ -z "$o" ] || owned="$owned $o "
-	done < "${TMPDIR:-/tmp}/xymon-plugin-trees.$$"
+	done <<EOF
+$trees
+EOF
 	while read -r c k t; do
+		[ -n "$c" ] || continue
 		case $owned in *" $c "*) continue ;; esac
 		printf '%s %s\n' "$k" "$t"
-	done < "${TMPDIR:-/tmp}/xymon-plugin-trees.$$"
-	rm -f "${TMPDIR:-/tmp}/xymon-plugin-trees.$$"
+	done <<EOF
+$trees
+EOF
 }
 
 # client_home SERVER -- the client tree SERVER's xymonserver.cfg names as
@@ -1665,19 +1669,22 @@ verify_plugin() {
 	if [ ! -f "$dir/MANIFEST" ]; then
 		v_untidy "$n: no MANIFEST, installed before it was kept: $fix"
 	else
-		: > "${TMPDIR:-/tmp}/xymon-plugin-named.$$"
+		# The paths MANIFEST names, one a line between newlines.
+		NL='
+'
+		named=$NL
 		while IFS="$(printf '\t')" read -r kind a b c; do
 			case $kind in
 				file)
-					case $b in /*) f=$(v_actual "$b") ;; *) f=$dir/$b; echo "$b" >> "${TMPDIR:-/tmp}/xymon-plugin-named.$$" ;; esac
-					case $b in "$XYMONHOME/ext/xymon-plugins-dist/plugins/$n/"*) echo "dist/${b##*/}" >> "${TMPDIR:-/tmp}/xymon-plugin-named.$$" ;; esac
+					case $b in /*) f=$(v_actual "$b") ;; *) f=$dir/$b; named="$named$b$NL" ;; esac
+					case $b in "$XYMONHOME/ext/xymon-plugins-dist/plugins/$n/"*) named="${named}dist/${b##*/}$NL" ;; esac
 					if [ ! -f "$f" ] || [ -L "$f" ]; then v_broken "$n: $b missing: $fix"
 					elif [ "$(cksum < "$f")" != "$a" ]; then
 						if [ "$c" = admin ]; then echo "edited: $n: $b, the administrator's"
 						else v_broken "$n: $b changed: $fix"; fi
 					fi ;;
 				link)
-					case $a in /*) f=$(v_actual "$a") ;; *) f=$dir/$a; echo "$a" >> "${TMPDIR:-/tmp}/xymon-plugin-named.$$" ;; esac
+					case $a in /*) f=$(v_actual "$a") ;; *) f=$dir/$a; named="$named$a$NL" ;; esac
 					if [ ! -L "$f" ]; then v_broken "$n: the link $a missing: $fix"
 					elif [ "$(readlink "$f")" != "$b" ]; then v_broken "$n: the link $a points to $(readlink "$f"), not $b: $fix"; fi ;;
 			esac
@@ -1686,10 +1693,9 @@ verify_plugin() {
 		# __pycache__, bytecode no install wrote, broken (the launchers
 		# write none); a file that runs or is imported, broken; any other,
 		# untidy.
-		(cd "$dir" && find . \( -type f -o -type l -o -type d -name __pycache__ \) ! -name MANIFEST -print) \
-			| sed -e 's|^\./||' | LC_ALL=C sort > "${TMPDIR:-/tmp}/xymon-plugin-here.$$"
 		while IFS= read -r f; do
-			grep -Fxq -- "$f" "${TMPDIR:-/tmp}/xymon-plugin-named.$$" && continue
+			[ -n "$f" ] || continue
+			case $named in *"$NL$f$NL"*) continue ;; esac
 			adm=" tasks.cfg $(held "$root" "$n" conf) "
 			case $adm in
 				*" ${f%.new} "*) [ "$f" != "${f%.new}" ] && { v_untidy "$n: $f, this version's beside yours: compare, then remove it"; continue; } ;;
@@ -1703,16 +1709,17 @@ verify_plugin() {
 				*) if v_runs "${f##*/}" "$dir/$f"; then v_broken "$n: $f, which can run, is not what was installed: $fix"
 				   else v_untidy "$n: $f is not what was installed: $fix"; fi ;;
 			esac
-		done < "${TMPDIR:-/tmp}/xymon-plugin-here.$$"
+		done <<EOF
+$(cd "$dir" && find . \( -type f -o -type l -o -type d -name __pycache__ \) ! -name MANIFEST -print | sed -e 's|^\./||' | LC_ALL=C sort)
+EOF
 		# The copy /plugins serves: nothing in it but what was staged.
 		if [ "$part" = server ] && [ -d "$DIST/plugins/$n" ]; then
 			for f in "$DIST/plugins/$n"/* "$DIST/plugins/$n"/.[!.]*; do
 				[ -e "$f" ] || [ -L "$f" ] || continue
-				grep -Fxq -- "dist/${f##*/}" "${TMPDIR:-/tmp}/xymon-plugin-named.$$" \
-					|| v_broken "$n: $XYMONHOME/ext/xymon-plugins-dist/plugins/$n/${f##*/}, served at /plugins, is not what was staged: $fix"
+				case $named in *"${NL}dist/${f##*/}$NL"*) continue ;; esac
+				v_broken "$n: $XYMONHOME/ext/xymon-plugins-dist/plugins/$n/${f##*/}, served at /plugins, is not what was staged: $fix"
 			done
 		fi
-		rm -f "${TMPDIR:-/tmp}/xymon-plugin-named.$$" "${TMPDIR:-/tmp}/xymon-plugin-here.$$"
 	fi
 	if [ "$part" = server ]; then
 		# The task link, a state MANIFEST leaves out (S29): there, it is the
@@ -1816,12 +1823,13 @@ left() {
 
 # verify_left PART -- what is left, untidy, each naming clean.
 verify_left() {
-	left "$1" > "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
 	while IFS="$(printf '\t')" read -r t at shown what pr; do
+		[ -n "$t" ] || continue
 		if [ "$t" = '*' ]; then v_untidy "$shown, $what: ./xymon-plugin clean --$1 --all"
 		else v_untidy "$shown, $what, which is gone: ./xymon-plugin clean --$1 $t"; fi
-	done < "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
-	rm -f "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
+	done <<EOF
+$(left "$1")
+EOF
 }
 
 # clean_part PART -- S31: what is left of the plugins named, or with --all
@@ -1830,38 +1838,38 @@ verify_left() {
 # when something is.
 clean_part() {
 	if [ "$1" = tools ]; then echo "Target: your tools, $PREFIX"; fi
-	left "$1" > "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
-	: > "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
-	kept=0
+	go= kept=0
 	while IFS="$(printf '\t')" read -r t at shown what pr; do
+		[ -n "$t" ] || continue
 		if [ -z "$ALL" ]; then case " $(echo $NAMES) " in *" $t "*) ;; *) continue ;; esac; fi
-		if [ "$pr" = proved ]; then printf '%s\t%s\n' "$at" "$shown, $what" >> "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
+		if [ "$pr" = proved ]; then go="$go$(printf '%s\t%s' "$at" "$shown, $what")
+"
 		else echo "Left: $shown, $what: not, byte for byte, what an install writes, so maybe not its own"; kept=$((kept + 1)); fi
-	done < "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
-	rm -f "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
-	go=$(wc -l < "${TMPDIR:-/tmp}/xymon-plugin-go.$$" | tr -d ' ')
-	if [ "$go" -eq 0 ]; then
-		rm -f "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
+	done <<EOF
+$(left "$1")
+EOF
+	if [ -z "$go" ]; then
 		[ "$kept" -eq 0 ] || exit 4
 		echo "Nothing is left that no plugin installed owns."
 		exit 0
 	fi
 	echo "To remove:"
-	cut -f2 "${TMPDIR:-/tmp}/xymon-plugin-go.$$" | sed -e 's/^/  /'
+	printf '%s' "$go" | cut -f2 | sed -e 's/^/  /'
 	if [ -z "${YES:-}" ]; then
 		if [ -t 0 ] && [ -t 1 ]; then
-			offer "Proceed?" || { rm -f "${TMPDIR:-/tmp}/xymon-plugin-go.$$"; echo "Nothing removed."; exit 4; }
+			offer "Proceed?" || { echo "Nothing removed."; exit 4; }
 		else
-			rm -f "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
 			echo "Nothing removed: off a terminal, --yes removes it."
 			exit 4
 		fi
 	fi
 	while IFS="$(printf '\t')" read -r at what; do
+		[ -n "$at" ] || continue
 		rm -rf "$at" || die "could not remove $at"
 		echo "Removed ${what%%, *}."
-	done < "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
-	rm -f "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
+	done <<EOF
+$go
+EOF
 	[ "$kept" -eq 0 ] || exit 4
 	exit 0
 }
@@ -2136,15 +2144,16 @@ case $VERB in
 		# None named: every installation found is listed, and nothing is
 		# asked, on a terminal as off one.
 		if [ "$PART" != tools ] && [ -z "$XYMONHOME" ] && [ -z "$DESTDIR" ]; then
-			xymon_trees | sed -n 's/^server //p' > "${TMPDIR:-/tmp}/xymon-plugin-status.$$"
 			while IFS= read -r t; do
+				[ -n "$t" ] || continue
 				echo "Xymon server $t:"
 				XYMONHOME=$t; server_paths
 				L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
 				for n in $L; do l=$(status server "$EXTROOT" "$n"); [ -z "$l" ] || echo "  $l"; done
 				show_client "$t"
-			done < "${TMPDIR:-/tmp}/xymon-plugin-status.$$"
-			rm -f "${TMPDIR:-/tmp}/xymon-plugin-status.$$"
+			done <<EOF
+$(xymon_trees | sed -n 's/^server //p')
+EOF
 			XYMONHOME=
 		elif [ "$PART" != tools ]; then
 			need_home
@@ -2164,13 +2173,14 @@ case $VERB in
 	verify)
 		# None named: every installation found, as status lists them.
 		if [ "$PART" != tools ] && [ -z "$XYMONHOME" ] && [ -z "$DESTDIR" ]; then
-			xymon_trees | sed -n 's/^server //p' > "${TMPDIR:-/tmp}/xymon-plugin-verify.$$"
 			while IFS= read -r t; do
+				[ -n "$t" ] || continue
 				echo "Xymon server: $t"
 				XYMONHOME=$t; server_paths
 				verify_part server "$EXTROOT"
-			done < "${TMPDIR:-/tmp}/xymon-plugin-verify.$$"
-			rm -f "${TMPDIR:-/tmp}/xymon-plugin-verify.$$"
+			done <<EOF
+$(xymon_trees | sed -n 's/^server //p')
+EOF
 			XYMONHOME=
 		elif [ "$PART" != tools ]; then
 			need_home

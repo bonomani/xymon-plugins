@@ -111,4 +111,15 @@ printf 'data: $XDG_CONFIG_HOME/xymonapi/\n' >> "$bad2/plugins/xymonapi-rag/PLUGI
 "$bad2/xymon-plugin" install --tools xymonapi-rag </dev/null >"$work/snaplog-good" 2>&1 \
 	|| fail "[S28] a data: line in the name of a plugin it needs was refused: $(tail -n 3 "$work/snaplog-good")"
 
+# The command keeps no file of its own anywhere else, not even for a moment
+# in TMPDIR: a success, a refusal, a die.
+mkdir -p "$work/snaptmp"
+for args in "status" "verify --tools" "install --tools nosuchplugin" "install --server xymonapi XYMONHOME=$work/nowhere"; do
+	# shellcheck disable=SC2086
+	TMPDIR="$work/snaptmp" "$ROOT/xymon-plugin" $args </dev/null >/dev/null 2>&1 || :
+done
+TMPDIR="$work/snaptmp" "$work/bad-root/xymon-plugin" install --tools xymonapi-rag </dev/null >/dev/null 2>&1 || :
+left=$(ls -A "$work/snaptmp")
+[ -z "$left" ] || fail "[S28] a run left in TMPDIR: $left"
+
 pass "a plugin writes only where S28 lists, at install, update and removal of each part, a removal leaving only directories and the installation used last; data: and writes: lines S28 does not allow are refused before anything is written"
