@@ -137,6 +137,16 @@ fix
 	|| fail "[S30] a launcher wrote a __pycache__"
 v 0 --tools
 
+# A module a part does without, missing: a note, exit 0. xymonapi-rag's
+# tools name fastembed and numpy so; a Python that skips site-packages
+# lacks them, wherever this runs.
+x install --tools xymonapi-rag
+printf '#!/bin/sh\nexec "%s" -S "$@"\n' "$(command -v "${XYMONAPI_PYTHON:-python3}")" > "$work/nosite"; chmod 755 "$work/nosite"
+XYMONAPI_PYTHON="$work/nosite" v 0 --tools
+assert_contains "note: xymonapi-rag: without the Python modules fastembed numpy, only to keep an index on this machine" "$out" "[S30] a module a part does without, missing, is a note naming what it adds, exit 0"
+assert_contains "./xymon-plugin update --tools --venv xymonapi-rag" "$out" "[S30] and how to have it"
+x remove --tools xymonapi-rag
+
 # A part with both selectors is refused.
 rc=0; out=$("$ROOT/xymon-plugin" verify --server --tools </dev/null 2>&1) || rc=$?
 [ "$rc" -ne 0 ] || fail "verify --server --tools was taken"

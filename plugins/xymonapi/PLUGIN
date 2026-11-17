@@ -14,8 +14,9 @@ manual: xymonapi.8
 
 # How ./xymon-plugin installs it. server-* and tools-* are each side's: the
 # files copied beside the plugin's others, the manual page, the modules its
-# Python needs (offered at install time), the plugins it needs first, the
-# same part of each, or another with NAME:part. server-short and
+# Python needs (offered at install time) -- or, as optional-modules, those
+# the part does without, venv-note saying what they add -- the plugins it
+# needs first, the same part of each, or another with NAME:part. server-short and
 # tools-short say each part in a few words, for the dialogue's menu. data
 # is a directory the plugin keeps for the administrator or the person,
 # under $XYMONVAR, $XDG_CONFIG_HOME, $XDG_CACHE_HOME or $XDG_STATE_HOME, in
