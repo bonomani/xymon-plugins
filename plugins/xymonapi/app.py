@@ -472,6 +472,10 @@ def build_app() -> FastAPI:
     # send it back to http:// -- its password with it. Such a path is one
     # this document does not list: not_found (C2).
     app = FastAPI(title=spec["info"]["title"], version=spec["info"]["version"], redirect_slashes=False)
+    # An older FastAPI, 0.75 among them, does not take redirect_slashes
+    # and drops it without a word: said to the router too, which every
+    # version reads.
+    app.router.redirect_slashes = False
 
     # A path that is none of ours, or a method a path does not take, is
     # answered by the framework with {"detail": ...}: put in the spec's form,
@@ -481,7 +485,9 @@ def build_app() -> FastAPI:
         error = {400: "bad_request", 401: "unauthorized", 404: "not_found",
                  405: "method_not_allowed"}.get(exc.status_code, "bad_request")
         return JSONResponse({"error": error, "detail": str(exc.detail)},
-                            status_code=exc.status_code, headers=exc.headers)
+                            status_code=exc.status_code,
+                            # Starlette before 0.19 has no headers on it.
+                            headers=getattr(exc, "headers", None))
 
     try:
         n = xymon.load_hide()
@@ -635,6 +641,12 @@ def main(argv: list[str]) -> int:
         @contextlib.contextmanager
         def capture_signals(self):
             yield
+
+        # uvicorn before 0.29 has no capture_signals: each server installs
+        # its own handlers here instead, the second over the first, and a
+        # SIGTERM then stops one listener and leaves the process running.
+        def install_signal_handlers(self):
+            pass
 
     servers: list[tuple[Server, socket.socket]] = []
     try:
