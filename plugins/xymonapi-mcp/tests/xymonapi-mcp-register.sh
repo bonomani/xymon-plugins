@@ -63,7 +63,8 @@ tok=$work/cfg/xymonapi/xymon.token
 assert_match '^xat_' "$(cat "$tok")" "register connects this machine: a token is kept"
 for c in claude codex; do
 	args=$(cat "$work/$c.args")
-	assert_contains "XYMONAPI_URL=$url" "$args" "$c is given the API's address"
+	assert_contains "XYMONAPI_NAME=xymon" "$args" "$c is given the connection's name"
+	assert_not_contains "XYMONAPI_URL" "$args" "and not its URL, read at each call"
 	assert_contains "XYMONAPI_TOKEN_FILE=$tok" "$args" "and the token file"
 	assert_contains "$launcher" "$args" "and the installed launcher as the command"
 	assert_not_contains "XYMONAPI_PYTHON" "$args" "and no XYMONAPI_PYTHON, unset"
@@ -83,7 +84,7 @@ out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="$py
 assert_contains "XYMONAPI_PYTHON=$py" "$(cat "$work/claude.args")" "XYMONAPI_PYTHON set: Claude Code is given it"
 assert_contains "XYMONAPI_PYTHON=$py" "$(cat "$work/codex.args")" "and Codex"
 assert_not_contains "password for" "$out" "a working token: nothing asked"
-assert_contains "already running sees this only once restarted: restart it, or reconnect its MCP server (/mcp in Claude Code), to use $url" "$out" "and an AI tool running is said to need a restart"
+assert_contains "An AI tool already running reaches $url at its next call" "$out" "and an AI tool running is said to reach it at its next call"
 
 # Codex not installed: the command to run later is printed.
 rm "$work/stub/codex"; : > "$work/claude.args"
@@ -92,8 +93,8 @@ out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="" \
 	"$mcp_bin" register "$url" < /dev/null 2>&1) || rc=$?
 [ "$rc" -eq 0 ] || fail "register without codex failed with $rc: $out"
 assert_contains "codex is not here; to register xymon with it later:" "$out" "a client not installed is said"
-assert_contains "codex mcp add xymon --env XYMONAPI_URL=$url" "$out" "with the command to run"
-assert_contains "XYMONAPI_URL=$url" "$(cat "$work/claude.args")" "and the other is registered"
+assert_contains "codex mcp add xymon --env XYMONAPI_NAME=xymon" "$out" "with the command to run"
+assert_contains "XYMONAPI_NAME=xymon" "$(cat "$work/claude.args")" "and the other is registered"
 
 # Codex installed but failing: said by name, with the command, and Claude
 # Code is still registered; the exit code says one failed.
@@ -104,8 +105,8 @@ out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="" \
 	"$mcp_bin" register "$url" < /dev/null 2>&1) || rc=$?
 assert_equal "1" "$rc" "register fails when a client's registration fails"
 assert_contains "could not register xymon with codex, which exited 3:" "$out" "and says which client, by name"
-assert_contains "codex mcp add xymon --env XYMONAPI_URL=$url" "$out" "with the command that failed"
-assert_contains "XYMONAPI_URL=$url" "$(cat "$work/claude.args")" "and the other client is registered all the same"
+assert_contains "codex mcp add xymon --env XYMONAPI_NAME=xymon" "$out" "with the command that failed"
+assert_contains "XYMONAPI_NAME=xymon" "$(cat "$work/claude.args")" "and the other client is registered all the same"
 # Both failing: nothing registered, so no restart is asked.
 cp "$work/stub/codex" "$work/claude.real"; mv "$work/stub/claude" "$work/claude.ok"; cp "$work/stub/codex" "$work/stub/claude"
 rc=0

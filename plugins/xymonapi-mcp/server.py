@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
+import subprocess
 import sys
 import traceback
 from pathlib import Path
@@ -20,6 +22,11 @@ from pathlib import Path
 # beside this one: xymon-plugin installs the plugins side by side.
 sys.path.append(str(Path(__file__).resolve().parent.parent / "xymonapi"))
 import xymonapi_client as client  # noqa: E402
+
+# This process lives as long as the AI tool that started it: where the API
+# is, it reads anew at each call.
+client.FOLLOW = True
+HERE = Path(__file__).resolve().parent
 
 # The protocol versions this server speaks: MCP over stdio is JSON-RPC, one
 # message per line, and the part used here -- tools -- is the same in each.
@@ -86,16 +93,16 @@ def api(path: str, **params: str | None) -> dict:
     try:
         answer = client.api(path, **params)
     except client.APIError as e:
-        # This server runs as long as the AI tool that started it, with the
-        # address of that moment: one changed since is not seen here.
-        if e.status is None:
-            raise ToolError(f"{e}. This server keeps the address it started with: if it "
+        # An XYMONAPI_URL given at its start stays: one changed since is not
+        # seen here. Without it, the URL kept is read at each call.
+        if e.status is None and os.environ.get("XYMONAPI_URL"):
+            raise ToolError(f"{e}. This server keeps the XYMONAPI_URL it started with: if it "
                             "changed since, restart the AI tool, or reconnect its MCP server: /mcp "
                             "in Claude Code") from e
         raise ToolError(str(e)) from e
     # An API older than this client was written for: said with every answer,
     # so the model can tell the user; never updated from here.
-    warning = client.version_warning()
+    warning = " ".join(w for w in (client.version_warning(), STALE) if w)
     if warning:
         answer = {**answer, "warning": warning}
     return answer
@@ -244,31 +251,93 @@ def send(msg: dict) -> None:
     sys.stdout.flush()
 
 
+# The code this process runs is the code installed when it started, by its
+# MANIFEST (S29); an update replaces it, and this process runs the new code
+# in its place, the connection kept: os.execv, between two requests, once
+# the new code is seen to start. When it does not, this one goes on, and
+# each answer says so. MANIFEST is absent in a checkout: nothing is watched.
+STALE = ""
+
+
+def _stamp() -> tuple | None:
+    try:
+        st = (HERE / "MANIFEST").stat()
+    except OSError:
+        return None
+    return (st.st_ino, st.st_mtime_ns, st.st_size)
+
+
+STAMP = _stamp()
+_tried: tuple | None = None
+
+
+def renew(pending: bytes) -> None:
+    """Run the code installed since this process started, if any and it
+    starts, handing it PENDING, the request read and not yet answered."""
+    global STALE, _tried
+    now = _stamp()
+    if STAMP is None or now is None or now == STAMP or now == _tried:
+        return
+    _tried = now
+    launcher = str(HERE / "xymonapi-mcp.sh")
+    try:
+        ok = subprocess.run(["/bin/sh", launcher, "--check"], stdin=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                            timeout=60).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        ok = False
+    if not ok:
+        STALE = ("this MCP server runs the code it started with: the code installed since does "
+                 "not start, xymonapi-mcp --check says why; /mcp in Claude Code reconnects it")
+        return
+    sys.stdout.flush()
+    os.environ["XYMONAPI_MCP_PENDING"] = pending.decode("utf-8", "replace")
+    os.execv("/bin/sh", ["sh", launcher])
+
+
+def handle(line: str) -> None:
+    """Answer one line of the client's, a JSON-RPC message."""
+    if not line.strip():
+        return
+    try:
+        msg = json.loads(line)
+    except ValueError:
+        send({"id": None, "error": {"code": -32700, "message": "not JSON"}})
+        return
+    if not isinstance(msg, dict) or "method" not in msg:
+        if isinstance(msg, dict) and "id" in msg:  # a reply to us: none asked
+            return
+        send({"id": None, "error": {"code": -32600, "message": "not a request"}})
+        return
+    try:
+        result = answer(msg)
+    except LookupError:
+        if "id" in msg:
+            send({"id": msg["id"], "error": {"code": -32601, "message": f"no method {msg['method']}"}})
+        return
+    if "id" in msg:  # a notification gets no answer
+        send({"id": msg["id"], "result": result})
+
+
 def main() -> None:
     # ponytail: one request at a time; a slow API call delays the next one,
     # within the client's own timeout. Threads if a client ever needs more.
-    for line in sys.stdin:
-        if not line.strip():
-            continue
-        try:
-            msg = json.loads(line)
-        except ValueError:
-            send({"id": None, "error": {"code": -32700, "message": "not JSON"}})
-            continue
-        if not isinstance(msg, dict) or "method" not in msg:
-            if isinstance(msg, dict) and "id" in msg:  # a reply to us: none asked
-                continue
-            send({"id": None, "error": {"code": -32600, "message": "not a request"}})
-            continue
-        try:
-            result = answer(msg)
-        except LookupError:
-            if "id" in msg:
-                send({"id": msg["id"], "error": {"code": -32601, "message": f"no method {msg['method']}"}})
-            continue
-        if "id" in msg:  # a notification gets no answer
-            send({"id": msg["id"], "result": result})
+    # Read unbuffered, a line at a time: a re-exec loses nothing read ahead.
+    pending = os.environ.pop("XYMONAPI_MCP_PENDING", None)
+    if pending is not None:
+        handle(pending)
+    raw = sys.stdin.buffer.raw
+    while True:
+        line = raw.readline()
+        if not line:
+            return
+        renew(line)
+        handle(line.decode("utf-8", "replace"))
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--check"]:
+        # The code starts: its modules import and its tools are listed.
+        answer({"method": "tools/list"})
+        sys.exit(0)
     main()

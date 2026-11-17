@@ -1,4 +1,4 @@
-.TH XYMONAPI-MCP 1 "October 30, 2026" "xymon-plugins"
+.TH XYMONAPI-MCP 1 "November 17, 2026" "xymon-plugins"
 .SH NAME
 xymonapi-mcp \- MCP server for the Xymon API
 .SH SYNOPSIS
@@ -33,13 +33,16 @@ URL with
 installed beside it -- a password asked once when there is no working token;
 nothing, on the server itself, for the API's own socket, unix:PATH -- then
 registers the server with Claude Code and with Codex under NAME,
-xymon by default: this launcher as the command, with XYMONAPI_URL,
+xymon by default: this launcher as the command, with XYMONAPI_NAME, NAME,
 XYMONAPI_TOKEN_FILE when there is a token, XYMONAPI_CA when a certificate is
 used, and XYMONAPI_PYTHON when it is set. A registration of that name is
 replaced. For an AI tool that is not installed, it prints the command to run
 later. When the connection fails it registers nothing and exits with
 xymonapi-connect's status; when an AI tool refuses the registration, it says
-which, registers the others all the same, and exits with 1.
+which, registers the others all the same, and exits with 1. The URL is
+not given: the server reads the one kept for NAME at each call, so that a
+register to another URL is seen by a server already running at its next
+call.
 
 .SH TOOLS
 .IP "\fBhealth\fR"
@@ -97,6 +100,9 @@ XYMONRUNDIR (XYMONSERVERLOGS when it is empty), says where it is and it is there
 in ~/.config/xymonapi/xymon.url, with the token and certificate beside it
 unless XYMONAPI_TOKEN_FILE, XYMONAPI_TOKEN or XYMONAPI_CA say otherwise;
 and http://127.0.0.1:1986 otherwise.
+.IP "\fBXYMONAPI_NAME\fR"
+The connection whose URL, token and certificate xymonapi-connect(1) keeps:
+~/.config/xymonapi/NAME.url, and the others beside it; xymon by default.
 .IP "\fBXYMONAPI_TOKEN_FILE\fR, \fBXYMONAPI_TOKEN\fR"
 A client token, from the first line of the file XYMONAPI_TOKEN_FILE names,
 or XYMONAPI_TOKEN itself: this machine's own credential (xymonapi(8),
