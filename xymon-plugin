@@ -1315,6 +1315,13 @@ venv_auto() {
 		echo "Under DESTDIR no virtualenv is made or used: on the installed system, ./xymon-plugin update $target --venv makes one for $plugin's modules ($modules)."
 		return 0
 	fi
+	# A virtualenv -- its pyvenv.cfg there -- whose Python does not run goes,
+	# said, and is made as on a first install: from a Python that has the
+	# modules, before any is fetched. Anything else named venv is left.
+	if [ -f "$root/venv/pyvenv.cfg" ] && ! "$root/venv/bin/python3" -c 'import sys' 2>/dev/null; then
+		echo "The virtualenv $root/venv has no Python that runs: it is made anew."
+		rm -rf "$root/venv" || die "could not remove $root/venv"
+	fi
 	if [ -x "$root/venv/bin/python3" ]; then
 		# shellcheck disable=SC2086
 		missing=$(lacking "$root/venv/bin/python3" $modules)
@@ -1374,7 +1381,7 @@ venv() {
 	[ -z "$DESTDIR" ] || return 0
 	# One whose Python does not run -- moved, or the Python it was made
 	# from gone -- is made anew: it is the plugins', beside them (S26).
-	if [ -e "$1/venv" ] && ! "$1/venv/bin/python3" -c 'import sys' 2>/dev/null; then
+	if [ -f "$1/venv/pyvenv.cfg" ] && ! "$1/venv/bin/python3" -c 'import sys' 2>/dev/null; then
 		echo "The virtualenv $1/venv has no Python that runs: it is made anew."
 		rm -rf "$1/venv" || die "could not remove $1/venv"
 	fi
