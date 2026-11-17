@@ -45,7 +45,8 @@ which, registers the others all the same, and exits with 1.
 .IP "\fBhealth\fR"
 Whether xymond answers, and its version.
 .IP "\fBstates\fR [entity] [test] [verdict]"
-The status board, one state per host and test.
+The status board, one state per host and test, with, for one that is
+acknowledged, until when and with what words.
 .IP "\fBalarms\fR"
 Every state whose verdict is not ok.
 .IP "\fBentities\fR"
@@ -70,7 +71,9 @@ no index.
 .SH SECURITY
 search_history returns status texts that the monitored hosts wrote, each
 marked as data, not instructions; a host that is broken into can still write
-there words meant to steer the AI tool's model. Every tool here only reads,
+there words meant to steer the AI tool's model. So can it in the words of an
+acknowledgement, which states and status return: xymond takes one from any
+machine it takes a status from. Every tool here only reads,
 but an AI tool that also has tools that change things should be watched
 when it acts on a history it found.
 
