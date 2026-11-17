@@ -188,7 +188,7 @@ def version_warning() -> str:
     if _warning is None:
         _warning = ""
         try:
-            theirs = api("/health").get("version", "")
+            theirs = (api("/health").get("api") or {}).get("version") or ""
         except APIError:
             return _warning
         t = _triple(theirs)
@@ -413,7 +413,7 @@ def connect(argv: list[str]) -> int:
         _say(f"removed {old}: the token replaces the password, which is no longer kept")
     # Whether the two sides run the same version: compatibility is what a
     # version says, so a difference is worth knowing, and who can act on it.
-    theirs, mine = health.get("version", ""), _own_version()
+    theirs, mine = (health.get("api") or {}).get("version") or "", _own_version()
     t, m = _triple(theirs), _triple(mine)
     if t and m and t < m:
         _say(f"the API runs xymonapi {theirs}, this machine's client {mine}: the server's admin "

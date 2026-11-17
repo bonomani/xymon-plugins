@@ -72,7 +72,7 @@ v=install; [ -d "$s/ext/xymonapi" ] && v=update
 mkdir -p "$s/ext/xymon-plugins-dist/plugins/gone"
 echo "# changed" >> "$s/ext/xymonapi/app.py"
 dialogue 'Use it? [Y/n] ' '' 'What do you want to do? [0] ' ''
-assert_contains "xymonapi 6" "$out" "[S27] the plugin is listed"
+assert_contains "xymonapi $(sed -n 's/^version: //p' "$ROOT/plugins/xymonapi/PLUGIN")" "$out" "[S27] the plugin is listed"
 assert_contains "-- broken: app.py changed" "$out" "[S27] with what verify finds broken in it"
 assert_contains "left by gone, gone: the staged copy" "$out" "[S27] what a plugin gone left is said"
 assert_contains "update the server's plugins, which repairs xymonapi" "$out" "[S27] the update that repairs it is offered"

@@ -103,19 +103,21 @@ RELAY = "disabled"
 
 
 def _health(request):
-    out: dict = {"alive": False, "search": _search_info(), "relay": RELAY}
-    # The version of the code this process runs, which a client compares
-    # with its own: here, behind the password.
-    version = VERSION
-    if version:
-        out["version"] = version
+    # Each version under what it is the version of, as X.Y.Z: the API's,
+    # the code this process runs, which a client compares with its own --
+    # a release tag, xymonapi/vX.Y.Z, given as its X.Y.Z; xymond's, from
+    # its answer to a ping, which is kept as it came.
+    m = _XYZ.search(VERSION)
+    xymond: dict = {"alive": False, "version": None, "answer": None}
     try:
-        version = xymon.ping()
+        answer = xymon.ping()
     except Exception as exc:                        # noqa: BLE001
         log.warning("ping: %s: %s", type(exc).__name__, exc)
-        return JSONResponse(out)
-    out.update(alive=True, server_version=version)
-    return JSONResponse(out)
+    else:
+        v = _XYZ.search(answer)
+        xymond = {"alive": True, "version": v[0] if v else None, "answer": answer}
+    return JSONResponse({"api": {"version": m[0] if m else None}, "xymond": xymond,
+                         "relay": RELAY, "search": _search_info()})
 
 
 def _search_info():
@@ -252,6 +254,9 @@ def installed_version() -> str:
         return ""
     return ref if _VERSION_RE.fullmatch(ref) else ""
 
+
+# A version, X.Y.Z and what follows it unbroken: 4.3.32-dev.
+_XYZ = re.compile(r"\d+\.\d+\.\d+[^\s,]*")
 
 # Read once, when the process starts: /health reports the code that runs,
 # not an install it has not been restarted for, whose VERSION is beside it.

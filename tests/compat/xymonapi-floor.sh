@@ -63,7 +63,7 @@ XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymon-plugins" \
 	mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
 answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the health call: $(tail -n 5 "$work/mcp.err")"
 assert_contains 'alive' "$answer" "the MCP server's health tool gives /health's answer"
-assert_contains "is xymonapi xymonapi/v0.0.1; this client needs $floor or later" "$answer" "and says the API is older than the client needs"
+assert_contains "is xymonapi 0.0.1; this client needs $floor or later" "$answer" "and says the API is older than the client needs"
 assert_contains "this client needs $floor" "$(cat "$work/mcp.err")" "and on stderr"
 api_at "$version"
 XYMONAPI_TOKEN="$mine" MCP_ROOT="$work/client/libexec/xymon-plugins" \

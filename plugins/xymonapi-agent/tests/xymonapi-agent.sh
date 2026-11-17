@@ -148,7 +148,7 @@ for said in \
 	assert_contains "not ok" "$out" "doctor fails on: $said"
 done
 # A version said in a sentence is one.
-rc=0; out=$(STUB_ANSWER='5.0.1 (the version field; server_version is xymond 4.3.32-dev).' run --backend codex doctor) || rc=$?
+rc=0; out=$(STUB_ANSWER='7.0.0 (api.version; xymond.version is 4.3.32-dev).' run --backend codex doctor) || rc=$?
 [ "$rc" -eq 0 ] || fail "doctor failed on a version said in a sentence: $out"
 
 # backends: each CLI, its restriction, and what answers.
