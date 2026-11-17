@@ -93,7 +93,11 @@ assert_contains "unedited, is replaced" "$(cat "$work/stock.log")" "[S16] and th
 cp "$home2/ext/xymonapi/xymonapi-nginx.conf" "$work/edited2"
 install2 edited
 cmp -s "$work/edited2" "$home2/ext/xymonapi/xymonapi-nginx.conf" || fail "[S16] an edited older snippet was replaced"
-assert_contains "is kept as edited; this version's differs" "$(cat "$work/edited.log")" "[S16] and the install says it differs"
+# This version's is the one the install before wrote: nothing to merge, so
+# nothing said and nothing beside it (S7).
+assert_not_contains "xymonapi-nginx.conf is kept" "$(cat "$work/edited.log")" "[S16] kept, with nothing to say when this version did not change it"
+assert_not_contains "xymonapi-nginx.conf, unedited" "$(cat "$work/edited.log")" "[S16] nor said unedited"
+[ ! -e "$home2/ext/xymonapi/xymonapi-nginx.conf.new" ] || fail "[S16] a NAME.new when this version did not change the snippet"
 shipped "$repo/plugins/xymonapi/xymonapi-nginx.conf" "$home2" > "$home2/ext/xymonapi/xymonapi-nginx.conf"
 install2 same
 assert_not_contains "xymonapi-nginx.conf" "$(cat "$work/same.log")" "[S16] a snippet as this version ships it is not spoken of"
@@ -162,9 +166,9 @@ cp "$h/ext/xymonapi/xymonapi-apache.conf" "$work/edited3"
 mkdir -p "$h/etc/xymonserver.d"; echo 'XYMONRUNDIR="/run/xymon"' > "$h/etc/xymonserver.d/run.cfg"
 "$ROOT/xymon-plugin" update --server xymonapi XYMONHOME="$h" MANDIR="$work/manmoved" >"$work/moved.log" 2>&1 || fail "install-server (moved again) failed"
 assert_contains "/run/xymon/xymonapi/relay.sock" "$(cat "$h/ext/xymonapi/xymonapi-nginx.conf")" "[S16] a snippet as the install before wrote it, naming a runtime directory moved since, takes this install's"
-assert_not_contains "xymonapi-nginx.conf is kept as edited" "$(cat "$work/moved.log")" "[S16] and is not said to be edited"
+assert_not_contains "xymonapi-nginx.conf is kept as yours" "$(cat "$work/moved.log")" "[S16] and is not said to be edited"
 cmp -s "$work/edited3" "$h/ext/xymonapi/xymonapi-apache.conf" || fail "[S16] an edited snippet was replaced when the runtime directory moved"
-assert_contains "xymonapi-apache.conf is kept as edited" "$(cat "$work/moved.log")" "[S16] and is said to differ"
+assert_contains "xymonapi-apache.conf is kept as yours" "$(cat "$work/moved.log")" "[S16] and is said to differ"
 assert_contains "xymonapi-apache.conf does not name /run/xymon" "$(cat "$work/moved.log")" "[S16] and to name a runtime directory that is not Xymon's"
 assert_contains "reload the web server" "$(cat "$work/moved.log")" "[S16] and the install says to reload the web server"
 # Edited still at the next install: the record of what was written is kept.

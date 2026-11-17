@@ -111,7 +111,11 @@ whether its task is on, and whether the checkout it runs from is newer.
 `update --server`, or `update --tools`, from an updated checkout or a fresh
 `/plugins` download, updates what is installed, or the plugins named; it
 refuses one that is not installed. It replaces the plugin's code and
-keeps your task file, snippets and settings. A task that runs on keeps the
+keeps your task file, snippets and settings. One you edited that this
+version changes too is merged on a terminal when the two changes do not
+touch the same lines and you answer y, your file before kept as
+`NAME.old`; otherwise it stays as you left it, this version's beside it as
+`NAME.new`, to compare and remove. A task that runs on keeps the
 code it loaded: the API's update stops the API, saying so, and xymonlaunch
 starts the new; a task that runs from time to time, as the index, takes the
 new code at its next run.

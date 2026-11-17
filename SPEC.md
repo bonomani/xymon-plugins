@@ -143,7 +143,16 @@ and `disable` refused.
 `update` replaces the plugin's directory as a whole, so a file a
 newer version no longer ships is gone; it keeps the task file as the
 administrator left it, whether it is on, and the web server snippets as the
-administrator edited them.
+administrator edited them. Each of those is met with this version's and
+with the version it started from, kept in `.shipped/` beside them:
+unedited, it takes this version's; edited, and this version's unchanged,
+or holding this version's change already, it stays, nothing said. Both changed, without a conflict, on a terminal both changes are
+shown and `Apply both? [y/N]` asked: y merges them, the file before kept
+as `NAME.old`. On N, off a terminal -- nothing is merged unattended --,
+under `DESTDIR`, on a conflict, or without `diff3` or a version to start
+from, the file stays as it is and this version's is written beside it as
+`NAME.new`, said with the `diff` to run. `verify` says a `.new` or `.old`
+left (S30).
 
 **S8. Removing takes away the plugin and its links.**
 The removal takes away the plugin's directory, its task link and its manual
@@ -424,7 +433,10 @@ its `PLUGIN` names not loaded where SELinux is active, by `semodule -l`;
 and a Python module the plugin needs missing from the Python it runs with,
 or older than its `requirements.txt` asks -- what is checked of the
 virtualenv, which `MANIFEST` leaves out. Untidy, as it works all the same:
-any other file in the plugin's directory that the manifest does not name;
+a `NAME.new` or `NAME.old` an update left beside an administrator's file
+(S7), "this version's beside yours" or "yours before the merge", to
+compare and remove; any other file in the plugin's directory that the
+manifest does not name;
 and a plugin with no `MANIFEST`, installed before it was kept, which an
 update records. A file the manifest marks the administrator's is said
 edited, and is neither. Then, with no plugin named, what is left in the
