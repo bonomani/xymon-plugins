@@ -1837,6 +1837,19 @@ installed() { [ -f "$1/$2/VERSION" ] && sed -e 's|^.*/v||' "$1/$2/VERSION"; }
 # applies, nothing by default; the command those answers spell printed,
 # confirmed and run, and nothing else; after an install, enabling offered
 # as a second command, [y/N]; then it stops.
+# findings PART ROOT PLUGIN -- what verify finds broken or untidy in the
+# plugin, its words without the plugin's name and the command, "; "
+# between; REPAIR set when an update puts it right.
+findings() {
+	verify_plugin "$1" "$2" "$3" | sed -n -e "s/^broken: $3: /broken: /p" -e "s/^untidy: $3: /untidy: /p" \
+		| sed -e 's/: \.\/xymon-plugin [^:]*$//' | awk 'NR > 1 { printf "; " } { printf "%s", $0 } END { if (NR) print "" }'
+}
+
+# left_by PART -- what is left in the part, one line per plugin gone, "T	what, what".
+left_by() {
+	left "$1" | awk -F '\t' '{ x = $4; if ($1 != "*") sub(" of " $1 "$", "", x); w[$1] = (($1 in w) ? w[$1] ", " : "") x } END { for (t in w) print t "\t" w[t] }' | LC_ALL=C sort
+}
+
 dialogue() {
 	me=$0
 	if [ -n "$XYMONHOME" ] || [ -n "$(xymon_trees | sed -n 's/^server //p')" ]; then
@@ -1848,6 +1861,7 @@ dialogue() {
 		[ -z "$XYMONHOME" ] || server_paths
 	fi
 	echo
+	REPAIR_S= REPAIR_T= LEFT_S=
 	if [ -n "$XYMONHOME" ]; then
 		echo "Xymon server: $XYMONHOME"
 		for n in $(all_plugins); do
@@ -1856,7 +1870,14 @@ dialogue() {
 			if [ -n "$(held "$EXTROOT" "$n" task)" ]; then
 				if is_on "$n"; then st=", on"; else st=", off"; fi
 			fi
-			echo "  $n $v$st"
+			f=$(findings server "$EXTROOT" "$n")
+			echo "  $n $v$st${f:+ -- $f}"
+			[ -z "$f" ] || REPAIR_S="$REPAIR_S $n"
+		done
+		LEFT_S=$(left_by server)
+		printf '%s\n' "$LEFT_S" | while IFS='	' read -r t w; do
+			[ -n "$t" ] || continue
+			if [ "$t" = '*' ]; then echo "  left: $w"; else echo "  left by $t, gone: $w"; fi
 		done
 		show_client "$XYMONHOME"
 	else
@@ -1865,7 +1886,14 @@ dialogue() {
 	echo "Your tools, $PREFIX:"
 	for n in $(all_plugins); do
 		v=$(installed "$TOOLSROOT" "$n") || continue
-		echo "  $n $v"
+		f=$(findings tools "$TOOLSROOT" "$n")
+		echo "  $n $v${f:+ -- $f}"
+		[ -z "$f" ] || REPAIR_T="$REPAIR_T $n"
+	done
+	LEFT_T=$(left_by tools)
+	printf '%s\n' "$LEFT_T" | while IFS='	' read -r t w; do
+		[ -n "$t" ] || continue
+		if [ "$t" = '*' ]; then echo "  left: $w"; else echo "  left by $t, gone: $w"; fi
 	done
 	# What applies, one line each, its command after a tab.
 	opts=
@@ -1895,7 +1923,7 @@ dialogue() {
 			if is_on "$n"; then add "turn $n off" "$me disable --server$hx $n"
 			else add "turn $n on" "$me enable --server$hx $n"; fi
 		done
-		[ -z "$any" ] || add "update the server's plugins" "$me update --server$hx"
+		[ -z "$any" ] || add "update the server's plugins${REPAIR_S:+, which repairs$REPAIR_S}" "$me update --server$hx"
 		for n in $(all_plugins); do
 			installed "$EXTROOT" "$n" >/dev/null || continue
 			by=
@@ -1906,6 +1934,11 @@ dialogue() {
 			[ -z "$by" ] || continue
 			add "remove $n from the server" "$me remove --server$hx $n"
 		done
+		ga=
+		for t in $(printf '%s\n' "$LEFT_S" | cut -f1); do
+			if [ "$t" = '*' ]; then ga=1; else add "take away what $t left on the server" "$me clean --server$hx $t"; fi
+		done
+		[ -z "$ga" ] || add "take away what no plugin uses on the server" "$me clean --server$hx --all"
 	fi
 	tany=
 	for n in $(ordered tools); do
@@ -1913,7 +1946,12 @@ dialogue() {
 		if installed "$TOOLSROOT" "$n" >/dev/null; then tany=1; continue; fi
 		add "install $n for you: $(short "$n" tools)" "$me install --tools $n"
 	done
-	[ -z "$tany" ] || add "update your tools" "$me update --tools"
+	[ -z "$tany" ] || add "update your tools${REPAIR_T:+, which repairs$REPAIR_T}" "$me update --tools"
+	ga=
+	for t in $(printf '%s\n' "$LEFT_T" | cut -f1); do
+		if [ "$t" = '*' ]; then ga=1; else add "take away what $t left in your tools" "$me clean --tools $t"; fi
+	done
+	[ -z "$ga" ] || add "take away what no plugin uses in your tools" "$me clean --tools --all"
 	echo
 	echo "What do you want to do?"
 	echo "  0) nothing"
@@ -2112,7 +2150,9 @@ case $VERB in
 			prune_dist
 			[ -n "$NAMES" ] || LIST=$(with_installed "$EXTROOT")
 			for n in $(deepest_first "$EXTROOT" server); do uninstall_server "$n"; done
-			[ -n "$NAMES" ] || rm -rf "$EXTROOT/venv"
+			# With the last plugin, what they shared: the virtualenv (S8).
+			last=1; for d in "$EXTROOT"/*; do [ -f "$d/VERSION" ] && last=; done
+			[ -z "$last" ] || [ ! -d "$EXTROOT/venv" ] || { rm -rf "$EXTROOT/venv" && echo "Removed the virtualenv, which no plugin uses now."; }
 			# The stage served at /plugins, with no plugin left in it, goes.
 			if [ -d "$DIST" ] && [ ! -L "$DIST" ] && [ -z "$(ls -A "$DIST/plugins" 2>/dev/null)" ]; then
 				rm -rf "$DIST" || exit 1
@@ -2120,8 +2160,9 @@ case $VERB in
 		else
 			[ -n "$NAMES" ] || LIST=$(with_installed "$TOOLSROOT")
 			for n in $(deepest_first "$TOOLSROOT" tools); do uninstall_tools "$n"; done
-			if [ -z "$NAMES" ]; then
-				rm -rf "$TOOLSROOT/venv"
+			last=1; for d in "$TOOLSROOT"/*; do [ -f "$d/VERSION" ] && last=; done
+			if [ -n "$last" ]; then
+				[ ! -d "$TOOLSROOT/venv" ] || { rm -rf "$TOOLSROOT/venv" && echo "Removed the virtualenv, which no plugin uses now."; }
 				rmdir "$TOOLSROOT" 2>/dev/null || true
 			fi
 		fi ;;

@@ -118,6 +118,20 @@ assert_contains "the virtualenv, with no plugin installed" "$out" "[S31] and the
 rc=0; v=$("$ROOT/xymon-plugin" verify --server XYMONHOME="$home" </dev/null 2>&1) || rc=$?
 [ "$rc" -eq 0 ] || fail "[S31] verify after clean --all exited $rc: $v"
 
+# S8: the removal of the last plugin of a part takes the virtualenv too;
+# one plugin removed of two leaves it. xymonapi-mcp, and xymonapi it
+# needs, are the tools installed.
+mkdir -p "$PREFIX/libexec/xymon-plugins/venv/bin"
+x remove --tools xymonapi-mcp
+[ -d "$PREFIX/libexec/xymon-plugins/venv" ] || fail "[S8] the virtualenv went while a plugin is still installed"
+x remove --tools xymonapi
+[ ! -e "$PREFIX/libexec/xymon-plugins/venv" ] || fail "[S8] the removal of the last plugin left the virtualenv"
+assert_contains "Removed the virtualenv, which no plugin uses now." "$(cat "$work/x.log")" "[S8] and says so"
+x install --server xymonapi XYMONHOME="$home"
+mkdir -p "$home/ext/venv/bin"
+x remove --server xymonapi XYMONHOME="$home"
+[ ! -e "$home/ext/venv" ] && [ ! -e "$home/ext/xymon-plugins-dist" ] || fail "[S8] the server's last removal left the virtualenv or the stage"
+
 # The person's data stays.
 assert_equal "mine" "$(cat "$XDG_CONFIG_HOME/xymonapi/xymon.url")" "[S31] a data: directory is never cleaned"
 

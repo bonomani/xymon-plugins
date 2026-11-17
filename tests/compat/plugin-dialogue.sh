@@ -64,6 +64,22 @@ assert_contains "turn xymonapi on" "$out" "[S27] only what applies is offered: t
 assert_not_contains "install xymonapi on the server" "$out" "[S27] not installing it again"
 assert_contains "xymonapi $(sed -n 's/^version: //p' "$ROOT/plugins/xymonapi/PLUGIN")" "$out" "[S27] and the plugin installed is listed with its version"
 
+# What verify finds, said beside each plugin, and what is left by a
+# plugin gone; the menu offers the update that repairs it and the clean
+# that takes the rest away.
+v=install; [ -d "$s/ext/xymonapi" ] && v=update
+"$ROOT/xymon-plugin" "$v" --server xymonapi XYMONHOME="$s" </dev/null >"$work/i.log" 2>&1 || fail "$v failed: $(tail -n 3 "$work/i.log")"
+mkdir -p "$s/ext/xymon-plugins-dist/plugins/gone"
+echo "# changed" >> "$s/ext/xymonapi/app.py"
+dialogue 'Use it? [Y/n] ' '' 'What do you want to do? [0] ' ''
+assert_contains "xymonapi 6" "$out" "[S27] the plugin is listed"
+assert_contains "-- broken: app.py changed" "$out" "[S27] with what verify finds broken in it"
+assert_contains "left by gone, gone: the staged copy" "$out" "[S27] what a plugin gone left is said"
+assert_contains "update the server's plugins, which repairs xymonapi" "$out" "[S27] the update that repairs it is offered"
+assert_contains "take away what gone left on the server" "$out" "[S27] and the clean that takes the rest away"
+"$ROOT/xymon-plugin" remove --server xymonapi XYMONHOME="$s" </dev/null >/dev/null 2>&1 || fail "remove failed"
+rm -rf "$s/ext/xymon-plugins-dist"
+
 # Off a terminal, no verb: the usage, nothing done (S17).
 rc=0; "$ROOT/xymon-plugin" </dev/null >"$work/usage.log" 2>&1 || rc=$?
 assert_equal "2" "$rc" "[S27] off a terminal, no verb is the usage"
