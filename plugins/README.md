@@ -122,6 +122,10 @@ install wrote, a link pointing elsewhere, a Python module older than the
 plugin asks, and what no plugin installed owns. It changes nothing, and
 exits 0 when all is as installed, 3 when something is broken, 4 when
 something is only untidy -- what a nightly check can test.
+`clean --server NAME`, or `--tools`, or `--all`, takes away what a plugin
+gone left -- a directory deleted by hand leaves its task link, its manual
+page's link, its staged copy or its command -- once listed and confirmed,
+or with `--yes` off a terminal; only what is provably a plugin's.
 
 **Uninstalling.** `XYMONHOME=... ./xymon-plugin remove --server NAME` or
 `./xymon-plugin remove --tools NAME` removes that plugin alone, and refuses

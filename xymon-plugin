@@ -52,7 +52,7 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 
 die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
 usage() {
-	echo "usage: ./xymon-plugin install|update|enable|disable|remove|status|verify [--server|--tools] [--all] [--venv] [--force] [--xymon-home PATH] [PLUGIN...] [NAME=value...]" >&2
+	echo "usage: ./xymon-plugin install|update|enable|disable|remove|status|verify|clean [--server|--tools] [--all] [--venv] [--force] [--yes] [--xymon-home PATH] [PLUGIN...] [NAME=value...]" >&2
 	exit 2
 }
 
@@ -64,7 +64,7 @@ fi
 VERB=$1; shift
 case $VERB in
 	dialogue) ;;
-	install|update|enable|disable|remove|status|verify) ;;
+	install|update|enable|disable|remove|status|verify|clean) ;;
 	venv) die "venv is now part of install and update: ./xymon-plugin update --server --venv, or --tools --venv" ;;
 	install-server|install-tools|uninstall-server|uninstall-tools|enable-server|disable-server|status-server|status-tools|venv-server|venv-tools)
 		v=${VERB%-*}; [ "$v" = uninstall ] && v=remove
@@ -77,6 +77,7 @@ NAMES=
 FORCE=
 VENV_FETCH=
 ALL=
+YES=
 SEL_SERVER=
 SEL_TOOLS=
 PREFIX_GIVEN=${PREFIX:+1}
@@ -89,6 +90,7 @@ while [ $# -gt 0 ]; do
 		--force) FORCE=1 ;;
 		--venv) VENV_FETCH=1 ;;
 		--all) ALL=1 ;;
+		--yes) YES=1 ;;
 		--server) SEL_SERVER=1 ;;
 		--tools) SEL_TOOLS=1 ;;
 		--client) die "no plugin has a client part yet: --server, or --tools" ;;
@@ -1609,48 +1611,116 @@ verify_plugin() {
 	[ $((BROKEN + UNTIDY)) -ne "$before" ] || echo "ok: $n"
 }
 
-# verify_left PART ROOT -- what is left in the part that no plugin
-# installed owns (S9): untidy.
-verify_left() {
+# left PART -- what is left in the part that no plugin installed owns (S9),
+# one per line, tab-separated: the plugin it was, or * for what the
+# plugins shared; where it lies; its path as installed; what it is; and
+# "proved" when it is provably that plugin's (S20), the only ones clean
+# takes away.
+left() {
+	T=$(printf '\t')
 	if [ "$1" = server ]; then
 		for l in "$TASKDIR"/*; do
 			[ -L "$l" ] || continue
 			case $(readlink "$l") in
 				"$XYMONHOME/ext/"*/tasks.cfg) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%/tasks.cfg}
-					[ -f "$EXTROOT/$t/VERSION" ] || v_untidy "$TASKDIR/${l##*/}, the task link of $t, which is gone: ./xymon-plugin clean --server $t" ;;
+					plain "$t" && [ ! -f "$EXTROOT/$t/VERSION" ] \
+						&& echo "$t$T$l$T$XYMONHOME/etc/tasks.d/${l##*/}${T}the task link of $t${T}proved" ;;
 			esac
 		done
 		for l in "$(inside "$MANDIR")"/man[1-9]/*; do
 			[ -L "$l" ] || continue
 			case $(readlink "$l") in
 				"$XYMONHOME/ext/"*/*) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%%/*}
-					[ -f "$EXTROOT/$t/VERSION" ] || v_untidy "${l#"$DESTDIR"}, a manual page's link of $t, which is gone: ./xymon-plugin clean --server $t" ;;
+					sec=${l%/*}
+					plain "$t" && [ ! -f "$EXTROOT/$t/VERSION" ] \
+						&& echo "$t$T$l$T$MANDIR/${sec##*/}/${l##*/}${T}a manual page's link of $t${T}proved" ;;
 			esac
 		done
 		for d in "$DIST/plugins"/*; do
-			[ -d "$d" ] || continue
-			[ -f "$EXTROOT/${d##*/}/VERSION" ] || v_untidy "${d#"$DESTDIR"}, the staged copy of ${d##*/}, which is gone: ./xymon-plugin clean --server ${d##*/}"
+			[ -d "$d" ] && [ ! -L "$d" ] || continue
+			plain "${d##*/}" && [ ! -f "$EXTROOT/${d##*/}/VERSION" ] \
+				&& echo "${d##*/}$T$d$T$XYMONHOME/ext/xymon-plugins-dist/plugins/${d##*/}${T}the staged copy of ${d##*/}${T}proved"
 		done
 		any=; for d in "$EXTROOT"/*; do [ -f "$d/VERSION" ] && any=1; done
-		[ -n "$any" ] || [ ! -d "$DIST" ] || v_untidy "${DIST#"$DESTDIR"}, the stage /plugins serves, with no plugin installed: ./xymon-plugin clean --server --all"
-		[ -n "$any" ] || [ ! -d "$EXTROOT/venv" ] || v_untidy "${EXTROOT#"$DESTDIR"}/venv, with no plugin installed: ./xymon-plugin clean --server --all"
+		if [ -z "$any" ]; then
+			[ ! -d "$DIST" ] || echo "*$T$DIST$T$XYMONHOME/ext/xymon-plugins-dist${T}the stage /plugins serves, with no plugin installed${T}proved"
+			[ ! -d "$EXTROOT/venv" ] || echo "*$T$EXTROOT/venv$T$XYMONHOME/ext/venv${T}the virtualenv, with no plugin installed${T}proved"
+		fi
 	else
 		for c in "$BIN"/*; do
 			[ -f "$c" ] && [ ! -L "$c" ] || continue
-			t=$(sed -n '2s|^exec "'"$(sedesc "$PREFIX")"'/libexec/xymon-plugins/\([^/]*\)/.*|\1|p' "$c" 2>/dev/null)
+			t=$(sed -n '2s|^exec "'"$(sedesc "$PREFIX")"'/libexec/xymon-plugins/\([^/]*\)/\([^/"]*\)" "\$@"$|\1/\2|p' "$c" 2>/dev/null)
 			[ -n "$t" ] && [ "$(sed -n 1p "$c")" = '#!/bin/sh' ] || continue
-			[ -f "$TOOLSROOT/$t/VERSION" ] || v_untidy "$PREFIX/bin/${c##*/}, the command of $t, which is gone: ./xymon-plugin clean --tools $t"
+			sc=${t#*/}; t=${t%%/*}
+			plain "$t" && [ ! -f "$TOOLSROOT/$t/VERSION" ] || continue
+			# The x keeps the trailing newlines a command substitution drops.
+			if [ "$(cat "$c"; echo x)" = "$(wrapper "$t" "$sc"; echo x)" ]; then pr=proved; else pr=; fi
+			echo "$t$T$c$T$PREFIX/bin/${c##*/}${T}the command of $t$T$pr"
 		done
 		for l in "$TOOLSMAN1"/*; do
 			[ -L "$l" ] || continue
 			case $(readlink "$l") in
 				"$PREFIX/libexec/xymon-plugins/"*/*) t=$(readlink "$l"); t=${t#"$PREFIX/libexec/xymon-plugins/"}; t=${t%%/*}
-					[ -f "$TOOLSROOT/$t/VERSION" ] || v_untidy "$PREFIX/share/man/man1/${l##*/}, a manual page's link of $t, which is gone: ./xymon-plugin clean --tools $t" ;;
+					plain "$t" && [ ! -f "$TOOLSROOT/$t/VERSION" ] \
+						&& echo "$t$T$l$T$PREFIX/share/man/man1/${l##*/}${T}a manual page's link of $t${T}proved" ;;
 			esac
 		done
 		any=; for d in "$TOOLSROOT"/*; do [ -f "$d/VERSION" ] && any=1; done
-		[ -n "$any" ] || [ ! -d "$TOOLSROOT/venv" ] || v_untidy "$PREFIX/libexec/xymon-plugins/venv, with no plugin installed: ./xymon-plugin clean --tools --all"
+		[ -n "$any" ] || [ ! -d "$TOOLSROOT/venv" ] \
+			|| echo "*$T$TOOLSROOT/venv$T$PREFIX/libexec/xymon-plugins/venv${T}the virtualenv, with no plugin installed${T}proved"
 	fi
+}
+
+# verify_left PART -- what is left, untidy, each naming clean.
+verify_left() {
+	left "$1" > "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
+	while IFS="$(printf '\t')" read -r t at shown what pr; do
+		if [ "$t" = '*' ]; then v_untidy "$shown, $what: ./xymon-plugin clean --$1 --all"
+		else v_untidy "$shown, $what, which is gone: ./xymon-plugin clean --$1 $t"; fi
+	done < "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
+	rm -f "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
+}
+
+# clean_part PART -- S31: what is left of the plugins named, or with --all
+# of every one and what they shared, listed, then, confirmed, taken away;
+# only what is proved a plugin's. Exits 0 when nothing is left after it, 4
+# when something is.
+clean_part() {
+	if [ "$1" = tools ]; then echo "Target: your tools, $PREFIX"; fi
+	left "$1" > "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
+	: > "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
+	kept=0
+	while IFS="$(printf '\t')" read -r t at shown what pr; do
+		if [ -z "$ALL" ]; then case " $(echo $NAMES) " in *" $t "*) ;; *) continue ;; esac; fi
+		if [ "$pr" = proved ]; then printf '%s\t%s\n' "$at" "$shown, $what" >> "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
+		else echo "Left: $shown, $what: not, byte for byte, what an install writes, so maybe not its own"; kept=$((kept + 1)); fi
+	done < "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
+	rm -f "${TMPDIR:-/tmp}/xymon-plugin-left.$$"
+	go=$(wc -l < "${TMPDIR:-/tmp}/xymon-plugin-go.$$" | tr -d ' ')
+	if [ "$go" -eq 0 ]; then
+		rm -f "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
+		[ "$kept" -eq 0 ] || exit 4
+		echo "Nothing is left that no plugin installed owns."
+		exit 0
+	fi
+	echo "To remove:"
+	cut -f2 "${TMPDIR:-/tmp}/xymon-plugin-go.$$" | sed -e 's/^/  /'
+	if [ -z "${YES:-}" ]; then
+		if [ -t 0 ] && [ -t 1 ]; then
+			offer "Proceed?" || { rm -f "${TMPDIR:-/tmp}/xymon-plugin-go.$$"; echo "Nothing removed."; exit 4; }
+		else
+			rm -f "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
+			echo "Nothing removed: off a terminal, --yes removes it."
+			exit 4
+		fi
+	fi
+	while IFS="$(printf '\t')" read -r at what; do
+		rm -rf "$at" || die "could not remove $at"
+		echo "Removed ${what%%, *}."
+	done < "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
+	rm -f "${TMPDIR:-/tmp}/xymon-plugin-go.$$"
+	[ "$kept" -eq 0 ] || exit 4
+	exit 0
 }
 
 # verify_part PART ROOT -- every plugin installed in the part, or those
@@ -1661,7 +1731,7 @@ verify_part() {
 		if [ -f "$2/$n/VERSION" ]; then verify_plugin "$1" "$2" "$n"
 		else echo "$n: not installed"; fi
 	done
-	[ -n "$NAMES" ] || verify_left "$1" "$2"
+	[ -n "$NAMES" ] || verify_left "$1"
 }
 
 # installed ROOT PLUGIN -- its VERSION there, read as X.Y.Z, or nothing.
@@ -1807,7 +1877,7 @@ fi
 for n in $NAMES; do plain "$n" || die "not a plugin name: '$n'"; done
 [ -z "$NAMES" ] || [ -z "$ALL" ] || die "--all, or plugins named: not both"
 case $VERB in
-	install|remove)
+	install|remove|clean)
 		[ -n "$NAMES" ] || [ -n "$ALL" ] \
 			|| die "name the plugins to $VERB, or --all: the plugins are $(echo $(all_plugins))" ;;
 esac
@@ -1825,7 +1895,8 @@ if [ "$PART" = server ]; then PARTROOT=$EXTROOT; else PARTROOT=$TOOLSROOT; fi
 # The plugins named, each checked; or, for install and remove, --all, which
 # they need when none is named; for an uninstall, the deepest first, so that
 # none is removed while one installed needs it.
-for n in $NAMES; do known "$n"; done
+# clean names plugins gone, which may be in no checkout: a plain name is enough.
+[ "$VERB" = clean ] || for n in $NAMES; do known "$n"; done
 if [ -n "$NAMES" ]; then LIST=$NAMES; else LIST=$(all_plugins); fi
 deepest_first() {
 	for n in $LIST; do echo "$(depth "$n" "$2" "$1") $n"; done | sort -rn | cut -d' ' -f2
@@ -1932,6 +2003,12 @@ case $VERB in
 		[ "$BROKEN" -eq 0 ] || exit 3
 		[ "$UNTIDY" -eq 0 ] || exit 4
 		exit 0 ;;
+	clean)
+		# A name given is a plugin gone: one installed is removed, not cleaned.
+		for n in $NAMES; do
+			[ ! -f "$PARTROOT/$n/VERSION" ] || die "$n is installed: ./xymon-plugin remove --$PART $n"
+		done
+		clean_part "$PART" ;;
 	remove)
 		if [ "$PART" = server ]; then
 			# The stage served at /plugins, pruned first, as an install
