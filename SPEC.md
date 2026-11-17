@@ -156,12 +156,15 @@ left (S30).
 
 **S8. Removing takes away the plugin and its links.**
 The removal takes away the plugin's directory, its task link and its manual
-pages, and is refused while another installed plugin needs it (S3).
+pages, and is refused while another installed plugin needs it (S3). The
+removal of the last plugin of a part takes away what the plugins shared
+there: the virtualenv, and on the server the stage `/plugins` serves.
 
 **S9. Removing the directory by hand removes the task.**
 Once `ext/NAME` is deleted, xymonlaunch no longer has the plugin's task, and
-says nothing of the link left pointing nowhere; the next removal takes that
-link away.
+says nothing of the link left pointing nowhere; the next removal of that
+plugin, or `clean` (S31), takes that link away, and `verify` says it is
+left (S30).
 
 **S10. The administrator's data outlives the plugin.**
 The removal keeps the API's tokens file, and says what it kept.
@@ -302,13 +305,16 @@ Run with no verb, its input and its output on a terminal, it says what it
 found: the Xymon installation, by S25 -- declined, the dialogue goes on
 with the person's tools alone -- each plugin installed there with
 its version and, for one with a task, whether it is on, and the person's
-tools, each in its section, the server's client too. It then offers only
+tools, each in its section, the server's client too; beside each plugin
+what `verify` finds broken or untidy in it (S30), and in each part what
+a plugin gone left there. It then offers only
 what applies, one line each, the plugins others need first: install a
 plugin on the server, with what that part does, by the `server-short:`
 line of its `PLUGIN`, and the plugins it needs named; turn one
-on or off; update the server's plugins; remove one that no installed
-plugin needs; install a plugin's tools, said by its `tools-short:` line;
-update them; or nothing, the default, Enter. It prints the command those
+on or off; update the server's plugins, saying which it repairs; remove
+one that no installed plugin needs; take away what a plugin gone left
+(S31); install a plugin's tools, said by its `tools-short:` line; update
+them, the same; take away what one left there; or nothing, the default, Enter. It prints the command those
 answers spell, the installation in it by `--xymon-home`, asks
 `Proceed? [Y/n]`, runs exactly that command and nothing else, and stops;
 after an install of a plugin with a task it offers enabling as a second
@@ -639,13 +645,6 @@ brings its test.
   `SUDO_USER`'s under `sudo`, else the account's that runs it; when it is gone, there is no default, and
   the command says so. `status --tools` run as root reads the tools of
   that person too.
-- **Now those four are built, the rules in force follow.** S24, its
-  usage and `--yes` came with S30 and S31. Still to follow: S27's dialogue
-  offers to check what is installed and, when something is left that no
-  plugin owns, to take it away. S8 ends: the removal of the last plugin of
-  a part takes away what the plugins shared there, the virtualenv, and on
-  the server the stage `/plugins` serves -- today only `--all` does. S9's
-  link left behind is taken away by the next removal, or `clean`.
 - **Open, to decide.**
   - where the search index lies on a server: `$XDG_CACHE_HOME/xymonapi-rag/`
     today, which the item above allows as `data:`, or under `$XYMONVAR`,
