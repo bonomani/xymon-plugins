@@ -65,7 +65,7 @@ assert_contains "passwords: $home/etc/xymonpasswd," "$(cat "$work/run.log")" "[S
 assert_not_contains "$stage" "$(grep 'xymonpasswd' "$work/run.log")" "[S21] not the stage's"
 run enable server
 check "etc an absolute link"
-assert_equal "$home/ext/xymonapi/tasks.cfg" "$(readlink "$stage$host/etc/tasks.d/xymonapi")" \
+assert_equal "$home/ext/xymonapi/tasks.cfg" "$(readlink "$stage$host/etc/tasks.d/xymonapi.cfg")" \
 	"[S21] the task link lies where etc's link points inside DESTDIR, naming the task as installed"
 cycle "etc an absolute link"
 
@@ -73,7 +73,7 @@ cycle "etc an absolute link"
 fresh; ln -s "../../../../../../../../../../../..$host/etc" "$stage$home/etc"
 cycle "etc a relative link climbing out"
 run install server; run enable server
-[ -L "$stage$host/etc/tasks.d/xymonapi" ] || fail "[S21] a relative link climbing out is not followed inside DESTDIR"
+[ -L "$stage$host/etc/tasks.d/xymonapi.cfg" ] || fail "[S21] a relative link climbing out is not followed inside DESTDIR"
 
 # A chain: etc to /stage-etc, which in the stage links to the host's.
 fresh; mkdir -p "$stage/stage-etc"; ln -s /stage-etc "$stage$home/etc"
@@ -138,7 +138,7 @@ check "update --server --venv under DESTDIR"
 
 # A directory at tasks.d/NAME is no task link: enable refuses it.
 fresh; run install server
-mkdir -p "$stage$home/etc/tasks.d/xymonapi"
+mkdir -p "$stage$home/etc/tasks.d/xymonapi.cfg"
 rc=0; "$ROOT/xymon-plugin" enable --server xymonapi XYMONHOME="$home" DESTDIR="$stage" </dev/null >"$work/en.log" 2>&1 || rc=$?
 [ "$rc" -ne 0 ] || fail "enable-server over a directory at tasks.d/xymonapi succeeded"
 assert_contains "is a directory" "$(cat "$work/en.log")" "and says why"

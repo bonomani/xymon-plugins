@@ -96,7 +96,7 @@ then needs a module it lacks says which, and what installs it.
 
 **Enabling.** A server task is installed off, so that installing changes
 nothing until `XYMONHOME=... ./xymon-plugin enable --server NAME`, which links
-`etc/tasks.d/NAME` to the task file, `ext/NAME/tasks.cfg`; xymonlaunch
+`etc/tasks.d/NAME.cfg` to the task file, `ext/NAME/tasks.cfg`; xymonlaunch
 notices and starts it within half a minute. `disable --server NAME` removes the
 link, and xymonlaunch stops the task. An update keeps the task file as
 you left it, and whether it is on; where an editor replaced the link by a

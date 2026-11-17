@@ -56,7 +56,7 @@ assert_contains "I will run:  $ROOT/xymon-plugin install --server --xymon-home $
 assert_file_exists "$s/ext/xymonapi/VERSION"
 assert_contains "Turn it on now?" "$out" "[S27] after the install, enabling is offered"
 assert_contains "xymonapi stays off" "$out" "[S27] and Enter declines it"
-[ -L "$s/etc/tasks.d/xymonapi" ] && fail "[S27] Enter at the enabling offer turned it on"
+[ -L "$s/etc/tasks.d/xymonapi.cfg" ] && fail "[S27] Enter at the enabling offer turned it on"
 
 # Now installed: turning it on is offered, installing it no more.
 dialogue 'Use it? [Y/n] ' '' 'What do you want to do? [0] ' ''

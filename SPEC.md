@@ -126,13 +126,18 @@ A plugin's task is installed off, with no link (S13); the install says how
 to turn it on.
 
 **S6. A plugin's task lives in its directory.**
-It is `ext/NAME/tasks.cfg`, and `etc/tasks.d/NAME`, when there, is a link to
-it; under `DESTDIR` the link names the installed file. A regular file at
-`tasks.d/NAME` -- a copy an older install made, or the file an editor left
-in place of the link -- is the one xymonlaunch reads: it is moved into the
-plugin's directory as it was, and linked unless it was `DISABLED`. A link
-at `tasks.d/NAME` to something else is left as it is, and the install,
-before it installs anything, `enable` and `disable` refused.
+It is `ext/NAME/tasks.cfg`, and `etc/tasks.d/NAME.cfg`, when there, is a
+link to it; under `DESTDIR` the link names the installed file. The link
+ends in `.cfg` because a packaged Xymon may read only the files of
+`tasks.d/` that do, where Xymon's own `tasks.cfg` reads them all. A link
+`tasks.d/NAME`, as an install before this name made it, is renamed by the
+next install or update, and by `enable`, the task staying on. A regular
+file at `tasks.d/NAME.cfg` or `tasks.d/NAME` -- a copy an older install
+made, or the file an editor left in place of the link -- is the one
+xymonlaunch reads: it is moved into the plugin's directory as it was, and
+linked unless it was `DISABLED`. A link at either name to something else
+is left as it is, and the install, before it installs anything, `enable`
+and `disable` refused.
 
 **S7. An update replaces the code and keeps the choices.**
 `update` replaces the plugin's directory as a whole, so a file a
@@ -173,11 +178,18 @@ under `DESTDIR` there is none to reload. A snippet is written as a new file,
 never through a link, symbolic or hard; one kept as edited that does not
 name Xymon's runtime directory is said to.
 
-**S13. A plugin is on when its link is there.**
-A plugin's task is on when `etc/tasks.d/NAME` links to its task file, and
-off when the link is absent: xymonlaunch has the task exactly then.
-`enable` makes the link, `disable` removes it, and each says
-so when there is nothing to do. The task file carries no `DISABLED`: one an
+**S13. A plugin is on when its link is there, and read.**
+A plugin's task is on when `etc/tasks.d/NAME.cfg` links to its task file
+and the server's `tasks.cfg` reads `tasks.d/`, and off when the link is
+absent: xymonlaunch has the task exactly then. `enable` makes the link,
+`disable` removes it, and each says so when there is nothing to do.
+Before it makes the link, `enable` looks for the line by which the
+server's `tasks.cfg` reads `tasks.d/`, a `directory` line naming it, as
+Xymon's own has it. Where there is none, it refuses, makes no link, and
+says the line to add; `--force` makes the link all the same, where the
+server reads `tasks.d/` another way, and says the task may not start.
+With no `tasks.cfg`, and under `DESTDIR`, nothing is looked at. The task
+file carries no `DISABLED`: one an
 older install wrote with that line is off, and the line is taken out, and
 the install says how to turn it on.
 
@@ -344,7 +356,7 @@ the modules it needs, naming what makes them, and `status` says so.
 
 **S28. A plugin writes only where this rule says.**
 An install writes a plugin's files under its directory, and outside it
-only: its task link, `etc/tasks.d/NAME` (S13); the link to its manual page
+only: its task link, `etc/tasks.d/NAME.cfg` (S13); the link to its manual page
 in `MANDIR` (S20); its command in `$PREFIX/bin` (S4); its copy in the stage
 `/plugins` serves (S19); the virtualenv beside the plugins (S26); and its
 SELinux module (S23). The command itself writes, besides, only the
@@ -391,7 +403,7 @@ brings its test.
   | server | `server-*` | a Xymon server's tree, `ext/NAME/` | the user that may write it, usually root |
   | client | `client-*` | a Xymon client's tree, `ext/NAME/`, its task started from a standalone client's `clientlaunch.d`, or, for a server's own client, from that server's `tasks.d` | the same |
 
-  On a server, a client part's link in `tasks.d` is named `NAME-client`,
+  On a server, a client part's link in `tasks.d` is named `NAME-client.cfg`,
   and its task is given the client's `xymonclient.cfg` as its `ENVFILE`.
   A Xymon server has a client tree of its own, the `XYMONCLIENTHOME` its
   `xymonserver.cfg` names: it belongs to that server, and a plugin's client
@@ -571,7 +583,7 @@ brings its test.
   administrator's or the person's. A name given is that of a plugin that
   is gone: a plain file name (S20), refused when a plugin of that name is
   installed in the part, naming `remove`. What is left of it is what bears
-  its name: `tasks.d/NAME`, its staged copy, and the links and commands
+  its name: `tasks.d/NAME.cfg`, its staged copy, and the links and commands
   that point into its directory. `--all` covers every such name, and the
   stage and the virtualenv when no plugin is installed beside them. A
   thing is removed only when it is provably a plugin's, as S20 says of a

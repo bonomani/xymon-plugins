@@ -92,9 +92,9 @@ server() { v=$1 a=$2; shift 2; [ "$a" = uninstall ] && a=remove; "$v/xymon-plugi
 server "$v1" install xymonapi-rag || fail "install-server xymonapi-rag failed: $(tail -n 5 "$work/server.log")"
 assert_file_exists "$home/ext/xymonapi-rag/PLUGIN"
 server "$v1" enable xymonapi-rag || fail "enable-server xymonapi-rag failed: $(tail -n 5 "$work/server.log")"
-[ -L "$home/etc/tasks.d/xymonapi-rag" ] || fail "enable-server made no link"
+[ -L "$home/etc/tasks.d/xymonapi-rag.cfg" ] || fail "enable-server made no link"
 server "$v2" update xymonapi-rag || fail "install-server xymonapi-rag from v2 failed: $(tail -n 5 "$work/server.log")"
-[ -e "$home/etc/tasks.d/xymonapi-rag" ] || [ -L "$home/etc/tasks.d/xymonapi-rag" ] \
+[ -e "$home/etc/tasks.d/xymonapi-rag.cfg" ] || [ -L "$home/etc/tasks.d/xymonapi-rag.cfg" ] \
 	&& fail "[S20] an update to a version with no task left the task link"
 [ -e "$home/ext/.xymonapi-rag.tasks.cfg" ] && fail "[S20] an update to a version with no task left its task file aside"
 
@@ -140,11 +140,11 @@ rm -f "$prefix/bin/xymonapi-mcp"
 # A task file in the link's place -- an older install's copy, or the one an
 # editor left -- goes with the plugin.
 server "$v1" update xymonapi-rag || fail "install-server xymonapi-rag failed: $(tail -n 5 "$work/server.log")"
-rm -f "$home/etc/tasks.d/xymonapi-rag"
+rm -f "$home/etc/tasks.d/xymonapi-rag.cfg"
 mkdir -p "$home/etc/tasks.d"
-cp "$home/ext/xymonapi-rag/tasks.cfg" "$home/etc/tasks.d/xymonapi-rag"
+cp "$home/ext/xymonapi-rag/tasks.cfg" "$home/etc/tasks.d/xymonapi-rag.cfg"
 server "$v1" uninstall xymonapi-rag || fail "uninstall-server xymonapi-rag failed: $(tail -n 5 "$work/server.log")"
-[ -e "$home/etc/tasks.d/xymonapi-rag" ] && fail "[S20] a task file in the link's place stayed after uninstall"
+[ -e "$home/etc/tasks.d/xymonapi-rag.cfg" ] && fail "[S20] a task file in the link's place stayed after uninstall"
 
 # Several plugins named go in the order the installed records say: v2's
 # xymonapi-agent no longer needs xymonapi-mcp, the installed one does.
