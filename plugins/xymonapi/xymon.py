@@ -32,7 +32,10 @@ XYMONSERVERCGIURL = os.environ.get("XYMONSERVERCGIURL", "").rstrip("/")
 XYMONWEBHOST = os.environ.get("XYMONWEBHOST", "").rstrip("/")
 XYMONHISTDIR = os.environ.get("XYMONHISTDIR", "")
 XYMONHISTLOGS = os.environ.get("XYMONHISTLOGS", "")
-BOARD_FIELDS = ["hostname", "testname", "color", "lastchange"]
+# acktime, ackmsg and acklist for a state's acknowledgement; xymondboard
+# encodes a "|" inside ackmsg and acklist, so a line still splits on it.
+BOARD_FIELDS = ["hostname", "testname", "color", "lastchange",
+                "acktime", "ackmsg", "acklist"]
 
 # A name from the request becomes part of a file path, so it may not hold
 # "/" or "..": a path outside XYMONRRDS. A host name never holds ":" either;
@@ -108,6 +111,7 @@ def states(entity: str | None = None, test: str | None = None,
            verdict: str | None = None) -> list[dict]:
     """One State per host and test on the board."""
     out: list[dict] = []
+    now = int(time.time())
     for d in _rows():
         host, tst = d.get("hostname", "?"), d.get("testname", "?")
         st = {"id": f"{host}:{tst}", "entity": host, "test": tst,
@@ -115,6 +119,9 @@ def states(entity: str | None = None, test: str | None = None,
         t = _iso(d.get("lastchange", ""))
         if t:
             st["time"] = t
+        ack = _acknowledgement(d, now)
+        if ack:
+            st["acknowledged"] = ack
         out.append(st)
     if entity:
         out = [s for s in out if s["entity"] == entity]
@@ -204,6 +211,31 @@ def _nldecode(text: str) -> str:
     return _NLESC.sub(lambda m: _NL.get(m.group(1), m.group(0)), text)
 
 
+def _acknowledgement(d: dict, now: int) -> dict | None:
+    """The acknowledgement running on a board line, as /states and /status
+    both give it -- {"until", "text"} -- or None.
+
+    xymond clears an acknowledgement that ran out only when the next status
+    arrives; until then the board still carries it, and its XML output too
+    reports it only while acktime is ahead of now. Two ways to acknowledge:
+    xymondack sets acktime and ackmsg; the critical-systems view's ackinfo
+    adds to acklist, one "start:until:level:by:text" line each, acktime left
+    at 0. Xymon's pages show either (xymongen/loaddata.c); the one running
+    longest is given."""
+    acks = []
+    acktime = d.get("acktime", "")
+    if _DIGITS.fullmatch(acktime) and int(acktime) > now:
+        acks.append((int(acktime), _nldecode(d.get("ackmsg", ""))))
+    for line in _nldecode(d.get("acklist", "")).splitlines():
+        a = line.split(":", 4)
+        if len(a) == 5 and _DIGITS.fullmatch(a[1]) and int(a[1]) > now:
+            acks.append((int(a[1]), a[4]))
+    if not acks:
+        return None
+    until, words = max(acks)
+    return {"until": _iso(str(until)), "text": hide(words)}
+
+
 def status(entity: str | None, test: str | None) -> dict:
     """The current status of HOST's TEST: its verdict, when it last changed
     and was last updated, whether it is acknowledged or disabled and with
@@ -232,24 +264,9 @@ def status(entity: str | None, test: str | None) -> dict:
     out = {"entity": host, "test": tst, "verdict": _verdict(d["color"]),
            "time": _iso(d["lastchange"]), "updated": _iso(d["logtime"]),
            "text": text}
-    # xymond clears an acknowledgement that ran out only when the next status
-    # arrives; until then the board still carries it, and its XML output
-    # too reports it only while acktime is ahead of now.
-    # Two ways to acknowledge: xymondack sets acktime and ackmsg; the
-    # critical-systems view's ackinfo adds to acklist, one
-    # "start:until:level:by:text" line each, acktime left at 0. Xymon's
-    # pages show either (xymongen/loaddata.c); the one running longest is
-    # given.
-    acks = []
-    if _DIGITS.fullmatch(d["acktime"]) and int(d["acktime"]) > now:
-        acks.append((int(d["acktime"]), _nldecode(d["ackmsg"])))
-    for line in _nldecode(d["acklist"]).splitlines():
-        a = line.split(":", 4)
-        if len(a) == 5 and _DIGITS.fullmatch(a[1]) and int(a[1]) > now:
-            acks.append((int(a[1]), a[4]))
-    if acks:
-        until, words = max(acks)
-        out["acknowledged"] = {"until": _iso(str(until)), "text": hide(words)}
+    ack = _acknowledgement(d, now)
+    if ack:
+        out["acknowledged"] = ack
     # Disabled by hand, with an end time or -1 for "until it is ok again"; or
     # blue from a DOWNTIME tag in hosts.cfg, with no end time and the words
     # "Planned downtime".

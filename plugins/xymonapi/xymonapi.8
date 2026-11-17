@@ -66,7 +66,8 @@ is none.
 .IP "\fB/states\fR [\fBentity\fR=HOST] [\fBtest\fR=TEST] [\fBverdict\fR=VERDICT]"
 The status board, one state per host and test. The colour is given as a
 verdict: green is ok, yellow warning, red critical, blue disabled, clear
-nodata and purple unknown.
+nodata and purple unknown. A state that is acknowledged carries
+\fBacknowledged\fR, as \fB/status\fR gives it: its words and until when.
 .IP "\fB/alarms\fR"
 Every state whose verdict is not ok.
 .IP "\fB/entities\fR"

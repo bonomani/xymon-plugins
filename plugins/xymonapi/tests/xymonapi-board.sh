@@ -5,9 +5,9 @@
 #
 # The API reports the board a running xymond holds: a status sent to xymond
 # comes back from /states with its colour turned into a verdict, a red one is
-# listed in /alarms and a green one is not, and /health names the xymond it
-# asked. An operation the API does not implement answers 404 rather than
-# sample data.
+# listed in /alarms and a green one is not, a state says when it is
+# acknowledged, and /health names the xymond it asked. An operation the API
+# does not implement answers 404 rather than sample data.
 #
 # Skips where the API cannot run (tests/lib/xymonapi.sh). Needs a built Xymon
 # server tree in XYMON_SRC, and curl.
@@ -111,6 +111,23 @@ assert_contains '"verdict":"critical"' "$red" "a red status is a critical verdic
 
 green=$(api_get '/states?entity=green.example.com&test=conn')
 assert_contains '"verdict":"ok"' "$green" "a green status is an ok verdict"
+
+# /states says when a state is acknowledged, in the same shape as /status:
+# a page drawing the board picks its icon by it. Both ways, xymondack's
+# acktime and the critical-systems view's acklist, running and run out.
+acked=$(api_get '/states?entity=disk.example.com&test=disk')
+assert_contains '"acknowledged":{"until":"' "$acked" "/states gives an acknowledgement made with xymondack, with its end time"
+assert_contains 'cleaning old kernels' "$acked" "and its words"
+crit=$(api_get '/states?entity=crit.example.com&test=conn')
+assert_contains '"acknowledged":{"until":"' "$crit" "/states gives one from the critical-systems view, in acklist alone"
+assert_contains 'on it from the critical view' "$crit" "with its words"
+assert_not_contains '"acknowledged"' "$red" "an acknowledgement with xymondack that ran out is not given, though xymond still carries it"
+assert_not_contains '"acknowledged"' "$(api_get '/states?entity=critold.example.com&test=conn')" "nor one in acklist that ran out"
+assert_not_contains '"acknowledged"' "$green" "a state nobody acknowledged has none"
+assert_not_contains '"acknowledged"' "$(api_get '/states?entity=dis.example.com&test=conn')" "nor has a disabled one, whose verdict says it"
+ack_st=$(api_get '/status?entity=disk.example.com&test=disk')
+ack_st=${ack_st#*\"acknowledged\":}; ack_st=${ack_st%%\}*}
+assert_contains "$ack_st" "$acked" "/states and /status give the same acknowledgement"
 
 alarms=$(api_get /alarms)
 assert_contains '"id":"red.example.com:conn"' "$alarms" "a red status is an alarm"
