@@ -158,6 +158,7 @@ assert_equal "8" "$(wc -l < "$work/edges.out" | tr -d ' ')" "eight answers to ni
 mcp "http://127.0.0.1:1" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health","arguments":{}}}' || true
 answer=$(grep '"id":3' "$work/mcp.out")
 assert_contains 'cannot reach xymonapi at http://127.0.0.1:1' "$answer" "an unreachable API names the URL"
+assert_contains 'started before the address changed keeps the old one: restart it' "$answer" "and says a program started earlier keeps the old address"
 assert_contains 'is the API running, and XYMONAPI_URL right' "$answer" "and what to check"
 
 # The URL must be http or https: urllib would read a file:// one.

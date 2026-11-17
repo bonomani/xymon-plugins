@@ -101,4 +101,7 @@ claude mcp remove --scope user "$name" >/dev/null 2>&1 || true
 register claude -e claude mcp add --scope user "$name"
 codex mcp remove "$name" >/dev/null 2>&1 || true
 register codex --env codex mcp add "$name"
+# An AI tool reads its MCP servers when it starts: one running keeps the
+# address it was given then.
+echo "An AI tool already running keeps the address it started with: restart it to use $XYMONAPI_URL."
 exit ${failed:-0}
