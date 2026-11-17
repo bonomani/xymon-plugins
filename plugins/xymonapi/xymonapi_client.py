@@ -243,13 +243,10 @@ def api(path: str, **params: str | None) -> dict:
                            "CA that signed it, in XYMONAPI_CA") from e
         if urlsplit(URL).scheme == "unix":
             raise APIError(f"cannot reach xymonapi at {URL}: {e.reason} -- is the API running, with "
-                           "that socket (XYMONAPI_SOCKET), and may this user connect to it? A "
-                           "program started before the address changed keeps the old one: "
-                           "restart it") from e
+                           "that socket (XYMONAPI_SOCKET), and may this user connect to it?") from e
         raise APIError(f"cannot reach xymonapi at {URL}: {e.reason} -- is the API running, and "
                        "XYMONAPI_URL right? From another machine it is reached over HTTPS, "
-                       "as xymonapi(8) says. A program started before the address "
-                       "changed keeps the old one: restart it") from e
+                       "as xymonapi(8) says") from e
     except ValueError as e:              # a URL urllib cannot use, or an answer that is not JSON
         raise APIError(f"xymonapi at {URL}: {e}") from e
     except OSError as e:                 # the connection broke, or timed out, while reading

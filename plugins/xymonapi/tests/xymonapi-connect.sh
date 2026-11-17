@@ -225,4 +225,12 @@ assert_not_contains "Traceback" "$(cat "$work/err")" "with no traceback"
 assert_equal "" "$(ls -A "$cfg/xymonapi" | grep '^\.')" "and nothing written aside is left"
 stop_process "$API_PID"; API_PID=""
 
+# A command just typed reads the address anew: an API it cannot reach asks
+# no restart, only what to check.
+rc=0
+XDG_CONFIG_HOME="$work/cfg-none" HOME="$work" "$connect" http://127.0.0.1:1 </dev/null >"$work/out" 2>"$work/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "connect to an API not there succeeded"
+assert_contains "is the API running, and XYMONAPI_URL right" "$(cat "$work/err")" "an API not reached says what to check"
+assert_not_contains "restart" "$(cat "$work/err")" "and asks no restart of a command just typed"
+
 pass "xymonapi-connect gets this machine a token with a password typed once, keeps it while it works, says a wrong password, a version difference and an untrusted certificate, and stops cleanly on Ctrl-C"

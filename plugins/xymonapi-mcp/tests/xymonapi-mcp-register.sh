@@ -83,7 +83,7 @@ out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="$py
 assert_contains "XYMONAPI_PYTHON=$py" "$(cat "$work/claude.args")" "XYMONAPI_PYTHON set: Claude Code is given it"
 assert_contains "XYMONAPI_PYTHON=$py" "$(cat "$work/codex.args")" "and Codex"
 assert_not_contains "password for" "$out" "a working token: nothing asked"
-assert_contains "already running keeps the address it started with: restart it to use $url" "$out" "and an AI tool running is said to need a restart"
+assert_contains "already running sees this only once restarted: restart it to use $url" "$out" "and an AI tool running is said to need a restart"
 
 # Codex not installed: the command to run later is printed.
 rm "$work/stub/codex"; : > "$work/claude.args"
@@ -106,6 +106,14 @@ assert_equal "1" "$rc" "register fails when a client's registration fails"
 assert_contains "could not register xymon with codex, which exited 3:" "$out" "and says which client, by name"
 assert_contains "codex mcp add xymon --env XYMONAPI_URL=$url" "$out" "with the command that failed"
 assert_contains "XYMONAPI_URL=$url" "$(cat "$work/claude.args")" "and the other client is registered all the same"
+# Both failing: nothing registered, so no restart is asked.
+cp "$work/stub/codex" "$work/claude.real"; mv "$work/stub/claude" "$work/claude.ok"; cp "$work/stub/codex" "$work/stub/claude"
+rc=0
+out=$(XDG_CONFIG_HOME="$work/cfg" HOME="$work" PATH="$path" XYMONAPI_PYTHON="" \
+	"$mcp_bin" register "$url" < /dev/null 2>&1) || rc=$?
+assert_equal "1" "$rc" "register fails when every registration fails"
+assert_not_contains "restart it" "$out" "and asks no restart, nothing being registered"
+mv "$work/claude.ok" "$work/stub/claude"; rm -f "$work/claude.real"
 rm "$work/stub/codex"
 
 # A refused password: nothing registered.

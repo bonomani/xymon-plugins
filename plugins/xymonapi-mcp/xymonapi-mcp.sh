@@ -87,6 +87,7 @@ EOF
 		# which tool failed nor that the other had succeeded.
 		if "$@" -- "$cmd"; then
 			echo "registered $name with $client"
+			registered=1
 		else
 			echo "could not register $name with $client, which exited $?:" >&2
 			printf ' %s' "$@" -- "$cmd" >&2; echo >&2
@@ -101,7 +102,7 @@ claude mcp remove --scope user "$name" >/dev/null 2>&1 || true
 register claude -e claude mcp add --scope user "$name"
 codex mcp remove "$name" >/dev/null 2>&1 || true
 register codex --env codex mcp add "$name"
-# An AI tool reads its MCP servers when it starts: one running keeps the
-# address it was given then.
-echo "An AI tool already running keeps the address it started with: restart it to use $XYMONAPI_URL."
+# An AI tool reads its MCP servers when it starts: one running sees a
+# registration only once restarted.
+[ -z "${registered:-}" ] || echo "An AI tool already running sees this only once restarted: restart it to use $XYMONAPI_URL."
 exit ${failed:-0}
