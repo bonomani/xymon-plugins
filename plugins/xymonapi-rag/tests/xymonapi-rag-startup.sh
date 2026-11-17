@@ -56,7 +56,12 @@ export XYMONAPI_URL="http://127.0.0.1:$API_PORT"
 "$ROOT/plugins/xymonapi-rag/xymonapi-rag.sh" index > "$work/index.out" 2> "$work/rag.err" &
 RAG_PID=$!
 sleep 12
-kill -0 "$RAG_PID" 2>/dev/null || fail "index gave up within 12 seconds of an API that was not up yet: $(tail -n 3 "$work/rag.err")"
+if ! kill -0 "$RAG_PID" 2>/dev/null; then
+	# 77, a module index needs and this machine lacks: said at once, as below.
+	rc=0; wait "$RAG_PID" || rc=$?; RAG_PID=""
+	[ "$rc" -eq 77 ] && skip "$(cat "$work/rag.err")"
+	fail "index gave up within 12 seconds of an API that was not up yet: $(tail -n 3 "$work/rag.err")"
+fi
 env $HIST XYMONAPI_LISTEN="127.0.0.1:$API_PORT" "$ROOT/plugins/xymonapi/xymonapi.sh" > "$work/api.log" 2>&1 &
 API_PID=$!
 deadline=$(( $(date +%s) + 60 ))

@@ -140,16 +140,22 @@ def _search(request):
     if not k.isdigit() or not 1 <= int(k) <= 20:
         return JSONResponse({"error": "bad_request", "detail": "k must be 1 to 20"},
                             status_code=400)
-    try:
-        rag = _rag()
-    except ImportError as exc:
+    # xymonrag imports numpy and fastembed only when it searches: a module
+    # missing is said from either place, not as a crash.
+    def missing(exc: ImportError) -> JSONResponse:
         return JSONResponse({"error": "not_found", "detail": "search is not set up on this "
                              "server: the Python modules in xymonapi-rag/requirements.txt are missing "
                              f"({exc.name})"}, status_code=404)
     try:
+        rag = _rag()
+    except ImportError as exc:
+        return missing(exc)
+    try:
         # remote=False: this is the server; with no index it says so rather
         # than asking itself.
         items = rag.search(question[:2000], kind, int(k), remote=False)
+    except ImportError as exc:
+        return missing(exc)
     except rag.IndexProblem as exc:
         return JSONResponse({"error": "not_found", "detail": f"search is not set up on this "
                              f"server: {exc}; enable the xymonapi-rag task"}, status_code=404)
