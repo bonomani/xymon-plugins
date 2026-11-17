@@ -10,7 +10,8 @@
 # off a terminal, a file is kept and v2's written beside it as NAME.new;
 # on one, both changes are shown and y merges them, the file before kept
 # as NAME.old; N keeps it, as off one. Edited on the same line, it is a
-# conflict: kept, NAME.new beside it. Unedited, it takes v2's. A version
+# conflict: kept, NAME.new beside it. Holding v2's change already, it is
+# left, nothing said. Unedited, it takes v2's. A version
 # that changes nothing leaves an edited file alone, with nothing beside
 # it. verify says a .new or .old left, untidy.
 
@@ -86,6 +87,17 @@ up
 assert_contains "xymonapi-apache.conf is kept as yours; this version's changes the same lines" "$out" "[S7] a conflict keeps yours, said"
 assert_contains "# my first line" "$(cat "$conf")" "[S7] unchanged"
 assert_contains "# v2's first line" "$(cat "$conf.new")" "[S7] this version's beside it"
+
+# Yours has v2's change already, and one of your own: nothing asked,
+# nothing beside it; v2's is then the version it starts from.
+fresh
+{ echo "# v2's first line"; cat "$conf"; echo "# mine"; } > "$work/c" && cat "$work/c" > "$conf"
+up
+assert_not_contains "xymonapi-apache.conf is kept" "$out" "[S7] yours with this version's change already: nothing said"
+[ ! -e "$conf.new" ] || fail "[S7] a NAME.new beside a file that has this version's change already"
+cmp -s "$work/c" "$conf" || fail "[S7] a file with this version's change already was changed"
+cmp -s "$ext/.shipped/xymonapi-apache.conf" "$work/c" && fail "[S7] .shipped/ took yours, not this version's"
+grep -q "# v2's first line" "$ext/.shipped/xymonapi-apache.conf" || fail "[S7] this version's is not the one it now starts from"
 
 # Unedited: v2's taken, the task file too.
 fresh

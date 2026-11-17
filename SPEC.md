@@ -146,7 +146,7 @@ administrator left it, whether it is on, and the web server snippets as the
 administrator edited them. Each of those is met with this version's and
 with the version it started from, kept in `.shipped/` beside them:
 unedited, it takes this version's; edited, and this version's unchanged,
-it stays. Both changed, without a conflict, on a terminal both changes are
+or holding this version's change already, it stays, nothing said. Both changed, without a conflict, on a terminal both changes are
 shown and `Apply both? [y/N]` asked: y merges them, the file before kept
 as `NAME.old`. On N, off a terminal -- nothing is merged unattended --,
 under `DESTDIR`, on a conflict, or without `diff3` or a version to start
