@@ -308,13 +308,13 @@ Off a terminal, S17.
 
 **S24. One command: a verb, and the part it acts on.**
 `xymon-plugin` takes a verb -- `install`, `update`, `enable`, `disable`,
-`remove`, `status`, `verify` -- and the part it acts on, `--server` or
+`remove`, `status`, `verify`, `clean` -- and the part it acts on, `--server` or
 `--tools`, the latter alone. An action of the `install.sh` it replaces, as
 `install-server`, is refused, naming the new form; so is `--client`, until
 a plugin has a client part. Without a part named, on a terminal, the
 server part is said and acted on; off one, a verb that changes something
-is refused; `status` and `verify` cover both. `install` and `remove` need a plugin
-named, or `--all`. `install` refuses a plugin installed already, and
+is refused; `status` and `verify` cover both. `install`, `remove` and `clean` need a
+plugin named, or `--all`. `install` refuses a plugin installed already, and
 `update` one that is not; `--all`, and a plugin one needs, pass over those
 installed, saying so. `enable` and `disable` refuse the tools, and a plugin
 named with no task. Run as root, a verb that changes the tools is refused
@@ -436,6 +436,29 @@ something is untidy and nothing broken. It needs no terminal, and, as
 `MANIFEST` lying where the Xymon user can write, `verify` finds what was
 changed by mistake or left behind, not what someone able to write there
 and to rewrite `MANIFEST` too has hidden.
+
+**S31. `clean` takes away what no installed plugin owns.**
+`clean --server` and `clean --tools` need a name, or `--all`, as `remove`
+does (S24). They remove what `verify` lists as left (S30), and nothing
+else: never a file in an installed plugin's directory, which `update`
+replaces (S7), nor anything a `data:` or `writes:` line names, which is
+the administrator's or the person's (S28). A name given is that of a
+plugin that is gone: a plain file name (S20), refused when a plugin of
+that name is installed in the part, naming `remove`; it need not be in the
+checkout. What is left of it is what bears its name: its task link, its
+staged copy, and the links and commands that point into its directory.
+`--all` covers every such name, and the stage and the virtualenv when no
+plugin is installed beside them. A thing is removed only when it is
+provably a plugin's, as S20 says of a removal: a link only if it points
+into a plugin's directory that is gone, a command only if it is, byte for
+byte, the one an install writes for such a directory. It first says the
+target (S25) and lists what it will remove. On a terminal it asks
+`Proceed? [y/N]`, so that Enter removes nothing. Off one it removes
+nothing, and says so, unless `--yes` is given. What it could not prove a
+plugin's it leaves, and says. Its exit says the state after it, as
+`verify`'s does: 0 when nothing is left, 4 when something is -- nothing
+removed off a terminal without `--yes`, an answer N, or a thing left
+unproved.
 
 ### Getting the code
 
@@ -598,36 +621,13 @@ brings its test.
   `SUDO_USER`'s under `sudo`, else the account's that runs it; when it is gone, there is no default, and
   the command says so. `status --tools` run as root reads the tools of
   that person too.
-- **`clean` takes away what no installed plugin owns.** `clean --server`
-  and `clean --tools` need a name, or `--all`, as `remove` does (S24).
-  They remove what `verify` lists as left, and nothing else: never a file
-  in an installed plugin's directory, which `update` replaces (S7), nor
-  anything a `data:` or `writes:` line names, which is the
-  administrator's or the person's. A name given is that of a plugin that
-  is gone: a plain file name (S20), refused when a plugin of that name is
-  installed in the part, naming `remove`. What is left of it is what bears
-  its name: `tasks.d/NAME.cfg`, its staged copy, and the links and commands
-  that point into its directory. `--all` covers every such name, and the
-  stage and the virtualenv when no plugin is installed beside them. A
-  thing is removed only when it is provably a plugin's, as S20 says of a
-  removal: a link only if it points into a plugin's directory that is
-  gone, a command only if it is, byte for byte, the one an install writes
-  for such a directory. It first says the target (S25) and lists what it
-  will remove. On a terminal it asks `Proceed? [y/N]`, so that Enter
-  removes nothing. Off one it removes nothing, and says so, unless `--yes`
-  is given: the same run, without it, shows what would go, and exits 4, as
-  `verify` does for what is untidy. With nothing left, it says so and
-  exits 0. What it could not prove a plugin's it leaves, and says.
-- **Once those four are built, the rules in force follow.** S24's verbs
-  gain `clean`; `install`, `remove` and `clean` need a plugin named,
-  or `--all`; run as root, `clean --tools` is refused as a verb that
-  changes the tools. S27's dialogue offers to
-  check what is installed and, when something is left that no plugin
-  owns, to take it away. S8 ends: the removal of the last plugin of a
-  part takes away what the plugins shared there, the virtualenv, and on
+- **Now those four are built, the rules in force follow.** S24, its
+  usage and `--yes` came with S30 and S31. Still to follow: S27's dialogue
+  offers to check what is installed and, when something is left that no
+  plugin owns, to take it away. S8 ends: the removal of the last plugin of
+  a part takes away what the plugins shared there, the virtualenv, and on
   the server the stage `/plugins` serves -- today only `--all` does. S9's
-  link left behind is taken away by the next removal, or `clean`. The
-  usage gains `clean` and `--yes`.
+  link left behind is taken away by the next removal, or `clean`.
 - **Open, to decide.**
   - where the search index lies on a server: `$XDG_CACHE_HOME/xymonapi-rag/`
     today, which the item above allows as `data:`, or under `$XYMONVAR`,
