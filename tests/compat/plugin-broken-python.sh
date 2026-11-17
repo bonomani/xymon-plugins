@@ -47,24 +47,43 @@ assert_contains "Could not make a virtualenv at $work/server/ext/venv with $work
 
 # A virtualenv whose Python does not run is made anew when its modules are
 # asked for, said; and pip failing is said, not a silent exit. A stand-in
-# Python makes one whose pip fails, so nothing is fetched.
+# Python, lacking the modules, makes one whose pip fails, so nothing is
+# fetched.
 real=$(command -v python3)
 mkdir -p "$work/stand"
 cat > "$work/stand/python3" <<EOF
 #!/bin/sh
 if [ "\$1" = -m ] && [ "\$2" = venv ]; then mkdir -p "\$3/bin" && cp "\$0" "\$3/bin/python3"; exit; fi
 if [ "\$1" = -m ] && [ "\$2" = pip ]; then echo "pip: no network here" >&2; exit 3; fi
-exec "$real" "\$@"
+case "\$2" in *sys.executable*) echo "\$0"; exit ;; esac
+exec "$real" -S "\$@"
 EOF
 chmod 755 "$work/stand/python3"
 rm -rf "$work/server/ext/venv"; mkdir -p "$work/server/ext/venv/bin"
 printf '#!/bin/sh\nexit 1\n' > "$work/server/ext/venv/bin/python3"; chmod 755 "$work/server/ext/venv/bin/python3"
+: > "$work/server/ext/venv/pyvenv.cfg"
 rc=0
 XYMONAPI_PYTHON= "$ROOT/xymon-plugin" update --server --venv xymonapi XYMONHOME="$work/server" MANDIR="$work/man" PYTHON="$work/stand/python3" \
 	</dev/null > "$work/remake.log" 2>&1 || rc=$?
 assert_contains "The virtualenv $work/server/ext/venv has no Python that runs: it is made anew." "$(cat "$work/remake.log")" "[S26] a virtualenv whose Python does not run is made anew, said"
-[ "$rc" -ne 0 ] || fail "[S26] pip failing was taken for success"
+[ "$rc" -ne 0 ] || fail "[S26] pip failing was taken for success: $(cat "$work/remake.log")"
 assert_contains "pip could not install the modules of" "$(cat "$work/remake.log")" "[S26] and pip failing is said, not a silent exit"
 assert_contains "pip: no network here" "$(cat "$work/remake.log")" "[S26] with what pip said"
+
+# And made from a Python that has the modules, nothing fetched, when one
+# is there: as on a first install.
+have=${XYMONAPI_PYTHON:-python3}
+"$have" -c 'import fastapi, uvicorn, yaml' 2>/dev/null || skip "no Python here with xymonapi's modules"
+rm -rf "$work/server/ext/venv"; mkdir -p "$work/server/ext/venv/bin"
+printf '#!/bin/sh\nexit 1\n' > "$work/server/ext/venv/bin/python3"; chmod 755 "$work/server/ext/venv/bin/python3"
+: > "$work/server/ext/venv/pyvenv.cfg"
+rc=0
+XYMONAPI_PYTHON= "$ROOT/xymon-plugin" update --server xymonapi XYMONHOME="$work/server" MANDIR="$work/man" PYTHON="$have" \
+	</dev/null > "$work/remake2.log" 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "[S26] the update failed: $(tail -n 3 "$work/remake2.log")"
+assert_contains "has no Python that runs: it is made anew." "$(cat "$work/remake2.log")" "[S26] the broken virtualenv is said"
+assert_contains "which has the modules this plugin needs" "$(cat "$work/remake2.log")" "[S26] and made from a Python that has them, nothing fetched"
+"$work/server/ext/venv/bin/python3" -c 'import sys' || fail "[S26] the virtualenv made anew has no Python that runs"
+assert_not_contains "from PyPI" "$(cat "$work/remake2.log")" "[S26] nothing offered to fetch"
 
 pass "an empty file is not taken for a Python: no virtualenv is claimed, and venv-server says it made none, and an install whose Python cannot make one goes on"
