@@ -381,6 +381,25 @@ tree, and the person's home, before and after. What a plugin writes while
 it runs is declared here, and checked by its own tests with a scratch
 home.
 
+**S29. An install records what it wrote.**
+The last step of an install or an update writes `MANIFEST` in the
+plugin's directory, beside `VERSION` and `PLUGIN`: one line for each file
+and link it wrote, its fields separated by tabs. A file is
+`file⇥CKSUM SIZE⇥PATH`, `CKSUM SIZE` what `cksum` gives, with `⇥admin`
+after the task file and the web server snippets, the administrator's to
+edit (S7); a link is `link⇥PATH⇥TARGET`. A path in the plugin's directory
+is given from it, `app.py`; one outside, as installed, without `DESTDIR`:
+each file of the copy `/plugins` serves (S19), the command (S4), the
+manual page's link (S20). The task link is not in it: it is a state, on
+or off, that `enable` and `disable` change after the install (S13); nor a
+SELinux module loaded, a state of the system's policy, its `.cil` file
+being one of the directory's (S23). `MANIFEST` lies in the plugin's
+directory, so removing that directory removes it; and in a directory the
+Xymon user can write, so it decides nothing alone: a removal takes away
+what S20 allows, no more. A plugin installed before it existed has none
+until it is updated. The `data:` and `writes:` lines of the `PLUGIN` copy
+say what the plugin's own commands may have written since (S28).
+
 ### Getting the code
 
 **S11. `stable` is code every test passed.**
@@ -542,20 +561,6 @@ brings its test.
   `SUDO_USER`'s under `sudo`, else the account's that runs it; when it is gone, there is no default, and
   the command says so. `status --tools` run as root reads the tools of
   that person too.
-- **An install records what it wrote.** The last step of an install or an
-  update writes `MANIFEST` in the plugin's directory, beside `VERSION` and
-  `PLUGIN`, its fields separated by tabs: one line for each file it wrote
-  there, with its cksum, and one
-  for each thing it put outside -- the task link, the manual page's link,
-  the command, the staged copy, the SELinux module -- with what it is: a
-  link and its target, or a file and its cksum. The task file and the web
-  server snippets are marked as the administrator's to edit. It lies in
-  the plugin's directory, so removing that directory removes it; and in a
-  directory the Xymon user can write, so it decides nothing alone: a
-  removal takes away what S20 allows, no more. A plugin installed before
-  the manifest existed has none until it is updated. The `data:` and
-  `writes:` lines of the `PLUGIN` copy say what the plugin's own commands
-  may have written since.
 - **`verify` says what differs from what was installed.** `verify
   --server` and `verify --tools` change nothing. They say two things,
   apart. First, for each plugin of the part, or those named, what its
@@ -563,7 +568,10 @@ brings its test.
   plugin may no longer do what was installed: a file missing; a file
   changed that is not the administrator's to edit; a link outside the
   directory gone, or pointing elsewhere; a command that is no longer the
-  one installed; and a file in the plugin's directory that the manifest
+  one installed; the task link, which `MANIFEST` leaves out (S29), there
+  and pointing elsewhere than the plugin's task file; a SELinux module its
+  `PLUGIN` names not loaded where SELinux is active, by `semodule -l`; and
+  a file in the plugin's directory that the manifest
   does not name and that can run or be imported -- one with an execute
   bit, or named `*.py`, `*.pyc`, `*.pth`, `*.so` or `*.sh`. Untidy, as it
   works all the same: any other file there that the manifest does not

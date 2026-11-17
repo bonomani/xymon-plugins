@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# tests/compat/plugin-manifest.sh
+#
+# An install records what it wrote (S29). After an install and an update of
+# each part, MANIFEST in the plugin's directory has one line for each file
+# and link the install wrote, and none for anything else: every file of the
+# directory by its path from it, with its cksum and size, the task file and
+# the snippets marked admin; outside it, by their paths as installed, the
+# copy /plugins serves, the command, and the manual page's link with its
+# target. The task link and a SELinux module loaded are states and stay
+# out. Under DESTDIR the paths are the installed system's. Fields are
+# separated by tabs.
+
+set -euo pipefail
+# shellcheck source=tests/lib/xymonapi.sh
+. "$(dirname "$0")/../lib/xymonapi.sh"
+
+ROOT=$(find_root)
+work=$(mktempdir)
+home=$work/server
+server_tree "$home"
+person=$work/home
+mkdir -p "$person"
+export HOME="$person" XDG_CONFIG_HOME="$person/.config" PREFIX="$person/.local" MANDIR="$work/man"
+export XYMON_PLUGINS_TREES_ONLY=1 XYMON_PLUGINS_TREES="$home"
+TAB=$(printf '\t')
+
+x() { "$ROOT/xymon-plugin" "$@" </dev/null >"$work/x.log" 2>&1 || fail "xymon-plugin $* failed: $(tail -n 5 "$work/x.log")"; }
+
+# expect DIR LINES... -- every line of DIR/MANIFEST is one of what DIR and
+# the places outside hold, and each of those has its line.
+expect() {
+	m=$1/MANIFEST; shift
+	assert_file_exists "$m"
+	printf '%s\n' "$@" | LC_ALL=C sort > "$work/want"
+	LC_ALL=C sort "$m" > "$work/got"
+	diff "$work/want" "$work/got" > "$work/diff" || fail "[S29] $m differs from what was written: $(cat "$work/diff")"
+}
+# line PATH NAME [admin] -- the file line expected for PATH, named NAME.
+line() { printf 'file\t%s\t%s%s\n' "$(cksum < "$1")" "$2" "${3:+$TAB$3}"; }
+
+# The server part: xymonapi, its task on, so a link the manifest must leave out.
+x install --server xymonapi XYMONHOME="$home"
+x enable --server xymonapi XYMONHOME="$home"
+for step in install update; do
+	[ "$step" = update ] && x update --server xymonapi XYMONHOME="$home"
+	ext=$home/ext/xymonapi
+	want=()
+	while IFS= read -r f; do
+		case $f in
+			tasks.cfg|xymonapi-apache.conf|xymonapi-nginx.conf|xymonapi-lighttpd.conf) want+=("$(line "$ext/$f" "$f" admin)") ;;
+			*) want+=("$(line "$ext/$f" "$f")") ;;
+		esac
+	done < <(cd "$ext" && find . -type f ! -name MANIFEST | sed 's|^\./||')
+	for f in $(cd "$home/ext/xymon-plugins-dist/plugins/xymonapi" && ls); do
+		want+=("$(line "$home/ext/xymon-plugins-dist/plugins/xymonapi/$f" "$home/ext/xymon-plugins-dist/plugins/xymonapi/$f")")
+	done
+	want+=("$(printf 'link\t%s\t%s' "$MANDIR/man8/xymonapi.8" "$home/ext/xymonapi/xymonapi.8")")
+	expect "$ext" "${want[@]}"
+done
+assert_contains "${TAB}tasks.cfg${TAB}admin" "$(cat "$home/ext/xymonapi/MANIFEST")" "[S29] the task file is marked the administrator's"
+assert_not_contains "tasks.d" "$(cat "$home/ext/xymonapi/MANIFEST")" "[S29] the task link, a state, is not in it"
+[ -L "$home/etc/tasks.d/xymonapi.cfg" ] || fail "the task was not on"
+
+# Your tools: xymonapi-mcp, with a command and a manual page.
+for step in install update; do
+	x "$step" --tools xymonapi-mcp
+	dir=$PREFIX/libexec/xymon-plugins/xymonapi-mcp
+	want=()
+	while IFS= read -r f; do want+=("$(line "$dir/$f" "$f")"); done \
+		< <(cd "$dir" && find . -type f ! -name MANIFEST | sed 's|^\./||')
+	want+=("$(line "$PREFIX/bin/xymonapi-mcp" "$PREFIX/bin/xymonapi-mcp")")
+	want+=("$(printf 'link\t%s\t%s' "$PREFIX/share/man/man1/xymonapi-mcp.1" "$dir/xymonapi-mcp.1")")
+	expect "$dir" "${want[@]}"
+done
+
+# Under DESTDIR: the paths are the installed system's, not the stage's.
+stage=$work/stage
+mkdir -p "$stage/usr/lib/xymon/server"
+"$ROOT/xymon-plugin" install --server xymonapi XYMONHOME=/usr/lib/xymon/server MANDIR=/usr/share/man DESTDIR="$stage" \
+	</dev/null >"$work/x.log" 2>&1 || fail "install under DESTDIR failed: $(tail -n 5 "$work/x.log")"
+m=$(cat "$stage/usr/lib/xymon/server/ext/xymonapi/MANIFEST")
+assert_contains "${TAB}/usr/lib/xymon/server/ext/xymon-plugins-dist/plugins/xymonapi/PLUGIN" "$m" "[S29] under DESTDIR, a path outside is the installed one"
+assert_contains "link${TAB}/usr/share/man/man8/xymonapi.8${TAB}/usr/lib/xymon/server/ext/xymonapi/xymonapi.8" "$m" "[S29] and the manual page's link too"
+assert_not_contains "$stage" "$m" "[S29] the stage is named nowhere"
+
+pass "an install and an update write MANIFEST: each file of the plugin's directory with its cksum, the task file and snippets marked admin, and outside it the staged copy, the command and the manual page's link, as installed; no task link"
