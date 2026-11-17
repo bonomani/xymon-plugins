@@ -1356,6 +1356,12 @@ venv_auto() {
 # again, it adds the modules of a plugin installed since.
 venv() {
 	[ -z "$DESTDIR" ] || return 0
+	# One whose Python does not run -- moved, or the Python it was made
+	# from gone -- is made anew: it is the plugins', beside them (S26).
+	if [ -e "$1/venv" ] && ! "$1/venv/bin/python3" -c 'import sys' 2>/dev/null; then
+		echo "The virtualenv $1/venv has no Python that runs: it is made anew."
+		rm -rf "$1/venv" || die "could not remove $1/venv"
+	fi
 	if [ ! -x "$1/venv/bin/python3" ]; then
 		"$PYTHON" -m venv "$1/venv" || exit 1
 		[ -x "$1/venv/bin/python3" ] || die "$PYTHON made no virtualenv at $1/venv"
@@ -1363,7 +1369,8 @@ venv() {
 	for r in "$1"/*/requirements.txt; do
 		[ -e "$r" ] || continue
 		echo "installing the modules of $r"
-		"$1/venv/bin/python3" -m pip install -q -r "$r" || exit 1
+		"$1/venv/bin/python3" -m pip install -q -r "$r" \
+			|| die "pip could not install the modules of $r into $1/venv: what it said is above"
 	done
 	echo "The plugins in $1 run with $1/venv/bin/python3 ($("$1/venv/bin/python3" -V))."
 }

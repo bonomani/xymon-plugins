@@ -45,4 +45,26 @@ rc=0
 [ "$rc" -eq 0 ] || fail "install-server stopped where a virtualenv could not be made: $(tail -n 3 "$work/install2.log")"
 assert_contains "Could not make a virtualenv at $work/server/ext/venv with $work/bad/python3" "$(cat "$work/install2.log")" "a venv that cannot be made is said, and the install goes on"
 
+# A virtualenv whose Python does not run is made anew when its modules are
+# asked for, said; and pip failing is said, not a silent exit. A stand-in
+# Python makes one whose pip fails, so nothing is fetched.
+real=$(command -v python3)
+mkdir -p "$work/stand"
+cat > "$work/stand/python3" <<EOF
+#!/bin/sh
+if [ "\$1" = -m ] && [ "\$2" = venv ]; then mkdir -p "\$3/bin" && cp "\$0" "\$3/bin/python3"; exit; fi
+if [ "\$1" = -m ] && [ "\$2" = pip ]; then echo "pip: no network here" >&2; exit 3; fi
+exec "$real" "\$@"
+EOF
+chmod 755 "$work/stand/python3"
+rm -rf "$work/server/ext/venv"; mkdir -p "$work/server/ext/venv/bin"
+printf '#!/bin/sh\nexit 1\n' > "$work/server/ext/venv/bin/python3"; chmod 755 "$work/server/ext/venv/bin/python3"
+rc=0
+XYMONAPI_PYTHON= "$ROOT/xymon-plugin" update --server --venv xymonapi XYMONHOME="$work/server" MANDIR="$work/man" PYTHON="$work/stand/python3" \
+	</dev/null > "$work/remake.log" 2>&1 || rc=$?
+assert_contains "The virtualenv $work/server/ext/venv has no Python that runs: it is made anew." "$(cat "$work/remake.log")" "[S26] a virtualenv whose Python does not run is made anew, said"
+[ "$rc" -ne 0 ] || fail "[S26] pip failing was taken for success"
+assert_contains "pip could not install the modules of" "$(cat "$work/remake.log")" "[S26] and pip failing is said, not a silent exit"
+assert_contains "pip: no network here" "$(cat "$work/remake.log")" "[S26] with what pip said"
+
 pass "an empty file is not taken for a Python: no virtualenv is claimed, and venv-server says it made none, and an install whose Python cannot make one goes on"
