@@ -115,6 +115,14 @@ code it loaded: the API's update stops the API, saying so, and xymonlaunch
 starts the new; a task that runs from time to time, as the index, takes the
 new code at its next run.
 
+**Checking.** `./xymon-plugin verify`, or `verify --server` or `--tools`,
+says what differs from what was installed, one line each, with the command
+that puts it right: a file changed or missing, a file or bytecode that no
+install wrote, a link pointing elsewhere, a Python module older than the
+plugin asks, and what no plugin installed owns. It changes nothing, and
+exits 0 when all is as installed, 3 when something is broken, 4 when
+something is only untidy -- what a nightly check can test.
+
 **Uninstalling.** `XYMONHOME=... ./xymon-plugin remove --server NAME` or
 `./xymon-plugin remove --tools NAME` removes that plugin alone, and refuses
 while another installed plugin needs it, naming it; `--all` in place of

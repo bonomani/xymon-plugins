@@ -8,6 +8,9 @@
 # the user's. As the other launchers do, exit 77 when it cannot run here and
 # say why on stderr.
 
+# No bytecode beside the code: verify takes a __pycache__ in the plugin's
+# directory for code no install wrote (S30).
+PYTHONDONTWRITEBYTECODE=1; export PYTHONDONTWRITEBYTECODE
 here=`dirname "$0"`
 venv=`cd "$here/.." && pwd`/venv
 if [ -n "${XYMONAPI_PYTHON:-}" ]; then

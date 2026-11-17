@@ -10,6 +10,9 @@
 # with their modules; else
 # python3 on PATH, without a word: a command that needs a module it lacks
 # says which, and what installs it, when it needs it.
+# No bytecode beside the code: verify takes a __pycache__ in the plugin's
+# directory for code no install wrote (S30).
+PYTHONDONTWRITEBYTECODE=1; export PYTHONDONTWRITEBYTECODE
 here=`dirname "$0"`
 venv=`cd "$here/.." && pwd`/venv
 tried=""

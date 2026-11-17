@@ -52,7 +52,7 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 
 die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
 usage() {
-	echo "usage: ./xymon-plugin install|update|enable|disable|remove|status [--server|--tools] [--all] [--venv] [--force] [--xymon-home PATH] [PLUGIN...] [NAME=value...]" >&2
+	echo "usage: ./xymon-plugin install|update|enable|disable|remove|status|verify [--server|--tools] [--all] [--venv] [--force] [--xymon-home PATH] [PLUGIN...] [NAME=value...]" >&2
 	exit 2
 }
 
@@ -64,7 +64,7 @@ fi
 VERB=$1; shift
 case $VERB in
 	dialogue) ;;
-	install|update|enable|disable|remove|status) ;;
+	install|update|enable|disable|remove|status|verify) ;;
 	venv) die "venv is now part of install and update: ./xymon-plugin update --server --venv, or --tools --venv" ;;
 	install-server|install-tools|uninstall-server|uninstall-tools|enable-server|disable-server|status-server|status-tools|venv-server|venv-tools)
 		v=${VERB%-*}; [ "$v" = uninstall ] && v=remove
@@ -101,7 +101,7 @@ done
 ROOTUSER=
 [ "$(id -u)" -ne 0 ] || ROOTUSER=1
 # status --tools under sudo reads the tools of the person who typed it.
-if [ -z "$PREFIX_GIVEN" ] && [ -n "$ROOTUSER" ] && [ "$VERB" = status ] && [ -n "${SUDO_USER:-}" ]; then
+if [ -z "$PREFIX_GIVEN" ] && [ -n "$ROOTUSER" ] && { [ "$VERB" = status ] || [ "$VERB" = verify ]; } && [ -n "${SUDO_USER:-}" ]; then
 	case $SUDO_USER in
 		*[!A-Za-z0-9._-]*|-*) ;;
 		*) eval "h=~$SUDO_USER"; [ -d "$h" ] && PREFIX=$h/.local ;;
@@ -1519,6 +1519,151 @@ uninstall_tools() {
 	if [ -f "$ROOT/plugins/$1/PLUGIN" ]; then say "$1" uninstalled-tools; else echo "Uninstalled $1."; fi
 }
 
+# S30. verify: what differs from what was installed, said one line each,
+# changing nothing. BROKEN and UNTIDY count what was found; edited and ok
+# lines count for neither.
+BROKEN=0 UNTIDY=0
+v_broken() { echo "broken: $1"; BROKEN=$((BROKEN + 1)); }
+v_untidy() { echo "untidy: $1"; UNTIDY=$((UNTIDY + 1)); }
+
+# v_actual PATH -- where PATH, as installed, lies now: under DESTDIR, inside it.
+v_actual() { d=$(inside "${1%/*}") || exit 1; printf '%s/%s\n' "$d" "${1##*/}"; }
+
+# v_runs NAME -- true when a file of that name, not in MANIFEST, can run or
+# be imported.
+v_runs() { case $1 in *.py|*.pyc|*.pth|*.so|*.sh) return 0 ;; esac; [ -x "$2" ]; }
+
+# verify_plugin PART ROOT PLUGIN -- the lines for one plugin installed.
+verify_plugin() {
+	part=$1 root=$2 n=$3 dir=$2/$3 fix="./xymon-plugin update --$1 $3" bad=0 before=$((BROKEN + UNTIDY))
+	if [ ! -f "$dir/MANIFEST" ]; then
+		v_untidy "$n: no MANIFEST, installed before it was kept: $fix"
+	else
+		: > "${TMPDIR:-/tmp}/xymon-plugin-named.$$"
+		while IFS="$(printf '\t')" read -r kind a b c; do
+			case $kind in
+				file)
+					case $b in /*) f=$(v_actual "$b") ;; *) f=$dir/$b; echo "$b" >> "${TMPDIR:-/tmp}/xymon-plugin-named.$$" ;; esac
+					case $b in "$XYMONHOME/ext/xymon-plugins-dist/plugins/$n/"*) echo "dist/${b##*/}" >> "${TMPDIR:-/tmp}/xymon-plugin-named.$$" ;; esac
+					if [ ! -f "$f" ] || [ -L "$f" ]; then v_broken "$n: $b missing: $fix"
+					elif [ "$(cksum < "$f")" != "$a" ]; then
+						if [ "$c" = admin ]; then echo "edited: $n: $b, the administrator's"
+						else v_broken "$n: $b changed: $fix"; fi
+					fi ;;
+				link)
+					case $a in /*) f=$(v_actual "$a") ;; *) f=$dir/$a; echo "$a" >> "${TMPDIR:-/tmp}/xymon-plugin-named.$$" ;; esac
+					if [ ! -L "$f" ]; then v_broken "$n: the link $a missing: $fix"
+					elif [ "$(readlink "$f")" != "$b" ]; then v_broken "$n: the link $a points to $(readlink "$f"), not $b: $fix"; fi ;;
+			esac
+		done < "$dir/MANIFEST"
+		# What the directory holds that MANIFEST does not name: a
+		# __pycache__, bytecode no install wrote, broken (the launchers
+		# write none); a file that runs or is imported, broken; any other,
+		# untidy.
+		(cd "$dir" && find . \( -type f -o -type l -o -type d -name __pycache__ \) ! -name MANIFEST -print) \
+			| sed -e 's|^\./||' | LC_ALL=C sort > "${TMPDIR:-/tmp}/xymon-plugin-here.$$"
+		while IFS= read -r f; do
+			grep -Fxq -- "$f" "${TMPDIR:-/tmp}/xymon-plugin-named.$$" && continue
+			case $f in
+				__pycache__|*/__pycache__) v_broken "$n: $f, bytecode no install wrote: $fix" ;;
+				*/__pycache__/*|__pycache__/*) ;;
+				*) if v_runs "${f##*/}" "$dir/$f"; then v_broken "$n: $f, which can run, is not what was installed: $fix"
+				   else v_untidy "$n: $f is not what was installed: $fix"; fi ;;
+			esac
+		done < "${TMPDIR:-/tmp}/xymon-plugin-here.$$"
+		# The copy /plugins serves: nothing in it but what was staged.
+		if [ "$part" = server ] && [ -d "$DIST/plugins/$n" ]; then
+			for f in "$DIST/plugins/$n"/* "$DIST/plugins/$n"/.[!.]*; do
+				[ -e "$f" ] || [ -L "$f" ] || continue
+				grep -Fxq -- "dist/${f##*/}" "${TMPDIR:-/tmp}/xymon-plugin-named.$$" \
+					|| v_broken "$n: $XYMONHOME/ext/xymon-plugins-dist/plugins/$n/${f##*/}, served at /plugins, is not what was staged: $fix"
+			done
+		fi
+		rm -f "${TMPDIR:-/tmp}/xymon-plugin-named.$$" "${TMPDIR:-/tmp}/xymon-plugin-here.$$"
+	fi
+	if [ "$part" = server ]; then
+		# The task link, a state MANIFEST leaves out (S29): there, it is the
+		# plugin's.
+		for l in "$TASKDIR/$n.cfg" "$TASKDIR/$n"; do
+			[ -L "$l" ] || continue
+			[ "$(readlink "$l")" = "$XYMONHOME/ext/$n/tasks.cfg" ] \
+				|| v_broken "$n: its task link ${l##*/} points to $(readlink "$l"), not its task file: ./xymon-plugin disable --server $n, then enable"
+		done
+		# Its SELinux module, loaded where SELinux is active.
+		if [ -n "$(held "$root" "$n" selinux)" ] && [ -z "$DESTDIR" ] && command -v selinuxenabled >/dev/null 2>&1 \
+			&& selinuxenabled && command -v semodule >/dev/null 2>&1; then
+			loaded=$(semodule -l 2>/dev/null | awk '{print $1}')
+			case " $(echo $loaded) " in *" $n "*) ;; *) v_broken "$n: its SELinux module is not loaded: $fix" ;; esac
+		fi
+	fi
+	# The Python modules it needs: there, and not older than requirements.txt asks.
+	mods=$(held "$root" "$n" "$part-modules")
+	if [ -n "$mods" ] && [ -z "$DESTDIR" ]; then
+		py=${XYMONAPI_PYTHON:-}
+		[ -n "$py" ] || { [ -x "$root/venv/bin/python3" ] && py=$root/venv/bin/python3; } || py=python3
+		lacks=$("$py" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $mods 2>/dev/null) || lacks=$mods
+		olds=$(old_modules "$py" "$dir/requirements.txt")
+		[ -z "$lacks" ] || v_broken "$n: the Python modules $lacks are missing from $py: ./xymon-plugin update --$part --venv $n"
+		[ -z "$olds" ] || v_broken "$n: older Python modules than it is tested with, $olds: ./xymon-plugin update --$part --venv $n"
+	fi
+	[ $((BROKEN + UNTIDY)) -ne "$before" ] || echo "ok: $n"
+}
+
+# verify_left PART ROOT -- what is left in the part that no plugin
+# installed owns (S9): untidy.
+verify_left() {
+	if [ "$1" = server ]; then
+		for l in "$TASKDIR"/*; do
+			[ -L "$l" ] || continue
+			case $(readlink "$l") in
+				"$XYMONHOME/ext/"*/tasks.cfg) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%/tasks.cfg}
+					[ -f "$EXTROOT/$t/VERSION" ] || v_untidy "$TASKDIR/${l##*/}, the task link of $t, which is gone: ./xymon-plugin clean --server $t" ;;
+			esac
+		done
+		for l in "$(inside "$MANDIR")"/man[1-9]/*; do
+			[ -L "$l" ] || continue
+			case $(readlink "$l") in
+				"$XYMONHOME/ext/"*/*) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%%/*}
+					[ -f "$EXTROOT/$t/VERSION" ] || v_untidy "${l#"$DESTDIR"}, a manual page's link of $t, which is gone: ./xymon-plugin clean --server $t" ;;
+			esac
+		done
+		for d in "$DIST/plugins"/*; do
+			[ -d "$d" ] || continue
+			[ -f "$EXTROOT/${d##*/}/VERSION" ] || v_untidy "${d#"$DESTDIR"}, the staged copy of ${d##*/}, which is gone: ./xymon-plugin clean --server ${d##*/}"
+		done
+		any=; for d in "$EXTROOT"/*; do [ -f "$d/VERSION" ] && any=1; done
+		[ -n "$any" ] || [ ! -d "$DIST" ] || v_untidy "${DIST#"$DESTDIR"}, the stage /plugins serves, with no plugin installed: ./xymon-plugin clean --server --all"
+		[ -n "$any" ] || [ ! -d "$EXTROOT/venv" ] || v_untidy "${EXTROOT#"$DESTDIR"}/venv, with no plugin installed: ./xymon-plugin clean --server --all"
+	else
+		for c in "$BIN"/*; do
+			[ -f "$c" ] && [ ! -L "$c" ] || continue
+			t=$(sed -n '2s|^exec "'"$(sedesc "$PREFIX")"'/libexec/xymon-plugins/\([^/]*\)/.*|\1|p' "$c" 2>/dev/null)
+			[ -n "$t" ] && [ "$(sed -n 1p "$c")" = '#!/bin/sh' ] || continue
+			[ -f "$TOOLSROOT/$t/VERSION" ] || v_untidy "$PREFIX/bin/${c##*/}, the command of $t, which is gone: ./xymon-plugin clean --tools $t"
+		done
+		for l in "$TOOLSMAN1"/*; do
+			[ -L "$l" ] || continue
+			case $(readlink "$l") in
+				"$PREFIX/libexec/xymon-plugins/"*/*) t=$(readlink "$l"); t=${t#"$PREFIX/libexec/xymon-plugins/"}; t=${t%%/*}
+					[ -f "$TOOLSROOT/$t/VERSION" ] || v_untidy "$PREFIX/share/man/man1/${l##*/}, a manual page's link of $t, which is gone: ./xymon-plugin clean --tools $t" ;;
+			esac
+		done
+		any=; for d in "$TOOLSROOT"/*; do [ -f "$d/VERSION" ] && any=1; done
+		[ -n "$any" ] || [ ! -d "$TOOLSROOT/venv" ] || v_untidy "$PREFIX/libexec/xymon-plugins/venv, with no plugin installed: ./xymon-plugin clean --tools --all"
+	fi
+}
+
+# verify_part PART ROOT -- every plugin installed in the part, or those
+# named; with none named, what is left too.
+verify_part() {
+	if [ -n "$NAMES" ]; then L=$NAMES; else L=$(for d in "$2"/*; do [ -f "$d/VERSION" ] && echo "${d##*/}"; done); fi
+	for n in $L; do
+		if [ -f "$2/$n/VERSION" ]; then verify_plugin "$1" "$2" "$n"
+		else echo "$n: not installed"; fi
+	done
+	[ -n "$NAMES" ] || verify_left "$1" "$2"
+}
+
 # installed ROOT PLUGIN -- its VERSION there, read as X.Y.Z, or nothing.
 installed() { [ -f "$1/$2/VERSION" ] && sed -e 's|^.*/v||' "$1/$2/VERSION"; }
 
@@ -1640,7 +1785,7 @@ if [ "$VERB" = dialogue ]; then dialogue; exit 0; fi
 # The part acted on: named, or, on a terminal, the server part, said; off a
 # terminal a verb that changes something needs it named; status covers both.
 if [ -n "$SEL_TOOLS" ] && [ -n "$SEL_SERVER" ]; then
-	[ "$VERB" != status ] || die "--tools goes alone: ./xymon-plugin status, with neither, shows both"
+	case $VERB in status|verify) die "--tools goes alone: ./xymon-plugin $VERB, with neither, covers both" ;; esac
 	rest=$(echo $NAMES)${ALL:+ --all}
 	die "--tools goes alone, as the tools are the person's and the server part its tree's owner's: run
   ./xymon-plugin $VERB --server${rest:+ $rest}
@@ -1648,12 +1793,12 @@ if [ -n "$SEL_TOOLS" ] && [ -n "$SEL_SERVER" ]; then
 fi
 if [ -n "$SEL_TOOLS" ]; then PART=tools
 elif [ -n "$SEL_SERVER" ]; then PART=server
-elif [ "$VERB" = status ]; then PART=both
+elif [ "$VERB" = status ] || [ "$VERB" = verify ]; then PART=both
 elif [ -t 0 ] && [ -t 1 ]; then PART=server; echo "Part: server, the one Xymon part a plugin has here."
 else die "$VERB names no part, and there is no terminal to say it: --server, or --tools"
 fi
 case $VERB in enable|disable) [ "$PART" != tools ] || die "the tools have no task to turn on or off" ;; esac
-if [ "$PART" = tools ] && [ -n "$ROOTUSER" ] && [ "$VERB" != status ] && [ -z "$DESTDIR" ] && [ -z "$PREFIX_GIVEN" ]; then
+if [ "$PART" = tools ] && [ -n "$ROOTUSER" ] && [ "$VERB" != status ] && [ "$VERB" != verify ] && [ -z "$DESTDIR" ] && [ -z "$PREFIX_GIVEN" ]; then
 	die "the tools go in a person's own directory, not root's: run this without sudo, or give PREFIX= or DESTDIR="
 fi
 # What needs no installation is checked before one is asked for: the names,
@@ -1674,7 +1819,7 @@ case $VERB in
 esac
 # The installation, named or chosen, once, before anything is looked at in
 # it; status reads it apart.
-if [ "$PART" = server ] && [ "$VERB" != status ]; then need_home; fi
+if [ "$PART" = server ] && [ "$VERB" != status ] && [ "$VERB" != verify ]; then need_home; fi
 if [ "$PART" = server ]; then PARTROOT=$EXTROOT; else PARTROOT=$TOOLSROOT; fi
 
 # The plugins named, each checked; or, for install and remove, --all, which
@@ -1764,6 +1909,29 @@ case $VERB in
 				if [ -z "$l" ]; then :; elif [ "$PART" = tools ]; then echo "$l"; else echo "  $l"; fi
 			done
 		fi ;;
+	verify)
+		# None named: every installation found, as status lists them.
+		if [ "$PART" != tools ] && [ -z "$XYMONHOME" ] && [ -z "$DESTDIR" ]; then
+			xymon_trees | sed -n 's/^server //p' > "${TMPDIR:-/tmp}/xymon-plugin-verify.$$"
+			while IFS= read -r t; do
+				echo "Xymon server: $t"
+				XYMONHOME=$t; server_paths
+				verify_part server "$EXTROOT"
+			done < "${TMPDIR:-/tmp}/xymon-plugin-verify.$$"
+			rm -f "${TMPDIR:-/tmp}/xymon-plugin-verify.$$"
+			XYMONHOME=
+		elif [ "$PART" != tools ]; then
+			need_home
+			echo "Xymon server: $XYMONHOME"
+			verify_part server "$EXTROOT"
+		fi
+		if [ "$PART" != server ]; then
+			echo "Your tools: $PREFIX"
+			verify_part tools "$TOOLSROOT"
+		fi
+		[ "$BROKEN" -eq 0 ] || exit 3
+		[ "$UNTIDY" -eq 0 ] || exit 4
+		exit 0 ;;
 	remove)
 		if [ "$PART" = server ]; then
 			# The stage served at /plugins, pruned first, as an install
