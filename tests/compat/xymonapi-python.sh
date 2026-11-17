@@ -217,6 +217,29 @@ rc=0; out=$(XYMONAPI_PYTHON="$work/nomods" "$ROOT/xymon-plugin" enable --server 
 assert_contains "update --server --venv xymonapi makes them" "$out" "[S26] and enable refuses it, naming what makes them"
 [ -L "$s/etc/tasks.d/xymonapi.cfg" ] && fail "the refused enable made the link anyway"
 
+# A Python that has the modules, one of them older than requirements.txt
+# asks: status says which and what it has, and enable refuses it as it does
+# a module that is not there. The modules and their versions are stand-ins
+# on PYTHONPATH, read by a real Python as an installed one's are.
+old=$work/oldmods; mkdir -p "$old"
+for m in fastapi:0.10.0 uvicorn:99.0 pyyaml:99.0; do
+	mkdir -p "$old/${m%%:*}-${m##*:}.dist-info"
+	printf 'Metadata-Version: 2.1\nName: %s\nVersion: %s\n' "${m%%:*}" "${m##*:}" > "$old/${m%%:*}-${m##*:}.dist-info/METADATA"
+done
+: > "$old/fastapi.py"; : > "$old/uvicorn.py"; : > "$old/yaml.py"
+printf '#!/bin/sh\nPYTHONPATH="%s" exec "%s" "$@"\n' "$old" "$py" > "$work/oldpy"; chmod 755 "$work/oldpy"
+floor=$(sed -n 's/^fastapi>=//p' "$ROOT/plugins/xymonapi/requirements.txt")
+assert_contains "its Python lacks fastapi>=$floor (has 0.10.0)" "$(XYMONAPI_PYTHON="$work/oldpy" "$ROOT/xymon-plugin" status --server xymonapi XYMONHOME="$s" 2>&1)" "[S26] status says a module older than requirements.txt asks, and the one it has"
+rc=0; out=$(XYMONAPI_PYTHON="$work/oldpy" "$ROOT/xymon-plugin" enable --server xymonapi XYMONHOME="$s" </dev/null 2>&1) || rc=$?
+[ "$rc" -ne 0 ] || fail "[S26] enable turned on a plugin whose Python has a module older than it asks"
+assert_contains "fastapi>=$floor (has 0.10.0)" "$out" "[S26] and enable refuses it, naming the module"
+assert_not_contains "uvicorn>=" "$out" "[S26] a module new enough is not named"
+[ -L "$s/etc/tasks.d/xymonapi.cfg" ] && fail "the refused enable made the link anyway"
+# The same Python with every module new enough is taken.
+rm -rf "$old/fastapi-0.10.0.dist-info"; mkdir -p "$old/fastapi-99.0.dist-info"
+printf 'Metadata-Version: 2.1\nName: fastapi\nVersion: 99.0\n' > "$old/fastapi-99.0.dist-info/METADATA"
+assert_not_contains "its Python lacks" "$(XYMONAPI_PYTHON="$work/oldpy" "$ROOT/xymon-plugin" status --server xymonapi XYMONHOME="$s" 2>&1)" "[S26] modules at the versions asked, or newer, are not said to be lacking"
+
 # A virtualenv there that lacks them: "y" installs them into it.
 pre=$work/offer-lacks
 mkdir -p "$pre/libexec/xymon-plugins/venv/bin"

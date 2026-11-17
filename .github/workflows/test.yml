@@ -28,6 +28,13 @@ jobs:
       fail-fast: false
       matrix:
         xymon: [main, rel-4.3.31]
+        modules: [newest]
+        # The oldest modules xymonapi's requirements.txt asks, exactly
+        # those: the versions written there are the ones its tests pass
+        # with, so that an install may refuse an older one (SPEC, S26).
+        include:
+          - xymon: main
+            modules: floors
     steps:
       - name: Checkout xymon-plugins
         uses: actions/checkout@v7
@@ -41,7 +48,16 @@ jobs:
           ref: ${{ matrix.xymon }}
           path: xymon
 
+      # The floors are old: a Python their wheels exist for.
+      - name: A Python the oldest modules install on
+        if: matrix.modules == 'floors'
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
       - name: Install dependencies
+        env:
+          MODULES: ${{ matrix.modules }}
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -51,7 +67,13 @@ jobs:
           # The system Python takes no pip installs (PEP 668); the launcher
           # uses whichever Python XYMONAPI_PYTHON names.
           python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install -r plugins-repo/plugins/xymonapi/requirements.txt -r plugins-repo/plugins/xymonapi-rag/requirements.txt
+          if [ "$MODULES" = floors ]; then
+            sed -e 's/>=/==/' plugins-repo/plugins/xymonapi/requirements.txt > "$RUNNER_TEMP/floors.txt"
+            cat "$RUNNER_TEMP/floors.txt"
+            "$RUNNER_TEMP/venv/bin/pip" install -r "$RUNNER_TEMP/floors.txt"
+          else
+            "$RUNNER_TEMP/venv/bin/pip" install -r plugins-repo/plugins/xymonapi/requirements.txt -r plugins-repo/plugins/xymonapi-rag/requirements.txt
+          fi
 
       # The non-interactive configure recipe of Xymon's own build.yml.
       - name: Build Xymon
@@ -91,7 +113,15 @@ jobs:
           XYMONAPI_NO_SKIP: "1"
           FASTEMBED_CACHE_PATH: ${{ runner.temp }}/fastembed
           XYMONAPI_RAG_EVAL_INDEX: ${{ runner.temp }}/rag-eval/docs.npz
-        run: plugins-repo/tests/run.sh
+          MODULES: ${{ matrix.modules }}
+        run: |
+          # With the oldest modules, xymonapi's own tests: the search's
+          # modules are not among them.
+          if [ "$MODULES" = floors ]; then
+            plugins-repo/tests/run.sh plugins/xymonapi/tests
+          else
+            plugins-repo/tests/run.sh
+          fi
 
   # The API's contract changes only with its version: build/contract-check.sh
   # compares it with stable's, oasdiff saying which changes break clients.
