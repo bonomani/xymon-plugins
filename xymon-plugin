@@ -1079,18 +1079,46 @@ restart() {
 # --venv given, or, on a terminal, QUESTION answered y.
 fetch_ok() { [ -n "$VENV_FETCH" ] || offer "$1"; }
 
+# old_modules PYTHON REQUIREMENTS -- the modules PYTHON has in a version
+# older than a "NAME>=X.Y" line of REQUIREMENTS asks, each as
+# "NAME>=X.Y (has V)": a plugin is tested from those versions on, and an
+# older one may start and then fail. A module PYTHON cannot say the
+# version of, a line of another form, a file that is not there and a
+# Python that fails say nothing: this adds to the check that the modules
+# import, and never stands in for it.
+old_modules() {
+	[ -f "$2" ] || return 0
+	"$1" -c 'import re, sys
+try:
+    from importlib.metadata import version
+except Exception:
+    sys.exit(0)
+def t(v): return tuple(int(x) for x in re.findall("[0-9]+", v)[:3])
+old = []
+for line in open(sys.argv[1]):
+    m = re.match("[ \t]*([A-Za-z0-9_.-]+)[ \t]*>=[ \t]*([0-9][0-9.]*)[ \t]*$", line)
+    if not m: continue
+    try: have = version(m.group(1))
+    except Exception: continue
+    if t(have) < t(m.group(2)): old.append("%s>=%s (has %s)" % (m.group(1), m.group(2), have))
+sys.stdout.write(", ".join(old))' "$2" 2>/dev/null || :
+}
+
 # missing_modules PLUGIN -- the server modules its PLUGIN copy names that
-# the Python its launcher runs with lacks: XYMONAPI_PYTHON, else the
-# virtualenv beside the plugins, else python3. Nothing under DESTDIR, where
-# no Python of the installed system is there to ask.
+# the Python its launcher runs with lacks, and those it has older than the
+# plugin's requirements.txt asks: XYMONAPI_PYTHON, else the virtualenv
+# beside the plugins, else python3. Nothing under DESTDIR, where no Python
+# of the installed system is there to ask.
 missing_modules() {
 	[ -z "$DESTDIR" ] || return 0
 	mods=$(held "$EXTROOT" "$1" server-modules)
 	[ -n "$mods" ] || return 0
 	py=${XYMONAPI_PYTHON:-}
 	[ -n "$py" ] || { [ -x "$EXTROOT/venv/bin/python3" ] && py=$EXTROOT/venv/bin/python3; } || py=python3
-	"$py" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $mods 2>/dev/null \
-		|| echo "$mods"
+	lacks=$("$py" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $mods 2>/dev/null) \
+		|| lacks=$mods
+	olds=$(old_modules "$py" "$EXTROOT/$1/requirements.txt")
+	printf '%s\n' "$lacks${lacks:+${olds:+, }}$olds"
 }
 
 # offer QUESTION -- on a terminal, ask it; true on y. Without one, false.
@@ -1124,6 +1152,8 @@ venv_auto() {
 	fi
 	if [ -x "$root/venv/bin/python3" ]; then
 		missing=$("$root/venv/bin/python3" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' $modules)
+		olds=$(old_modules "$root/venv/bin/python3" "$root/$plugin/requirements.txt")
+		missing=$missing${missing:+${olds:+, }}$olds
 		[ -z "$missing" ] && return 0
 		if fetch_ok "The virtualenv $root/venv lacks $missing, which $plugin needs${note:+ ($note)}. Install them into it, from PyPI?"; then
 			venv "$root"
@@ -1148,6 +1178,9 @@ venv_auto() {
 			[ -x "$real" ] && p=$real
 			[ -n "$newest" ] || newest=$p
 			"$p" -c 'import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in sys.argv[1:]))' $modules 2>/dev/null || continue
+			# One that has them, but older than the plugin is tested
+			# with, is not one that has them.
+			[ -z "$(old_modules "$p" "$root/$plugin/requirements.txt")" ] || continue
 			py=$p; break 2
 		done
 	done

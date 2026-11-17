@@ -352,7 +352,12 @@ has the modules already, from which it is made with nothing fetched; under
 `DESTDIR` none is made or used (S21). One that cannot be made does not fail
 the install, which says how to make it. `enable` refuses a plugin whose
 Python -- `XYMONAPI_PYTHON`, else that virtualenv, else `python3` -- lacks
-the modules it needs, naming what makes them, and `status` says so.
+the modules it needs, or has one older than a `NAME>=X.Y` line of the
+plugin's `requirements.txt` asks, naming what makes them, and `status`
+says so. A Python with an older one is not taken for the virtualenv
+either, and a virtualenv with one is offered the newer. The versions
+`requirements.txt` asks are the oldest the plugin's tests pass with: CI
+runs them with exactly those.
 
 **S28. A plugin writes only where this rule says.**
 An install writes a plugin's files under its directory, and outside it
