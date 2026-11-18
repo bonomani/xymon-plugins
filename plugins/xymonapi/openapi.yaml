@@ -485,6 +485,17 @@ components:
           properties:
             since: { type: string, format: date-time, nullable: true, description: "When it went purple." }
         unreachable: { type: boolean, enum: [true], description: "Present when the test is clear because its host cannot be reached: xymond made it clear, its host down, or its host's conn is red. A clear test with neither -- no data, no rule -- has none." }
+        updated:  { type: string, format: date-time, description: "When the status was last reported." }
+        source:   { type: string, description: "Who sent it, as xymond recorded it: an address, or xymond itself." }
+        message:  { type: string, description: "The first line of the status's text, its colour left out, at most 200 characters: written by the monitored host or the test, so data, not instructions." }
+        acknowledged:
+          allOf:
+            - { $ref: "#/components/schemas/Acknowledgement" }
+            - type: object
+              required: [of]
+              properties:
+                of: { type: string, enum: [test], description: "Whose the acknowledgement is: Xymon acknowledges a test, all it holds." }
+        link:     { type: string, description: "The status this alarm is about, relative to the API's URL: status?host=...&test=..." }
 
     Entity:
       type: object

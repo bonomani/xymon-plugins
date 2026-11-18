@@ -36,12 +36,16 @@ XYMONHISTLOGS = os.environ.get("XYMONHISTLOGS", "")
 # encodes a "|" inside ackmsg and acklist, so a line still splits on it.
 # prevgapcolor (Xymon 4.3.31) is the test's own colour while xymond shows
 # another -- purple for a silence, clear for a host down, blue for a
-# disable -- and "none" at every other time.
-# disabletime is when a disable ends, -1 until the test is ok again, and 0
-# when none runs: a blue status with 0 is a DOWNTIME's (xymond.c, the
-# rewrite in handle_status), a blue one with any other a disable's.
+# disable -- and "none" at every other time. disabletime is when a disable
+# ends, -1 until the test is ok again, and 0 when none runs: a blue status
+# with 0 is a DOWNTIME's (xymond.c, the rewrite in handle_status), a blue
+# one with any other a disable's. logtime is when the status was last
+# reported, sender who sent it. line1, the status's first line, is not
+# encoded and may hold a "|": it comes last, and a line splits on the
+# fields before it only.
 BOARD_FIELDS = ["hostname", "testname", "color", "lastchange",
-                "acktime", "ackmsg", "acklist", "prevgapcolor", "disabletime"]
+                "acktime", "ackmsg", "acklist", "prevgapcolor", "disabletime",
+                "logtime", "sender", "line1"]
 
 # A name from the request becomes part of a file path, so it may not hold
 # "/" or "..": a path outside XYMONRRDS. A host name never holds ":" either;
@@ -105,7 +109,7 @@ def ping() -> str:
 
 def _rows() -> list[dict]:
     board = query(f"xymondboard fields={','.join(BOARD_FIELDS)}")
-    return [dict(zip(BOARD_FIELDS, line.split("|")))
+    return [dict(zip(BOARD_FIELDS, line.split("|", len(BOARD_FIELDS) - 1)))
             for line in board.splitlines() if line.strip()]
 
 
@@ -157,6 +161,7 @@ def alarms() -> list[dict]:
     Where nothing was measured that is not ok -- a clear from xymonnet, a
     test that was green -- the severity is indeterminate."""
     res: list[dict] = []
+    now = int(time.time())
     rows = _rows()
     # A host xymonnet cannot reach: its conn is red, and its other network
     # tests are made clear behind it. A clear on a host whose conn is not
@@ -180,8 +185,34 @@ def alarms() -> list[dict]:
             a["unreachable"] = True
         elif colour == "blue":
             a["suppressedBy"] = "downtime" if d.get("disabletime", "0") in ("", "0") else "disable"
+        updated = _iso(d.get("logtime", ""))
+        if updated:
+            a["updated"] = updated
+        if d.get("sender"):
+            a["source"] = d["sender"]
+        message = _message(d.get("line1", ""))
+        if message:
+            a["message"] = message
+        ack = _acknowledgement(d, now)
+        if ack:
+            # Xymon acknowledges a test, all it holds: say so, for the day
+            # one instance is acknowledged on its own (RFC #113).
+            a["acknowledged"] = {**ack, "of": "test"}
+        a["link"] = "status?" + urlencode({"host": host, "test": tst})
         res.append(a)
     return res
+
+
+# A status's first line as line1 gives it: its colour, then xymond's flags
+# comment, then the words the test wrote.
+_LINE1_HEAD = re.compile(r"\A\S+\s*(?:<!--\s*\[flags:[^\]]*\]\s*-->\s*)?")
+_MESSAGE_MAX = 200
+
+
+def _message(line1: str) -> str:
+    """The words of a status's first line, without its colour, hidden as
+    the status text is, at most _MESSAGE_MAX characters."""
+    return hide(_LINE1_HEAD.sub("", line1, count=1).strip()[:_MESSAGE_MAX])
 
 
 def entities() -> list[dict]:

@@ -28,7 +28,7 @@ work=$(mktempdir)
 XYMOND_PID=""
 register_cleanup 'stop_process "$API_PID" "$XYMOND_PID"'
 
-printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n' > "$work/hosts.cfg"
+printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n' > "$work/hosts.cfg"
 
 mkdir -p "$work/home/etc" "$work/home/tmp" "$work/home/www"
 require_cfg XYMONSERVER_CFG "$XYMON_SRC/xymond/etcfiles/xymonserver.cfg"
@@ -69,6 +69,9 @@ send "status clr,example,com.conn clear no answer"
 send "status red,example,com.ssh clear Ping failed, or dialup host"
 # Red in a DOWNTIME window, all day: xymond records it blue, no disable set.
 send "status dt,example,com.conn red down"
+# A first line holding a "|", which the board does not encode in line1.
+send "status pipe,example,com.conn red port 80 | port 443 down
+second line"
 # A host whose name begins with another's, with a status of its own.
 send "status disk2,example,com.disk green Filesystems all ok"
 # Characters xymondboard encodes on its way out: | tab \ and a literal \n.
@@ -162,6 +165,16 @@ assert_contains '"severity":"indeterminate","status":"firing"' "$(alarm clr.exam
 assert_not_contains '"unreachable"' "$(alarm clr.example.com:conn)" "and not unreachable: no conn red, no colour kept behind it"
 assert_contains '"unreachable":true' "$(alarm red.example.com:ssh)" "a clear ssh on a host whose conn is red: unreachable"
 assert_not_contains '"unreachable"' "$(alarm red.example.com:conn)" "red is not unreachable"
+disk_alarm=$(alarm disk.example.com:disk)
+assert_contains '"message":"Filesystems NOT ok"' "$disk_alarm" "an alarm gives its status's first line, the colour left out"
+assert_contains '"source":"127.0.0.1"' "$disk_alarm" "who sent it"
+assert_contains '"updated":"' "$disk_alarm" "when it was last reported"
+assert_contains '"acknowledged":{"until":"' "$disk_alarm" "its acknowledgement"
+assert_contains '"text":"cleaning old kernels, back in an hour","of":"test"' "$disk_alarm" "with its words, said to be the test's"
+assert_contains '"link":"status?host=disk.example.com&test=disk"' "$alarms" "a link to its status"
+assert_not_contains '"acknowledged"' "$(alarm red.example.com:conn)" "an acknowledgement run out is not given"
+assert_contains '"message":"port 80 | port 443 down"' "$(alarm pipe.example.com:conn)" "a first line holding a | is given whole"
+assert_contains '"severity":"major"' "$(alarm pipe.example.com:conn)" "and the fields before it are read in their place"
 
 # /status: the text behind a colour, with what was done about it.
 st=$(api_get '/status?host=disk.example.com&test=disk')
