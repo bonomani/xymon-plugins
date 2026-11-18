@@ -497,6 +497,17 @@ components:
               properties:
                 of: { type: string, enum: [test], description: "Whose the acknowledgement is: Xymon acknowledges a test, all it holds." }
         link:     { type: string, description: "The status this alarm is about, relative to the API's URL: status?host=...&test=..." }
+        instance: { type: string, description: "The object the alarm is about, where Xymon names it: today an inode alarm's file system (its status's ID=), one alarm each. Absent otherwise: the alarm is the test's." }
+        metric:   { type: string, description: "The quantity measured, as the RRD dataset is named: pct. Absent where the result is a state or is not given." }
+        measure:
+          type: object
+          description: "The value measured, and the threshold it crossed, as the status line gives them; or the state, where there is no number."
+          properties:
+            value:    { type: number }
+            unit:     { type: string }
+            warning:  { type: number, description: "The warning threshold, when it is the one crossed." }
+            critical: { type: number, description: "The panic threshold, when it is the one crossed." }
+            state:    { type: string, description: "In place of a number: unreachable, a file system that could not be measured." }
 
     Entity:
       type: object

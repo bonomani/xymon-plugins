@@ -5,8 +5,9 @@
 #
 # The API reports the board a running xymond holds: a status sent to xymond
 # comes back from /states with its colour turned into a verdict, a red one is
-# listed in /alarms and a green one is not, a state says when it is
-# acknowledged, and /health names the xymond it asked. An operation the API
+# listed in /alarms and a green one is not -- an alarm with its severity,
+# its flags, its fields, its domain, and an inode one for each file system
+# in alarm -- a state says when it is acknowledged, and /health names the xymond it asked. An operation the API
 # does not implement answers 404 rather than sample data.
 #
 # Skips where the API cannot run (tests/lib/xymonapi.sh). Needs a built Xymon
@@ -28,7 +29,7 @@ work=$(mktempdir)
 XYMOND_PID=""
 register_cleanup 'stop_process "$API_PID" "$XYMOND_PID"'
 
-printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n' > "$work/hosts.cfg"
+printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n127.0.0.1 ino.example.com # inode\n' > "$work/hosts.cfg"
 
 mkdir -p "$work/home/etc" "$work/home/tmp" "$work/home/www"
 require_cfg XYMONSERVER_CFG "$XYMON_SRC/xymond/etcfiles/xymonserver.cfg"
@@ -72,6 +73,13 @@ send "status dt,example,com.conn red down"
 # A first line holding a "|", which the board does not encode in line1.
 send "status pipe,example,com.conn red port 80 | port 443 down
 second line"
+# The inode status xymond's client analysis writes: one ID= line for each
+# file system in alarm.
+send "status ino,example,com.inode red Filesystems NOT ok
+&red <!-- ID=/var --> /var (95% used) has reached the PANIC level (90%)
+&yellow <!-- ID=/home --> /home (75% used) has reached the WARNING level (70%)
+&red <!-- ID=/mnt/nfs --> /mnt/nfs is unreachable (not measured)
+/ ok"
 # A host whose name begins with another's, with a status of its own.
 send "status disk2,example,com.disk green Filesystems all ok"
 # Characters xymondboard encodes on its way out: | tab \ and a literal \n.
@@ -178,6 +186,17 @@ assert_contains '"message":"no answer"' "$(alarm clr.example.com:conn)" "the dat
 assert_contains '"severity":"major"' "$(alarm pipe.example.com:conn)" "and the fields before it are read in their place"
 assert_contains '"domain":"filesystem"' "$disk_alarm" "disk lies in the filesystem domain"
 assert_contains '"domain":"network"' "$(alarm red.example.com:conn)" "conn in network"
+# inode: one alarm for each file system its status names.
+ino() { printf '%s' "$alarms" | sed 's/},{"id"/}\n{"id"/g' | grep -F "\"instance\":\"$1\""; }
+assert_equal 3 "$(printf '%s' "$alarms" | grep -o '"id":"ino.example.com:inode"' | wc -l | tr -d ' ')" "an inode alarm, one for each file system in alarm"
+assert_contains '"severity":"major"' "$(ino /var)" "/var: major"
+assert_contains '"message":"/var (95% used) has reached the PANIC level (90%)"' "$(ino /var)" "its own line"
+assert_contains '"metric":"pct","measure":{"value":95,"unit":"%","critical":90}' "$(ino /var)" "its pct and the panic level crossed"
+assert_contains '"severity":"minor"' "$(ino /home)" "/home: minor, from its own line"
+assert_contains '"measure":{"value":75,"unit":"%","warning":70' "$(ino /home)" "and the warning level crossed"
+assert_contains '"measure":{"state":"unreachable"' "$(ino /mnt/nfs)" "/mnt/nfs: unreachable, a state"
+assert_not_contains '"instance":"/"' "$alarms" "a file system that is ok is no alarm"
+assert_not_contains '"instance"' "$disk_alarm" "disk names no instance: its lines have no ID="
 
 # /status: the text behind a colour, with what was done about it.
 st=$(api_get '/status?host=disk.example.com&test=disk')

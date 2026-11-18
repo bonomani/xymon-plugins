@@ -19,6 +19,11 @@ given no more. What to do: a client that read `critical` for a silent test
 reads `stale`; one that left out clear or blue by their severity leaves out
 `unreachable`, `suppressed` or `indeterminate`.
 
+An inode test in alarm is given once for each file system its status
+names, each with its `instance`: several alarms share the `id`
+`host:inode`. A client that keys alarms by `id` keys them by host, test and
+instance.
+
 ## A host is called host, from xymonapi 8.0.0
 
 The API called a host `entity`, as a query parameter and as a field; it is
