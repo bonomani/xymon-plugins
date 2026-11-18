@@ -385,8 +385,14 @@ components:
 
     Severity:
       type: string
-      description: red is major, purple critical, yellow and anything else minor.
-      enum: [minor, major, critical]
+      description: >-
+        What the test last measured, in ITU-T X.733's words: red is major,
+        yellow minor. Purple, clear and blue are xymond's, not the test's:
+        the alarm keeps the colour the test last reported (xymond's
+        prevgapcolor) and says what xymond added in stale, unreachable or
+        status. indeterminate where nothing that is not ok was measured: a
+        clear sent by xymonnet, or a test that was green.
+      enum: [minor, major, indeterminate]
 
     Labels:
       type: object
@@ -469,8 +475,15 @@ components:
         host:     { type: string }
         test:     { type: string }
         severity: { $ref: "#/components/schemas/Severity" }
-        status:   { type: string, enum: [firing] }
+        status:   { type: string, enum: [firing, suppressed], description: "suppressed: the test is disabled (blue), listed all the same, as Alertmanager lists a silenced alert." }
         since:    { type: string, format: date-time }
+        stale:
+          type: object
+          description: Present when the test went silent (purple); the severity is the one it last reported.
+          required: [since]
+          properties:
+            since: { type: string, format: date-time, nullable: true, description: "When it went purple." }
+        unreachable: { type: boolean, enum: [true], description: "Present when the test is clear: its host is down (xymond), or xymonnet could not reach it." }
 
     Entity:
       type: object

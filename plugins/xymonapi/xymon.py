@@ -34,8 +34,11 @@ XYMONHISTDIR = os.environ.get("XYMONHISTDIR", "")
 XYMONHISTLOGS = os.environ.get("XYMONHISTLOGS", "")
 # acktime, ackmsg and acklist for a state's acknowledgement; xymondboard
 # encodes a "|" inside ackmsg and acklist, so a line still splits on it.
+# prevgapcolor (Xymon 4.3.31) is the test's own colour while xymond shows
+# another -- purple for a silence, clear for a host down, blue for a
+# disable -- and "none" at every other time.
 BOARD_FIELDS = ["hostname", "testname", "color", "lastchange",
-                "acktime", "ackmsg", "acklist"]
+                "acktime", "ackmsg", "acklist", "prevgapcolor"]
 
 # A name from the request becomes part of a file path, so it may not hold
 # "/" or "..": a path outside XYMONRRDS. A host name never holds ":" either;
@@ -69,7 +72,10 @@ class Upstream(RuntimeError):
 # A verdict, never a colour: the colour is how the web pages show it.
 COLOUR_STATUS = {"green": "ok", "yellow": "warning", "red": "critical",
                  "blue": "disabled", "clear": "nodata", "purple": "unknown"}
-COLOUR_SEVERITY = {"red": "major", "purple": "critical", "yellow": "minor"}
+# What a test measured, as a severity in ITU-T X.733's words. Purple, clear
+# and blue are xymond's, not the test's: an alarm keeps the severity last
+# measured and says beside it what xymond added (RFC #113, version 2).
+COLOUR_SEVERITY = {"red": "major", "yellow": "minor"}
 VERDICTS = tuple(dict.fromkeys(COLOUR_STATUS.values()))
 # xymond_history writes a colour to allevents as its first two letters:
 # "gr ye" is green after yellow. The full names are taken too.
@@ -139,18 +145,29 @@ def states(host: str | None = None, test: str | None = None,
 
 
 def alarms() -> list[dict]:
-    """Every state that is not ok, as an Alarm."""
+    """Every state that is not ok, as an Alarm: the severity the test last
+    measured, and what xymond adds said beside it -- stale for a test gone
+    silent (purple), unreachable for one whose host is down or that
+    xymonnet could not reach (clear), suppressed for one disabled (blue).
+    Where nothing was measured that is not ok -- a clear from xymonnet, a
+    test that was green -- the severity is indeterminate."""
     res: list[dict] = []
     for d in _rows():
         colour = d.get("color", "clear")
         if COLOUR_STATUS.get(colour, "unknown") == "ok":
             continue
         host, tst = d.get("hostname", "?"), d.get("testname", "?")
+        own = colour if colour in COLOUR_SEVERITY else d.get("prevgapcolor", "none")
         a = {"id": f"{host}:{tst}", "host": host, "test": tst,
-             "severity": COLOUR_SEVERITY.get(colour, "minor"), "status": "firing"}
+             "severity": COLOUR_SEVERITY.get(own, "indeterminate"),
+             "status": "suppressed" if colour == "blue" else "firing"}
         t = _iso(d.get("lastchange", ""))
         if t:
             a["since"] = t
+        if colour == "purple":
+            a["stale"] = {"since": t}
+        elif colour == "clear":
+            a["unreachable"] = True
         res.append(a)
     return res
 

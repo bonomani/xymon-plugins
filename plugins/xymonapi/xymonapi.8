@@ -74,7 +74,14 @@ words and until when. Acknowledged from the critical-systems view, its
 words are who acknowledged and the words, whole, \fIby\fR:\fIwords\fR:
 xymond escapes neither, so a name holding a colon cannot be told apart.
 .IP "\fB/alarms\fR"
-Every state whose verdict is not ok.
+Every state whose verdict is not ok, with the severity the test last
+measured, in ITU-T X.733's words: red major, yellow minor. What xymond adds
+is said beside it: \fBstale\fR for a test gone silent (purple),
+\fBunreachable\fR for one that is clear, its host down or out of
+xymonnet's reach, and the status \fBsuppressed\fR for one disabled (blue),
+which is listed all the same. Where nothing that is not ok was measured --
+a clear from xymonnet, a test that was green -- the severity is
+\fBindeterminate\fR. Needs xymond's \fBprevgapcolor\fR, Xymon 4.3.31.
 .IP "\fB/entities\fR"
 Each host on the board, once.
 .IP "\fB/status\fR \fBentity\fR=HOST \fBtest\fR=TEST"
