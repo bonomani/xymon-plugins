@@ -176,6 +176,8 @@ assert_not_contains '"acknowledged"' "$(alarm red.example.com:conn)" "an acknowl
 assert_contains '"message":"port 80 | port 443 down"' "$(alarm pipe.example.com:conn)" "a first line holding a | is given whole"
 assert_contains '"message":"no answer"' "$(alarm clr.example.com:conn)" "the date a status opens with is left out of its message"
 assert_contains '"severity":"major"' "$(alarm pipe.example.com:conn)" "and the fields before it are read in their place"
+assert_contains '"domain":"filesystem"' "$disk_alarm" "disk lies in the filesystem domain"
+assert_contains '"domain":"network"' "$(alarm red.example.com:conn)" "conn in network"
 
 # /status: the text behind a colour, with what was done about it.
 st=$(api_get '/status?host=disk.example.com&test=disk')

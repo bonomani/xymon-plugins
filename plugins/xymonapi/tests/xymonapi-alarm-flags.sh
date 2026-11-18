@@ -28,7 +28,7 @@ py=${XYMONAPI_PYTHON:-python3}
 command -v "$py" >/dev/null 2>&1 || skip "no Python to run the API's code with ($py)"
 
 # alarms LINES -- /alarms for the board lines LINES, one alarm per line:
-# host, severity, status, then the flags present.
+# host, severity, status, the flags present, then [domain].
 alarms() {
 	"$py" - "$ROOT/plugins/xymonapi" "$1" <<'EOF'
 import sys
@@ -37,7 +37,7 @@ import xymon
 xymon.query = lambda req: sys.argv[2]
 for a in xymon.alarms():
     flags = [k for k in ("stale", "unreachable") if k in a] + ([f'by:{a["suppressedBy"]}'] if "suppressedBy" in a else [])
-    print(a["host"], a["severity"], a["status"], *flags)
+    print(a["host"], a["severity"], a["status"], *flags, f'[{a["domain"]}]')
 EOF
 }
 
@@ -67,4 +67,10 @@ reach=$(alarms "$(printf 'far|conn|red|1700000000|0|||none|0\nfar|ssh|clear|1700
 assert_contains 'far indeterminate firing unreachable' "$reach" "a clear ssh on a host whose conn is red: unreachable"
 assert_not_contains 'near indeterminate firing unreachable' "$reach" "a clear procs on a host that answers: not unreachable"
 
-pass "an alarm keeps the severity its test last measured, with stale, unreachable or suppressed beside it"
+# The domain: from the table, or the test itself where it says nothing.
+assert_contains 'red major firing [network]' "$out" "conn lies in the network domain"
+mine=$(alarms "$(printf 'web1|ssh|red|1700000000|0|||none\nweb1|mycheck|yellow|1700000000|0|||none\n')")
+assert_contains 'web1 major firing [ssh]' "$mine" "a network service is its own domain"
+assert_contains 'web1 minor firing [mycheck]' "$mine" "and so is a script's own test"
+
+pass "an alarm keeps the severity its test last measured, with stale, unreachable or suppressed beside it, and says its domain"
