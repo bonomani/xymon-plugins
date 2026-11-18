@@ -169,7 +169,7 @@ def _search(request):
 def _states(request):
     q = request.query_params
     try:
-        items = xymon.states(q.get("entity"), q.get("test"), q.get("verdict"))
+        items = xymon.states(q.get("host"), q.get("test"), q.get("verdict"))
     except Exception as exc:                        # noqa: BLE001
         return _refused(exc)
     return JSONResponse({"items": items})
@@ -194,7 +194,7 @@ def _entities(request):
 def _status(request):
     q = request.query_params
     try:
-        s = xymon.status(q.get("entity"), q.get("test"))
+        s = xymon.status(q.get("host"), q.get("test"))
     except Exception as exc:                        # noqa: BLE001
         return _refused(exc)
     return JSONResponse(s)
@@ -203,7 +203,7 @@ def _status(request):
 def _series(request):
     q = request.query_params
     try:
-        s = xymon.series(q.get("entity"), q.get("test"), q.get("metric"),
+        s = xymon.series(q.get("host"), q.get("test"), q.get("metric"),
                          q.get("from", "-24h"), q.get("to", "now"))
     except Exception as exc:                        # noqa: BLE001
         return _refused(exc)
@@ -213,7 +213,7 @@ def _series(request):
 def _graphs(request):
     q = request.query_params
     try:
-        png = xymon.graph(q.get("entity"), q.get("test"),
+        png = xymon.graph(q.get("host"), q.get("test"),
                           q.get("from", "-24h"), q.get("to", "now"))
     except Exception as exc:                        # noqa: BLE001
         return _refused(exc)
@@ -223,7 +223,7 @@ def _graphs(request):
 def _events(request):
     q = request.query_params
     try:
-        items = xymon.events(q.get("entity"), q.get("test"), q.get("since"), q.get("limit"),
+        items = xymon.events(q.get("host"), q.get("test"), q.get("since"), q.get("limit"),
                              q.get("before"))
     except Exception as exc:                        # noqa: BLE001
         return _refused(exc)
@@ -233,7 +233,7 @@ def _events(request):
 def _histlog(request):
     q = request.query_params
     try:
-        log = xymon.histlog(q.get("entity"), q.get("test"), q.get("time"))
+        log = xymon.histlog(q.get("host"), q.get("test"), q.get("time"))
     except Exception as exc:                        # noqa: BLE001
         return _refused(exc)
     return JSONResponse(log)

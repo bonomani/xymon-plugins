@@ -188,7 +188,7 @@ def open_url(req, timeout: float):
 # The xymonapi version this client was written for, the floor in the PLUGIN
 # file beside this one; tests/api/xymonapi-auth.sh checks the two agree.
 # The API keeps its answers within a major version, so a newer one is fine.
-API_FLOOR = "0.1.0"
+API_FLOOR = "8.0.0"
 _TRIPLE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 _warning: str | None = None
 

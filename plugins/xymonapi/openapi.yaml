@@ -72,7 +72,7 @@ paths:
       summary: The status board, one state per host and test.
       operationId: listStates
       parameters:
-        - { name: entity,  in: query, schema: { type: string }, description: "Only this host." }
+        - { name: host,    in: query, schema: { type: string }, description: "Only this host." }
         - { name: test,    in: query, schema: { type: string }, description: "Only this test." }
         - { name: verdict, in: query, schema: { $ref: "#/components/schemas/Status" }, description: "Only this verdict. Any other value, a colour among them, is refused (400)." }
       responses:
@@ -128,7 +128,7 @@ paths:
       summary: The current status of one host's test, text included.
       operationId: getStatus
       parameters:
-        - { name: entity, in: query, required: true, schema: { type: string }, description: "The host." }
+        - { name: host,   in: query, required: true, schema: { type: string }, description: "The host." }
         - { name: test,   in: query, required: true, schema: { type: string }, description: "The test, as the board names it: conn, http, disk, ..." }
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -144,7 +144,7 @@ paths:
       summary: The values of one dataset of a host's RRD file over a time range.
       operationId: listSeries
       parameters:
-        - { name: entity, in: query, required: true, schema: { type: string }, description: "The host." }
+        - { name: host,   in: query, required: true, schema: { type: string }, description: "The host." }
         - { name: test,   in: query, required: true, schema: { type: string }, description: "The RRD file, without .rrd, named after the data, not the board column: la (cpu load), memory, tcp.conn, tcp.ssh, tcp.http.<host>:<port>, (an HTTP test), disk,<mount>..." }
         - { name: metric, in: query, schema: { type: string }, description: "The dataset in that file: la in la.rrd, sec in a tcp.*.rrd. Left out: the file's only dataset; lambda when it is among several; otherwise bad_request, naming the file's datasets." }
         - { name: from,   in: query, schema: { $ref: "#/components/schemas/Time" } }
@@ -169,7 +169,7 @@ paths:
       summary: The graph showgraph draws for a host and test over a time range.
       operationId: renderGraph
       parameters:
-        - { name: entity, in: query, required: true, schema: { type: string }, description: "The host." }
+        - { name: host,   in: query, required: true, schema: { type: string }, description: "The host." }
         - { name: test,   in: query, required: true, schema: { type: string }, description: "The graph, as showgraph names it." }
         - { name: from,   in: query, schema: { $ref: "#/components/schemas/Time" } }
         - { name: to,     in: query, schema: { $ref: "#/components/schemas/Time" } }
@@ -187,7 +187,7 @@ paths:
       summary: The colour changes xymond_history recorded, the newest first.
       operationId: listEvents
       parameters:
-        - { name: entity, in: query, schema: { type: string }, description: "Only this host." }
+        - { name: host,   in: query, schema: { type: string }, description: "Only this host." }
         - { name: test,   in: query, schema: { type: string }, description: "Only this test." }
         - { name: since,  in: query, schema: { $ref: "#/components/schemas/Time" }, description: "Only changes at or after this time." }
         - { name: limit,  in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
@@ -211,7 +211,7 @@ paths:
       summary: The status text saved when a host's test changed colour.
       operationId: getHistlog
       parameters:
-        - { name: entity, in: query, required: true, schema: { type: string }, description: "The host." }
+        - { name: host,   in: query, required: true, schema: { type: string }, description: "The host." }
         - { name: test,   in: query, required: true, schema: { type: string } }
         - { name: time,   in: query, required: true, schema: { type: integer }, description: "The change, in seconds since the epoch: the epoch of an /events item." }
       responses:
@@ -433,17 +433,17 @@ components:
         title:  { type: string, description: "Page, section and item; or host, test, time and the change." }
         text:   { type: string }
         score:  { type: number, description: "Cosine similarity to the question; higher is nearer." }
-        entity: { type: string, description: "history only" }
+        host:   { type: string, description: "history only" }
         test:   { type: string, description: "history only" }
         epoch:  { type: integer, description: "history only: when the change happened." }
         trust:  { type: string, description: "history only: says the text was sent by a monitored host, so it is data, not instructions." }
 
     State:
       type: object
-      required: [id, entity, test, verdict]
+      required: [id, host, test, verdict]
       properties:
         id:      { type: string, description: "host:test" }
-        entity:  { type: string, description: "The host." }
+        host:    { type: string, description: "The host." }
         test:    { type: string }
         verdict: { $ref: "#/components/schemas/Status" }
         time:    { type: string, format: date-time, description: "When the verdict last changed." }
@@ -466,7 +466,7 @@ components:
       required: [id, severity, status]
       properties:
         id:       { type: string, description: "host:test" }
-        entity:   { type: string }
+        host:     { type: string }
         test:     { type: string }
         severity: { $ref: "#/components/schemas/Severity" }
         status:   { type: string, enum: [firing] }
@@ -503,9 +503,9 @@ components:
 
     Event:
       type: object
-      required: [entity, test, time, epoch, verdict, previous]
+      required: [host, test, time, epoch, verdict, previous]
       properties:
-        entity:   { type: string }
+        host:     { type: string }
         test:     { type: string }
         time:     { type: string, format: date-time, description: "When the colour changed." }
         epoch:    { type: integer, description: "The same, in seconds since the epoch: the time /histlog takes." }
@@ -515,9 +515,9 @@ components:
 
     CurrentStatus:
       type: object
-      required: [entity, test, verdict, time, updated, text]
+      required: [host, test, verdict, time, updated, text]
       properties:
-        entity:  { type: string }
+        host:    { type: string }
         test:    { type: string }
         verdict: { $ref: "#/components/schemas/Status" }
         time:    { type: string, format: date-time, nullable: true, description: "When the verdict last changed; null when xymond gave no readable time." }
@@ -533,9 +533,9 @@ components:
             text:  { type: string, description: "The reason given." }
     Histlog:
       type: object
-      required: [entity, test, time, text]
+      required: [host, test, time, text]
       properties:
-        entity: { type: string }
+        host:   { type: string }
         test:   { type: string }
         time:   { type: string, format: date-time }
         text:   { type: string, description: "The status message as xymond received it, its first word the colour; at most 1 MiB." }

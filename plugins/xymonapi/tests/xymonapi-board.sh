@@ -114,29 +114,29 @@ assert_contains '"xymond":{"alive":true' "$health" "/health while xymond runs"
 assert_contains '"answer":"xymond' "$health" "/health gives the xymond it asked, as it answered"
 assert_contains '"api":{"version":' "$health" "/health gives the API's version under api"
 
-red=$(api_get '/states?entity=red.example.com&test=conn')
+red=$(api_get '/states?host=red.example.com&test=conn')
 assert_contains '"id":"red.example.com:conn"' "$red" "/states for the red host"
 assert_contains '"verdict":"critical"' "$red" "a red status is a critical verdict"
 
-green=$(api_get '/states?entity=green.example.com&test=conn')
+green=$(api_get '/states?host=green.example.com&test=conn')
 assert_contains '"verdict":"ok"' "$green" "a green status is an ok verdict"
 
 # /states says when a state is acknowledged, in the same shape as /status:
 # a page drawing the board picks its icon by it. Both ways, xymondack's
 # acktime and the critical-systems view's acklist, running and run out.
-acked=$(api_get '/states?entity=disk.example.com&test=disk')
+acked=$(api_get '/states?host=disk.example.com&test=disk')
 assert_contains '"acknowledged":{"until":"' "$acked" "/states gives an acknowledgement made with xymondack, with its end time"
 assert_contains 'cleaning old kernels' "$acked" "and its words"
-crit=$(api_get '/states?entity=crit.example.com&test=conn')
+crit=$(api_get '/states?host=crit.example.com&test=conn')
 assert_contains '"acknowledged":{"until":"' "$crit" "/states gives one from the critical-systems view, in acklist alone"
 assert_contains '"text":"alice:on it from the critical view"' "$crit" "with who acknowledged and the words, whole"
-assert_contains '"text":"dom:alice:by with a colon"' "$(api_get '/states?entity=critcolon.example.com&test=conn')" \
+assert_contains '"text":"dom:alice:by with a colon"' "$(api_get '/states?host=critcolon.example.com&test=conn')" \
 	"a name holding a colon does not shift the words: who and the words come whole"
 assert_not_contains '"acknowledged"' "$red" "an acknowledgement with xymondack that ran out is not given, though xymond still carries it"
-assert_not_contains '"acknowledged"' "$(api_get '/states?entity=critold.example.com&test=conn')" "nor one in acklist that ran out"
+assert_not_contains '"acknowledged"' "$(api_get '/states?host=critold.example.com&test=conn')" "nor one in acklist that ran out"
 assert_not_contains '"acknowledged"' "$green" "a state nobody acknowledged has none"
-assert_not_contains '"acknowledged"' "$(api_get '/states?entity=dis.example.com&test=conn')" "nor has a disabled one, whose verdict says it"
-ack_st=$(api_get '/status?entity=disk.example.com&test=disk')
+assert_not_contains '"acknowledged"' "$(api_get '/states?host=dis.example.com&test=conn')" "nor has a disabled one, whose verdict says it"
+ack_st=$(api_get '/status?host=disk.example.com&test=disk')
 ack_st=${ack_st#*\"acknowledged\":}; ack_st=${ack_st%%\}*}
 assert_contains "$ack_st" "$acked" "/states and /status give the same acknowledgement"
 
@@ -145,7 +145,7 @@ assert_contains '"id":"red.example.com:conn"' "$alarms" "a red status is an alar
 assert_not_contains 'green.example.com' "$alarms" "a green status is not an alarm"
 
 # /status: the text behind a colour, with what was done about it.
-st=$(api_get '/status?entity=disk.example.com&test=disk')
+st=$(api_get '/status?host=disk.example.com&test=disk')
 assert_contains '"verdict":"warning"' "$st" "/status gives the verdict"
 assert_contains '"text":"Filesystems NOT ok' "$st" "and the status text, without the command line that set it"
 assert_contains '/var at 91%' "$st" "newlines unescaped"
@@ -153,35 +153,35 @@ assert_contains '2.1G of 24G free\n/boot ok' "$st" "line by line"
 assert_contains '"acknowledged":{' "$st" "an acknowledged status says so"
 assert_contains 'cleaning old kernels' "$st" "with the acknowledgement's words"
 assert_not_contains '"disabled"' "$st" "and is not disabled"
-dis=$(api_get '/status?entity=dis.example.com&test=conn')
+dis=$(api_get '/status?host=dis.example.com&test=conn')
 assert_contains '"disabled":{' "$dis" "a disabled test says so"
 assert_contains 'maintenance window' "$dis" "with the reason given"
 assert_contains '"verdict":"disabled"' "$dis" "and its verdict is disabled, as the board shows it blue"
-assert_equal "404" "$(api_code '/status?entity=green.example.com&test=disk')" "/status of a test the host has not"
+assert_equal "404" "$(api_code '/status?host=green.example.com&test=disk')" "/status of a test the host has not"
 # xymondboard matches host= and test= as unanchored regular expressions;
 # the API must not pass on another host's status as this one's.
-assert_contains '"text":"Filesystems NOT ok' "$(api_get '/status?entity=disk.example.com&test=disk')" "disk.example.com gets its own text, not disk2's"
-assert_contains '"text":"Filesystems all ok"' "$(api_get '/status?entity=disk2.example.com&test=disk')" "and disk2.example.com its own"
-assert_equal "404" "$(api_code '/status?entity=disk.example&test=disk')" "a host name that is the start of a real one"
-assert_equal "404" "$(api_code '/status?entity=disk.example.com&test=dis')" "a test name that is the start of a real one"
-assert_equal "404" "$(api_code '/status?entity=d.sk.example.com&test=disk')" "a dot is a dot, not any character"
-enc=$(api_get '/status?entity=enc.example.com&test=conn')
+assert_contains '"text":"Filesystems NOT ok' "$(api_get '/status?host=disk.example.com&test=disk')" "disk.example.com gets its own text, not disk2's"
+assert_contains '"text":"Filesystems all ok"' "$(api_get '/status?host=disk2.example.com&test=disk')" "and disk2.example.com its own"
+assert_equal "404" "$(api_code '/status?host=disk.example&test=disk')" "a host name that is the start of a real one"
+assert_equal "404" "$(api_code '/status?host=disk.example.com&test=dis')" "a test name that is the start of a real one"
+assert_equal "404" "$(api_code '/status?host=d.sk.example.com&test=disk')" "a dot is a dot, not any character"
+enc=$(api_get '/status?host=enc.example.com&test=conn')
 assert_contains '"text":"C:\\temp | cpu\tload \\n not a newline"' "$enc" "a pipe, a tab, a backslash and a literal \\n are decoded as xymondboard encoded them"
-assert_contains '"text":"up for 5h"' "$(api_get '/status?entity=lt.example.com&test=conn')" "the command line is left out when it has a lifetime with a unit and a group"
-assert_not_contains '"acknowledged"' "$(api_get '/status?entity=red.example.com&test=conn')" "an acknowledgement that ran out is not reported, though xymond still carries it"
-crit=$(api_get '/status?entity=crit.example.com&test=conn')
+assert_contains '"text":"up for 5h"' "$(api_get '/status?host=lt.example.com&test=conn')" "the command line is left out when it has a lifetime with a unit and a group"
+assert_not_contains '"acknowledged"' "$(api_get '/status?host=red.example.com&test=conn')" "an acknowledgement that ran out is not reported, though xymond still carries it"
+crit=$(api_get '/status?host=crit.example.com&test=conn')
 assert_contains '"acknowledged":{' "$crit" "an acknowledgement from the critical-systems view, in acklist alone, says so"
 assert_contains 'on it from the critical view' "$crit" "with its words"
-assert_not_contains '"acknowledged"' "$(api_get '/status?entity=critold.example.com&test=conn')" "one in acklist that ran out is not reported"
-assert_equal "400" "$(api_code '/status?entity=../etc&test=disk')" "/status with a host name that is a path"
+assert_not_contains '"acknowledged"' "$(api_get '/status?host=critold.example.com&test=conn')" "one in acklist that ran out is not reported"
+assert_equal "400" "$(api_code '/status?host=../etc&test=disk')" "/status with a host name that is a path"
 
-hid=$(api_get '/status?entity=enc2.example.com&test=procs')
+hid=$(api_get '/status?host=enc2.example.com&test=procs')
 assert_contains 'mysqld --[hidden] --port=3306' "$hid" "XYMONAPI_HIDE blanks a password on a command line"
 assert_contains '[hidden]' "$hid" "and a token"
 assert_not_contains 'hunter2' "$hid" "the password is gone"
 assert_not_contains 'abc' "$hid" "and so is the token"
-assert_contains 'Filesystems NOT ok' "$(api_get '/status?entity=disk.example.com&test=disk')" "other texts are untouched"
-assert_contains 'cleaning old kernels' "$(api_get '/status?entity=disk.example.com&test=disk')" "an acknowledgement too"
+assert_contains 'Filesystems NOT ok' "$(api_get '/status?host=disk.example.com&test=disk')" "other texts are untouched"
+assert_contains 'cleaning old kernels' "$(api_get '/status?host=disk.example.com&test=disk')" "an acknowledgement too"
 # A file of expressions that is not one stops the API: silently hiding
 # nothing would be worse.
 stop_process "$API_PID"; API_PID=""

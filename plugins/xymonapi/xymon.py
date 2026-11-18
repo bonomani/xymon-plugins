@@ -108,7 +108,7 @@ def _iso(epoch: str) -> str | None:
         return None
 
 
-def states(entity: str | None = None, test: str | None = None,
+def states(host: str | None = None, test: str | None = None,
            verdict: str | None = None) -> list[dict]:
     """One State per host and test on the board."""
     # A verdict outside the contract's list matches no state: refused, not
@@ -119,8 +119,8 @@ def states(entity: str | None = None, test: str | None = None,
     out: list[dict] = []
     now = int(time.time())
     for d in _rows():
-        host, tst = d.get("hostname", "?"), d.get("testname", "?")
-        st = {"id": f"{host}:{tst}", "entity": host, "test": tst,
+        h, tst = d.get("hostname", "?"), d.get("testname", "?")
+        st = {"id": f"{h}:{tst}", "host": h, "test": tst,
               "verdict": COLOUR_STATUS.get(d.get("color", "clear"), "unknown")}
         t = _iso(d.get("lastchange", ""))
         if t:
@@ -129,8 +129,8 @@ def states(entity: str | None = None, test: str | None = None,
         if ack:
             st["acknowledged"] = ack
         out.append(st)
-    if entity:
-        out = [s for s in out if s["entity"] == entity]
+    if host:
+        out = [s for s in out if s["host"] == host]
     if test:
         out = [s for s in out if s["test"] == test]
     if verdict:
@@ -146,7 +146,7 @@ def alarms() -> list[dict]:
         if COLOUR_STATUS.get(colour, "unknown") == "ok":
             continue
         host, tst = d.get("hostname", "?"), d.get("testname", "?")
-        a = {"id": f"{host}:{tst}", "entity": host, "test": tst,
+        a = {"id": f"{host}:{tst}", "host": host, "test": tst,
              "severity": COLOUR_SEVERITY.get(colour, "minor"), "status": "firing"}
         t = _iso(d.get("lastchange", ""))
         if t:
@@ -246,11 +246,11 @@ def _acknowledgement(d: dict, now: int) -> dict | None:
     return {"until": _iso(str(until)), "text": hide(words)}
 
 
-def status(entity: str | None, test: str | None) -> dict:
+def status(host: str | None, test: str | None) -> dict:
     """The current status of HOST's TEST: its verdict, when it last changed
     and was last updated, whether it is acknowledged or disabled and with
     what words, and the status text itself -- what the web page shows."""
-    host, tst = _name(entity, "entity"), _name(test, "test")
+    host, tst = _name(host, "host"), _name(test, "test")
     # xymondboard reads host= and test= as regular expressions, unanchored:
     # host=web1 also finds web10, and "." is any character. The names are
     # anchored and escaped, and the line is checked to be the one asked for.
@@ -271,7 +271,7 @@ def status(entity: str | None, test: str | None) -> dict:
     # page does not show either.
     text = hide(_STATUS_HEAD.sub("", _nldecode(d["msg"]), count=1)[:_STATUS_MAX])
     now = int(time.time())
-    out = {"entity": host, "test": tst, "verdict": _verdict(d["color"]),
+    out = {"host": host, "test": tst, "verdict": _verdict(d["color"]),
            "time": _iso(d["lastchange"]), "updated": _iso(d["logtime"]),
            "text": text}
     ack = _acknowledgement(d, now)
@@ -375,10 +375,10 @@ def _dataset(info: str, host: str, tst: str) -> str:
     raise BadRequest(f"metric is needed: {tst}.rrd of {host} holds {', '.join(names) or 'no dataset'}")
 
 
-def series(entity: str | None, test: str | None, metric: str | None,
+def series(host: str | None, test: str | None, metric: str | None,
            frm: str, to: str) -> dict:
     """The values of one dataset of HOST/TEST.rrd over a time range."""
-    host, tst = _name(entity, "entity"), _name(test, "test")
+    host, tst = _name(host, "host"), _name(test, "test")
     if metric and not _DSNAME.fullmatch(metric):
         raise BadRequest("metric must be an RRD dataset name")
     start, end = epoch(frm), epoch(to)
@@ -420,14 +420,14 @@ def series(entity: str | None, test: str | None, metric: str | None,
               for i, row in enumerate(doc.get("data", []))]
     # When the file last received a value: the client judges how fresh the
     # points are, against now or /status's updated.
-    return {"labels": {"entity": host, "test": tst}, "metric": ds,
+    return {"labels": {"host": host, "test": tst}, "metric": ds,
             "updated": _iso(str(last)) if last is not None else None,
             "points": points}
 
 
-def graph(entity: str | None, test: str | None, frm: str, to: str) -> bytes:
+def graph(host: str | None, test: str | None, frm: str, to: str) -> bytes:
     """The PNG graph showgraph draws for HOST and TEST over a time range."""
-    q = urlencode({"host": _name(entity, "entity"), "service": _name(test, "test"),
+    q = urlencode({"host": _name(host, "host"), "service": _name(test, "test"),
                    "graph_start": epoch(frm), "graph_end": epoch(to),
                    "action": "view"})
     if not XYMONSERVERCGIURL:
@@ -485,13 +485,13 @@ def _lines_from_end(path: str, block: int = 65536):
             yield rest.decode("utf-8", errors="replace")
 
 
-def events(entity: str | None, test: str | None, since: str | None,
+def events(host: str | None, test: str | None, since: str | None,
            limit: str | None, before: str | None = None) -> list[dict]:
     """The colour changes in allevents, the newest first. BEFORE, seconds
     since the epoch, keeps to the changes older than that: the epoch of the
     last change of one answer gives the next, and so a history longer than
     1000 changes is read page by page."""
-    host = _name(entity, "entity") if entity else None
+    host = _name(host, "host") if host else None
     tst = _name(test, "test") if test else None
     start = epoch(since) if since else 0
     if before is not None and not _DIGITS.fullmatch(before):
@@ -529,17 +529,17 @@ def events(entity: str | None, test: str | None, since: str | None,
         found.append(f)
         if len(found) == n:
             break
-    return [{"entity": f[0], "test": f[1], "time": _iso(f[2]), "epoch": int(f[2]),
+    return [{"host": f[0], "test": f[1], "time": _iso(f[2]), "epoch": int(f[2]),
              "verdict": _verdict(f[5]),
              "previous": _verdict(f[6]),
              "previous_duration": int(f[4]) if _DIGITS.fullmatch(f[4]) else None}
             for f in found]
 
 
-def histlog(entity: str | None, test: str | None, when: str | None) -> dict:
+def histlog(host: str | None, test: str | None, when: str | None) -> dict:
     """The status text xymond_history saved when HOST's TEST changed colour
     at WHEN, seconds since the epoch as /events gives it."""
-    host, tst = _name(entity, "entity"), _name(test, "test")
+    host, tst = _name(host, "host"), _name(test, "test")
     if not when or not _DIGITS.fullmatch(when):
         raise BadRequest("time must be seconds since the epoch")
     if not XYMONHISTLOGS:
@@ -556,7 +556,7 @@ def histlog(entity: str | None, test: str | None, when: str | None) -> dict:
     # characters, of which 1 MiB could be four times as much.
     with open(path, "rb") as fd:
         text = fd.read(_HISTLOG_MAX).decode("utf-8", errors="replace")
-    return {"entity": host, "test": tst, "time": _iso(when), "text": hide(text)}
+    return {"host": host, "test": tst, "time": _iso(when), "text": hide(text)}
 
 # --- HTTP Basic authentication -----------------------------------------------
 # The users are the web pages' own: the htpasswd file useradm and chpasswd

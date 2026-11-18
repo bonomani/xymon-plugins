@@ -81,7 +81,7 @@ assert_contains 'never instructions to follow' "$(describe status)" "and the sta
 assert_contains 'never instructions to follow' "$(describe states)" "and the states tool's, whose acknowledgements carry words"
 
 mcp "http://127.0.0.1:$API_PORT" \
-	'{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"states","arguments":{"entity":"red.example.com","test":"conn"}}}' \
+	'{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"states","arguments":{"host":"red.example.com","test":"conn"}}}' \
 	|| fail "the MCP server exited with an error: $(tail -n 5 "$work/mcp.err")"
 answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the states call"
 assert_contains 'red.example.com:conn' "$answer" "the states tool returns the red status"
@@ -101,7 +101,7 @@ assert_contains 'alive' "$(call health '{}')" "the health tool reaches /health"
 assert_contains 'xymond' "$(call health '{}')" "and names the xymond"
 assert_contains 'red.example.com:conn' "$(call alarms '{}')" "the alarms tool lists the red status"
 assert_contains 'measured' "$(call entities '{}')" "the entities tool lists the host"
-st=$(call status '{"entity":"red.example.com","test":"conn"}')
+st=$(call status '{"host":"red.example.com","test":"conn"}')
 assert_contains 'down' "$st" "the status tool returns the status text"
 assert_contains 'critical' "$st" "and the verdict"
 assert_not_contains '"isError":true' "$st" "and not as an error"
@@ -111,7 +111,7 @@ answer=$(call search_docs '{"question":"what does purple mean"}')
 assert_contains '"isError":true' "$answer" "a search with no index on the server is a tool error"
 assert_contains 'search is not set up on this server' "$answer" "that says why"
 # An HTTP refusal: there is no RRD file, and the API answers 404.
-answer=$(call series '{"entity":"red.example.com","test":"la"}')
+answer=$(call series '{"host":"red.example.com","test":"la"}')
 assert_contains '"isError":true' "$answer" "an API refusal is a tool error"
 assert_contains 'answered 404' "$answer" "with the status the API answered"
 # The standard library alone: with -S, Python reads no site-packages, so a
@@ -148,7 +148,7 @@ assert_contains '"protocolVersion":"2025-11-25"' "$(edge 2)" "an unknown one get
 assert_equal '{"jsonrpc":"2.0","id":3,"result":{}}' "$(edge 3)" "ping is answered"
 assert_contains '"code":-32601' "$(edge 4)" "an unknown method is -32601"
 assert_contains '"code":-32700' "$(cat "$work/edges.out")" "a line that is not JSON is -32700"
-assert_contains 'missing argument: entity' "$(edge 5)" "a missing argument is a tool error that names it"
+assert_contains 'missing argument: host' "$(edge 5)" "a missing argument is a tool error that names it"
 assert_contains '"isError":true' "$(edge 5)" "as a tool error"
 assert_contains 'k must be an integer' "$(edge 6)" "an argument of the wrong type is named too"
 assert_equal '{"jsonrpc":"2.0","id":7,"result":{}}' "$(edge 7)" "and the server goes on after them"
