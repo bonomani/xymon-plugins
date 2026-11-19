@@ -74,8 +74,9 @@ paths:
       parameters:
         - { name: entity,  in: query, schema: { type: string }, description: "Only this host." }
         - { name: test,    in: query, schema: { type: string }, description: "Only this test." }
-        - { name: verdict, in: query, schema: { $ref: "#/components/schemas/Status" } }
+        - { name: verdict, in: query, schema: { $ref: "#/components/schemas/Status" }, description: "Only this verdict. Any other value, a colour among them, is refused (400)." }
       responses:
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "200":
           description: The matching states.

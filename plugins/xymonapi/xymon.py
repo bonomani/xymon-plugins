@@ -70,6 +70,7 @@ class Upstream(RuntimeError):
 COLOUR_STATUS = {"green": "ok", "yellow": "warning", "red": "critical",
                  "blue": "disabled", "clear": "nodata", "purple": "unknown"}
 COLOUR_SEVERITY = {"red": "major", "purple": "critical", "yellow": "minor"}
+VERDICTS = tuple(dict.fromkeys(COLOUR_STATUS.values()))
 # xymond_history writes a colour to allevents as its first two letters:
 # "gr ye" is green after yellow. The full names are taken too.
 _SHORT = {c[:2]: c for c in COLOUR_STATUS}
@@ -110,6 +111,11 @@ def _iso(epoch: str) -> str | None:
 def states(entity: str | None = None, test: str | None = None,
            verdict: str | None = None) -> list[dict]:
     """One State per host and test on the board."""
+    # A verdict outside the contract's list matches no state: refused, not
+    # an empty board -- "verdict=red", a colour where a verdict is asked,
+    # would read as "nothing is red" (#92).
+    if verdict and verdict not in VERDICTS:
+        raise BadRequest(f"verdict must be one of {', '.join(VERDICTS)}, not a colour")
     out: list[dict] = []
     now = int(time.time())
     for d in _rows():

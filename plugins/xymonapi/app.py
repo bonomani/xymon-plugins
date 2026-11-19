@@ -171,7 +171,7 @@ def _states(request):
     try:
         items = xymon.states(q.get("entity"), q.get("test"), q.get("verdict"))
     except Exception as exc:                        # noqa: BLE001
-        return _upstream(exc)
+        return _refused(exc)
     return JSONResponse({"items": items})
 
 
