@@ -40,6 +40,9 @@ v() {
 }
 fix() { x update --server xymonapi XYMONHOME="$home"; v 0 --server XYMONHOME="$home"; }
 
+# A server with no plugin says so, as status does, not a heading alone.
+v 0 --server XYMONHOME="$home"
+assert_contains "no plugin" "$out" "[S30] a part with no plugin installed says so"
 x install --server xymonapi XYMONHOME="$home"
 x enable --server xymonapi XYMONHOME="$home"
 x install --tools xymonapi-mcp

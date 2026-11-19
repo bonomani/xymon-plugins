@@ -1897,6 +1897,9 @@ verify_part() {
 		if [ -f "$2/$n/VERSION" ]; then verify_plugin "$1" "$2" "$n"
 		else echo "$n: not installed"; fi
 	done
+	# A part with nothing installed says so, as status does, rather than a
+	# heading with nothing under it.
+	[ -n "$L" ] || echo "no plugin"
 	[ -n "$NAMES" ] || verify_left "$1"
 }
 
