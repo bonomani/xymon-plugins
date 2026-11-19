@@ -28,7 +28,7 @@ work=$(mktempdir)
 XYMOND_PID=""
 register_cleanup 'stop_process "$API_PID" "$XYMOND_PID"'
 
-printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n' > "$work/hosts.cfg"
+printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n' > "$work/hosts.cfg"
 
 mkdir -p "$work/home/etc" "$work/home/tmp" "$work/home/www"
 require_cfg XYMONSERVER_CFG "$XYMON_SRC/xymond/etcfiles/xymonserver.cfg"
@@ -78,11 +78,19 @@ send "xymondack $cookie 0 already over"
 # second, which has run out by the time it is asked for.
 send "status crit,example,com.conn red down"
 send "status critold,example,com.conn red down"
+send "status critcolon,example,com.conn red down"
 send "ackinfo crit.example.com.conn
 1
 3600
 alice
 on it from the critical view"
+# Acknowledged by a name holding a colon: who and the words come whole, as
+# the colon cannot be told from the one between them (#89).
+send "ackinfo critcolon.example.com.conn
+1
+3600
+dom:alice
+by with a colon"
 send "ackinfo critold.example.com.conn
 1
 1
@@ -121,7 +129,9 @@ assert_contains '"acknowledged":{"until":"' "$acked" "/states gives an acknowled
 assert_contains 'cleaning old kernels' "$acked" "and its words"
 crit=$(api_get '/states?entity=crit.example.com&test=conn')
 assert_contains '"acknowledged":{"until":"' "$crit" "/states gives one from the critical-systems view, in acklist alone"
-assert_contains 'on it from the critical view' "$crit" "with its words"
+assert_contains '"text":"alice:on it from the critical view"' "$crit" "with who acknowledged and the words, whole"
+assert_contains '"text":"dom:alice:by with a colon"' "$(api_get '/states?entity=critcolon.example.com&test=conn')" \
+	"a name holding a colon does not shift the words: who and the words come whole"
 assert_not_contains '"acknowledged"' "$red" "an acknowledgement with xymondack that ran out is not given, though xymond still carries it"
 assert_not_contains '"acknowledged"' "$(api_get '/states?entity=critold.example.com&test=conn')" "nor one in acklist that ran out"
 assert_not_contains '"acknowledged"' "$green" "a state nobody acknowledged has none"

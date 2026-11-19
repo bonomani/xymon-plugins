@@ -227,15 +227,19 @@ def _acknowledgement(d: dict, now: int) -> dict | None:
     xymondack sets acktime and ackmsg; the critical-systems view's ackinfo
     adds to acklist, one "start:until:level:by:text" line each, acktime left
     at 0. Xymon's pages show either (xymongen/loaddata.c); the one running
-    longest is given."""
+    longest is given.
+
+    An acklist line's text is given as "by:text", whole: neither field is
+    escaped, so a "by" holding a ":" -- dom:alice -- cannot be told from the
+    text, and splitting it would cut the words wrongly (#89)."""
     acks = []
     acktime = d.get("acktime", "")
     if _DIGITS.fullmatch(acktime) and int(acktime) > now:
         acks.append((int(acktime), _nldecode(d.get("ackmsg", ""))))
     for line in _nldecode(d.get("acklist", "")).splitlines():
-        a = line.split(":", 4)
-        if len(a) == 5 and _DIGITS.fullmatch(a[1]) and int(a[1]) > now:
-            acks.append((int(a[1]), a[4]))
+        a = line.split(":", 3)
+        if len(a) == 4 and _DIGITS.fullmatch(a[1]) and int(a[1]) > now:
+            acks.append((int(a[1]), a[3]))
     if not acks:
         return None
     until, words = max(acks)

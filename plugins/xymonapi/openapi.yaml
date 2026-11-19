@@ -459,7 +459,7 @@ components:
       required: [until, text]
       properties:
         until: { type: string, format: date-time }
-        text:  { type: string, description: "The acknowledgement's words." }
+        text:  { type: string, description: "The acknowledgement's words. From the critical-systems view, who acknowledged and the words, as xymond holds them: by:words, whole, since a by holding a colon cannot be told from the words." }
 
     Alarm:
       type: object
