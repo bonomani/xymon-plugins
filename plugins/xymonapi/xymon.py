@@ -210,8 +210,42 @@ def alarms() -> list[dict]:
             # one instance is acknowledged on its own (RFC #113).
             a["acknowledged"] = {**ack, "of": "test"}
         a["link"] = "status?" + urlencode({"host": host, "test": tst})
-        res.append(a)
+        res += _instances(a) if tst in _INSTANCE_TESTS else [a]
     return res
+
+
+# The tests whose status names each object it judged: xymond writes inode's
+# lines in alarm as "&red <!-- ID=/var --> ..." (xymond_client.c), the only
+# ones with ID=. disk writes the same lines without it, so its file systems
+# are left in the message until Xymon names them (RFC #113, step 5).
+_INSTANCE_TESTS = {"inode"}
+_ID_LINE = re.compile(r"^&(red|yellow) <!-- ID=(.+?) -->\s*(.*)$", re.M)
+# "/var (95% used) has reached the PANIC level (90%)"; a limit in units free
+# instead of a percentage gives no pct, and is left in the message.
+_PCT = re.compile(r"\((\d+)% used\) has reached the (PANIC|WARNING) level \((\d+)%\)")
+
+
+def _instances(alarm: dict) -> list[dict]:
+    """ALARM, one per object its status names in alarm, each with its
+    instance, the severity of its own line and, where the line gives them,
+    its pct and the threshold it crossed. ALARM itself when none is named."""
+    board = query(f"xymondboard host=^{re.escape(alarm['host'])}$ "
+                  f"test=^{re.escape(alarm['test'])}$ fields=msg")
+    out = []
+    for colour, name, words in _ID_LINE.findall(_nldecode(board)):
+        # The line's colour is what the test measured of that object when it
+        # last reported, whatever xymond shows over it since.
+        a = {**alarm, "instance": name, "severity": COLOUR_SEVERITY[colour],
+             "message": hide(words.strip()[:_MESSAGE_MAX])}
+        m = _PCT.search(words)
+        if m:
+            level = "critical" if m.group(2) == "PANIC" else "warning"
+            a["metric"] = "pct"
+            a["measure"] = {"value": int(m.group(1)), "unit": "%", level: int(m.group(3))}
+        elif "is unreachable (not measured)" in words:
+            a["measure"] = {"state": "unreachable"}
+        out.append(a)
+    return out or [alarm]
 
 
 # A status's first line as line1 gives it: its colour, then xymond's flags
