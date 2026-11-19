@@ -60,12 +60,12 @@ for p in "$ROOT"/plugins/*/PLUGIN; do
 	p=$(sed -n 's/^name: *//p' "$p")
 	grep -qw -- "$p" "$ROOT/xymon-plugin" && fail "[S1] xymon-plugin names the plugin $p"
 done
-# Each plugin records its version beside its files: its release tag when
-# the checkout is at one, else the version in its PLUGIN file.
+# Each plugin records its version beside its files, X.Y.Z, the PLUGIN
+# file's: from a checkout at a release tag as from any other (S2).
 for p in xymonapi xymonapi-rag; do
 	assert_file_exists "$home/ext/$p/VERSION"
-	want=$(git -C "$ROOT" describe --exact-match --tags --match "$p/v*" 2>/dev/null || sed -n 's/^version: *//p' "$ROOT/plugins/$p/PLUGIN")
-	assert_equal "$want" "$(cat "$home/ext/$p/VERSION")" "[S2] $p/VERSION holds its tag or its PLUGIN version"
+	want=$(sed -n 's/^version: *//p' "$ROOT/plugins/$p/PLUGIN")
+	assert_equal "$want" "$(cat "$home/ext/$p/VERSION")" "[S2] $p/VERSION holds its PLUGIN version"
 done
 assert_file_exists "$work/man/man8/xymonapi.8"
 

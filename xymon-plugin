@@ -606,13 +606,12 @@ copy() {
 	set +f
 }
 
-# version PLUGIN DIR -- the plugin's version, in DIR/VERSION. Installed from
-# a release, the commit its tag PLUGIN/vX.Y.Z names, it is that tag, which
-# git checks out: the API's, which /health gives so a laptop fetches the same
-# code. From any other commit, or an archive, the version in the PLUGIN file.
+# version PLUGIN DIR -- the plugin's version, X.Y.Z, in DIR/VERSION: the
+# PLUGIN file's, from a checkout or a release's archive alike (S2). Whether
+# the code is exactly a release's is for status and verify to say, and an
+# archive's attestation.
 version() {
-	v=$(git -C "$ROOT/plugins/$1" describe --exact-match --tags --match "$1/v*" 2>/dev/null) || v=$(field "$1" version)
-	printf '%s\n' "$v" > "$2/VERSION" && chmod 644 "$2/VERSION"
+	printf '%s\n' "$(field "$1" version)" > "$2/VERSION" && chmod 644 "$2/VERSION"
 }
 
 # manual PLUGIN PAGE DIR MANROOT FINAL -- the page kept in the plugin's
