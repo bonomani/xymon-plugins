@@ -384,11 +384,11 @@ def _acknowledgement(d: dict, now: int) -> dict | None:
         ack["since"] = since
     # The web page's acknowledgement ends its words with who made it, and
     # from where (web/acknowledge.c), which Xymon's own feed reads back
-    # (web/appfeed.c): read here too. An acklist line's who is not split
+    # (web/appfeed.c, AckedBy): read here too. An acklist line's who is not split
     # from its words, above.
     m = _ACKED_BY.match(words) if not start else None
     if m:
-        ack["by"] = hide(m[2].strip())
+        ack["ackedBy"] = hide(m[2].strip())
         if m[3]:
             ack["from"] = hide(m[3])
         words = m[1]
@@ -449,13 +449,13 @@ _DISABLED_BY = re.compile(r"\A\s*Disabled by: (.*?) @ (\S+)[ \t]*\nReason: (.*)\
 
 def _disable_words(dismsg: str) -> dict:
     """A disable's text, encoded as the board gives it: its reason, and who
-    set it from which address when the web page did (by and from, as
-    Alertmanager's createdBy and TMF642's ackUserId and ackSystemId);
+    set it from which address when the web page did (createdBy, as
+    Alertmanager's silence has it, and from);
     the text whole otherwise. Each hidden as the status text is; what is
     empty is left out."""
     text = _nldecode(dismsg)
     m = _DISABLED_BY.match(text)
-    words = {"by": m[1], "from": m[2], "text": m[3]} if m else {"text": text}
+    words = {"createdBy": m[1], "from": m[2], "text": m[3]} if m else {"text": text}
     return {k: hide(v.strip()) for k, v in words.items() if v.strip()}
 
 

@@ -160,8 +160,8 @@ acked=$(api_get '/states?host=disk.example.com&test=disk')
 assert_contains '"acknowledged":{"until":"' "$acked" "/states gives an acknowledgement made with xymondack, with its end time"
 assert_contains 'cleaning old kernels' "$acked" "and its words"
 assert_not_contains '"since"' "$acked" "and no start: xymondack keeps none"
-assert_not_contains '"by":' "$acked" "and no one, sent with xymon(1)"
-assert_contains '"by":"bruno","from":"10.0.0.9","text":"rebooting it"' "$(api_get '/states?host=wack.example.com&test=conn')" \
+assert_not_contains '"ackedBy":' "$acked" "and no one, sent with xymon(1)"
+assert_contains '"ackedBy":"bruno","from":"10.0.0.9","text":"rebooting it"' "$(api_get '/states?host=wack.example.com&test=conn')" \
 	"the web page's acknowledgement: who, from where, and the words alone"
 crit=$(api_get '/states?host=crit.example.com&test=conn')
 assert_contains '"acknowledged":{"until":"' "$crit" "/states gives one from the critical-systems view, in acklist alone"
@@ -186,8 +186,8 @@ assert_contains '"severity":"minor","status":"firing"' "$(alarm disk.example.com
 assert_contains '"severity":"major","status":"suppressed"' "$(alarm dis.example.com:conn)" "blue over red: the red it measured, major, and suppressed"
 assert_contains '"suppressedBy":[{"kind":"disable","of":"test","until":"' "$(alarm dis.example.com:conn)" "by a disable, the test's, with its end"
 assert_contains '"text":"maintenance window"' "$(alarm dis.example.com:conn)" "and its text"
-assert_not_contains '"by":' "$(alarm dis.example.com:conn)" "a disable sent with xymon(1) says no one"
-assert_contains '"by":"bruno","from":"10.0.0.9","text":"disk being replaced"' "$(alarm wdis.example.com:conn)" "the web page's: who, from where, and the reason alone"
+assert_not_contains '"createdBy":' "$(alarm dis.example.com:conn)" "a disable sent with xymon(1) says no one"
+assert_contains '"createdBy":"bruno","from":"10.0.0.9","text":"disk being replaced"' "$(alarm wdis.example.com:conn)" "the web page's: who, from where, and the reason alone"
 assert_contains '"status":"suppressed"' "$(alarm dt.example.com:conn)" "red in a DOWNTIME window: suppressed"
 assert_contains '"suppressedBy":[{"kind":"downtime","of":"test"' "$(alarm dt.example.com:conn)" "by the DOWNTIME, no disable set"
 assert_not_contains '"suppressedBy"' "$(alarm red.example.com:conn)" "red is not suppressed"
@@ -236,7 +236,7 @@ assert_contains '"disabled":{' "$dis" "a disabled test says so"
 assert_contains 'maintenance window' "$dis" "with the reason given"
 assert_contains '"verdict":"disabled"' "$dis" "and its verdict is disabled, as the board shows it blue"
 wdis=$(api_get '/status?host=wdis.example.com&test=conn')
-assert_contains '"text":"disk being replaced","by":"bruno","from":"10.0.0.9"' "$wdis" "/status reads the web page's disable as /alarms does"
+assert_contains '"text":"disk being replaced","createdBy":"bruno","from":"10.0.0.9"' "$wdis" "/status reads the web page's disable as /alarms does"
 assert_equal "404" "$(api_code '/status?host=green.example.com&test=disk')" "/status of a test the host has not"
 # xymondboard matches host= and test= as unanchored regular expressions;
 # the API must not pass on another host's status as this one's.
