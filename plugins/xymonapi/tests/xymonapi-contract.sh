@@ -59,6 +59,13 @@ v1=/xymon/api/v1
 answer '[C1]' GET "$v1/status?entity=not%20a%20name&test=conn" 400 bad_request
 answer '[C1]' GET "$v1/series?entity=host.example.com&test=la" 404 not_found
 answer '[C1]' GET "$v1/alarms" 502 upstream
+# A verdict outside the contract's list, a colour above all, is refused,
+# naming the list, before xymond is asked -- not an empty board (#92).
+answer '[C1]' GET "$v1/states?verdict=red" 400 bad_request
+assert_contains "verdict must be one of ok, warning, critical, disabled, nodata, unknown" "$(cat "$work/body")" \
+	"[C1] the refusal names the verdicts"
+answer '[C1]' GET "$v1/states?verdict=AAA" 400 bad_request
+answer '[C1]' GET "$v1/states?verdict=critical" 502 upstream
 answer '[C2]' GET "$v1/no-such-path" 404 not_found
 answer '[C2]' GET "/elsewhere" 404 not_found
 answer '[C2]' DELETE "$v1/alarms" 405 method_not_allowed
