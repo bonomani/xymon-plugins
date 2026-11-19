@@ -83,6 +83,11 @@ listed all the same, with \fBsuppressedBy\fR saying why: \fBdisable\fR
 for a disable, \fBdowntime\fR for a DOWNTIME window of hosts.cfg. Where nothing that is not ok was measured --
 a clear from xymonnet, a test that was green -- the severity is
 \fBindeterminate\fR. Needs xymond's \fBprevgapcolor\fR, Xymon 4.3.31.
+An alarm also gives when the status was last reported (\fBupdated\fR), who
+sent it (\fBsource\fR), its first line without the date it opens with
+(\fBmessage\fR), its
+\fBacknowledged\fR, saying it is the test's, and a \fBlink\fR to its
+\fB/status\fR.
 .IP "\fB/entities\fR"
 Each host on the board, once.
 .IP "\fB/status\fR \fBentity\fR=HOST \fBtest\fR=TEST"
