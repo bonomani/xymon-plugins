@@ -28,8 +28,13 @@ case $tag in
 	*/v*) ;;
 	*) die "$tag is no release tag: NAME/vX.Y.Z" ;;
 esac
-printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
-	|| die "$tag: the version must be X.Y.Z"
+# X.Y.Z, digits only: no pipe into grep -q, which a writer under pipefail
+# can die of (SIGPIPE) when grep stops reading at the first match.
+case $version in
+	*[!0-9.]*|*..*|.*|*.|*.*.*.*) die "$tag: the version must be X.Y.Z" ;;
+	*.*.*) ;;
+	*) die "$tag: the version must be X.Y.Z" ;;
+esac
 case $name in
 	''|*/*|.*) die "$tag: no plugin is named $name" ;;
 esac
