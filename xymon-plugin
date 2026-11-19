@@ -51,7 +51,7 @@
 ROOT=$(cd "$(dirname "$0")" && pwd)
 # This installer's own version, released apart from the plugins under the
 # tag xymon-plugin/vX.Y.Z (build/release-archive.sh checks the two agree).
-INSTALLER_VERSION=0.1.1
+INSTALLER_VERSION=0.1.2
 
 die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
 usage() {
