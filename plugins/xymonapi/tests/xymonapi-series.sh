@@ -55,33 +55,33 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do [ -e "$work/rrdctl.req" ] && break; sleep 0.2;
 export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONRRDS="$work/rrd" XYMONTMP="$work/tmp"
 start_api
 
-body=$(api_get "/series?entity=host.example.com&test=la&metric=la&from=$t0&to=$((t0 + 900))")
+body=$(api_get "/series?host=host.example.com&test=la&metric=la&from=$t0&to=$((t0 + 900))")
 for v in 1.0 2.0 3.0; do
 	assert_contains "\"v\":$v" "$body" "/series returns the value $v stored in the RRD"
 done
 assert_contains '"metric":"la"' "$body" "/series names the dataset it read"
 
 # With no metric: the file's only dataset, la here, not a lambda it has not.
-body=$(api_get "/series?entity=host.example.com&test=la&from=$t0&to=$((t0 + 900))")
+body=$(api_get "/series?host=host.example.com&test=la&from=$t0&to=$((t0 + 900))")
 assert_contains '"metric":"la"' "$body" "with no metric, /series reads the file's only dataset"
 assert_contains '"v":3.0' "$body" "and its values"
 # Several datasets: lambda when it is among them, as before there was a
 # choice; otherwise a 400 that names them.
 rrdtool create "$work/rrd/host.example.com/two.rrd" --start "$t0" --step 300 DS:used:GAUGE:600:U:U DS:pct:GAUGE:600:U:U RRA:AVERAGE:0.5:1:100
-assert_equal "400" "$(api_code "/series?entity=host.example.com&test=two&from=$t0&to=$((t0 + 900))")" "two datasets and no metric: a 400"
-assert_contains "two.rrd of host.example.com holds used, pct" "$(api_get "/series?entity=host.example.com&test=two&from=$t0&to=$((t0 + 900))")" "which names them"
+assert_equal "400" "$(api_code "/series?host=host.example.com&test=two&from=$t0&to=$((t0 + 900))")" "two datasets and no metric: a 400"
+assert_contains "two.rrd of host.example.com holds used, pct" "$(api_get "/series?host=host.example.com&test=two&from=$t0&to=$((t0 + 900))")" "which names them"
 rrdtool create "$work/rrd/host.example.com/ncv.rrd" --start "$t0" --step 300 DS:count:GAUGE:600:U:U DS:lambda:GAUGE:600:U:U RRA:AVERAGE:0.5:1:100
-assert_contains '"metric":"lambda"' "$(api_get "/series?entity=host.example.com&test=ncv&from=$t0&to=$((t0 + 900))")" "with lambda among several, lambda"
+assert_contains '"metric":"lambda"' "$(api_get "/series?host=host.example.com&test=ncv&from=$t0&to=$((t0 + 900))")" "with lambda among several, lambda"
 assert_equal "" "$(cat "$work/rrdctl.req")" "a range long past asks xymond_rrd for nothing"
 
 # A range up to now: xymond_rrd is asked to write the host's cached updates
 # first; the left-over file beside its socket does not get in the way.
-body=$(api_get "/series?entity=host.example.com&test=la&metric=la&from=-1h")
+body=$(api_get "/series?host=host.example.com&test=la&metric=la&from=-1h")
 assert_contains '"metric":"la"' "$body" "/series up to now answers"
 assert_contains "/host.example.com/" "$(cat "$work/rrdctl.req")" "and first asks xymond_rrd to write that host's cached updates"
 
 # updated: when the file last received a value -- here the last of the three.
-assert_contains '"updated":"2023-11-14T22:25:00Z"' "$(api_get "/series?entity=host.example.com&test=la&metric=la&from=$t0&to=$((t0 + 900))")" \
+assert_contains '"updated":"2023-11-14T22:25:00Z"' "$(api_get "/series?host=host.example.com&test=la&metric=la&from=$t0&to=$((t0 + 900))")" \
 	"/series says when the file last received a value"
 
 # A write that comes 0.6 s after the request, later than the 0.3 s a graph
@@ -94,7 +94,7 @@ register_cleanup 'stop_process "$RRDCTL2_PID"'
 for _ in 1 2 3 4 5 6 7 8 9 10; do [ -e "$work/rrdctl2.req" ] && break; sleep 0.2; done
 [ -e "$work/rrdctl2.req" ] || fail "the second stand-in control socket did not start"
 want=$("${XYMONAPI_PYTHON:-python3}" -c 'import datetime, sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]), datetime.timezone.utc).isoformat().replace("+00:00", "Z"))' "$now")
-assert_contains "\"updated\":\"$want\"" "$(api_get "/series?entity=host.example.com&test=la&metric=la&from=-1h")" \
+assert_contains "\"updated\":\"$want\"" "$(api_get "/series?host=host.example.com&test=la&metric=la&from=-1h")" \
 	"/series waits for a write that comes after the request, and says its time"
 
 # An HTTP test's file is named after its URL, colon and all; rrdtool reads
@@ -102,28 +102,28 @@ assert_contains "\"updated\":\"$want\"" "$(api_get "/series?entity=host.example.
 http="$work/rrd/host.example.com/tcp.http.host.example.com:8080,.rrd"
 rrdtool create "$http" --start "$t0" --step 300 DS:sec:GAUGE:600:U:U RRA:AVERAGE:0.5:1:100
 rrdtool update "$http" "$((t0 + 300)):0.5"
-body=$(api_get "/series?entity=host.example.com&test=tcp.http.host.example.com:8080,&metric=sec&from=$t0&to=$((t0 + 300))")
+body=$(api_get "/series?host=host.example.com&test=tcp.http.host.example.com:8080,&metric=sec&from=$t0&to=$((t0 + 300))")
 assert_contains '"v":0.5' "$body" "/series reads an HTTP test's RRD, whose name holds a colon"
-body=$(api_get "/series?entity=host.example.com&test=tcp.http.host.example.com:8080,&from=$t0&to=$((t0 + 300))")
+body=$(api_get "/series?host=host.example.com&test=tcp.http.host.example.com:8080,&from=$t0&to=$((t0 + 300))")
 assert_contains '"metric":"sec"' "$body" "and with no metric, its only dataset, sec"
 
-assert_equal "400" "$(api_code '/series?entity=../host.example.com&test=la&metric=la')" "a host name with ../"
-assert_equal "400" "$(api_code '/series?entity=host:example.com&test=la&metric=la')" "a host name with a colon"
-assert_equal "400" "$(api_code '/series?entity=host.example.com&test=la&metric=l:a')" "a metric name with a colon"
-assert_equal "400" "$(api_code '/series?entity=host.example.com&test=la&metric=la&from=yesterday')" "a time that is not now, a number or like -24h"
-assert_equal "404" "$(api_code '/series?entity=host.example.com&test=disk&metric=la')" "an RRD file that does not exist"
-assert_equal "404" "$(api_code '/series?entity=host.example.com&test=la&metric=nope')" "a dataset the RRD file does not hold"
-assert_contains 'no dataset nope' "$(api_get '/series?entity=host.example.com&test=la&metric=nope')" "and the answer names it"
-assert_equal "400" "$(api_code "/series?entity=host.example.com&test=la&metric=la&from=$((t0 + 900))&to=$t0")" "from after to"
+assert_equal "400" "$(api_code '/series?host=../host.example.com&test=la&metric=la')" "a host name with ../"
+assert_equal "400" "$(api_code '/series?host=host:example.com&test=la&metric=la')" "a host name with a colon"
+assert_equal "400" "$(api_code '/series?host=host.example.com&test=la&metric=l:a')" "a metric name with a colon"
+assert_equal "400" "$(api_code '/series?host=host.example.com&test=la&metric=la&from=yesterday')" "a time that is not now, a number or like -24h"
+assert_equal "404" "$(api_code '/series?host=host.example.com&test=disk&metric=la')" "an RRD file that does not exist"
+assert_equal "404" "$(api_code '/series?host=host.example.com&test=la&metric=nope')" "a dataset the RRD file does not hold"
+assert_contains 'no dataset nope' "$(api_get '/series?host=host.example.com&test=la&metric=nope')" "and the answer names it"
+assert_equal "400" "$(api_code "/series?host=host.example.com&test=la&metric=la&from=$((t0 + 900))&to=$t0")" "from after to"
 # Numbers no clock can mean: thousands of digits, which int() itself refuses
 # on Python 3.11+, and a relative time of a billion weeks.
 long=$(printf '1%.0s' $(seq 1 5000))
-assert_equal "400" "$(api_code "/series?entity=host.example.com&test=la&metric=la&from=$long")" "a time of 5000 digits"
-assert_equal "400" "$(api_code '/series?entity=host.example.com&test=la&metric=la&from=-1000000000w')" "a relative time of ten digits"
+assert_equal "400" "$(api_code "/series?host=host.example.com&test=la&metric=la&from=$long")" "a time of 5000 digits"
+assert_equal "400" "$(api_code '/series?host=host.example.com&test=la&metric=la&from=-1000000000w')" "a relative time of ten digits"
 
 # /graphs checks the same names before it asks showgraph, so this needs no
 # web server. What showgraph then draws is xymonapi-graphs.sh's business.
-assert_equal "400" "$(api_code '/graphs?entity=../host.example.com&test=la')" "/graphs, a host name with ../"
+assert_equal "400" "$(api_code '/graphs?host=../host.example.com&test=la')" "/graphs, a host name with ../"
 
 # rrdtool missing is the server's problem, a 502, not a 404 as if the RRD
 # file were not there -- subprocess raises FileNotFoundError for both. The
@@ -142,14 +142,14 @@ python=${XYMONAPI_PYTHON:-python3}
 [ -n "${XYMONAPI_PYTHON:-}" ] || [ ! -x "$ROOT/plugins/venv/bin/python3" ] || python=$ROOT/plugins/venv/bin/python3
 python=$("$python" -c 'import sys; print(sys.executable)')
 XYMONAPI_PYTHON="$python" PATH="$work/nobin" start_api
-assert_equal "502" "$(api_code '/series?entity=host.example.com&test=la&metric=la')" "/series with no rrdtool on PATH"
-assert_contains 'xymonapi.log' "$(api_get '/series?entity=host.example.com&test=la&metric=la')" "and the answer points at the log"
-assert_not_contains "$work" "$(api_get '/series?entity=host.example.com&test=la&metric=la')" "and holds no path of the server's"
+assert_equal "502" "$(api_code '/series?host=host.example.com&test=la&metric=la')" "/series with no rrdtool on PATH"
+assert_contains 'xymonapi.log' "$(api_get '/series?host=host.example.com&test=la&metric=la')" "and the answer points at the log"
+assert_not_contains "$work" "$(api_get '/series?host=host.example.com&test=la&metric=la')" "and holds no path of the server's"
 assert_contains 'rrdtool' "$(cat "$work/api.log")" "which says what was missing"
 
 # No XYMONTMP: nothing to ask, and /series answers as before.
 stop_process "$API_PID"; API_PID=""
 unset XYMONTMP
 start_api
-assert_contains '"metric":"la"' "$(api_get "/series?entity=host.example.com&test=la&metric=la&from=-1h")" "without XYMONTMP, /series up to now answers"
+assert_contains '"metric":"la"' "$(api_get "/series?host=host.example.com&test=la&metric=la&from=-1h")" "without XYMONTMP, /series up to now answers"
 pass "/series reads the RRD values asked for, first asking xymond_rrd to write the host's cached updates when the range reaches them, answers 404 for a missing file or dataset, 400 for bad times, and refuses names that leave XYMONRRDS"

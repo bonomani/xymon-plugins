@@ -56,8 +56,8 @@ answer() {
 export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONRRDS="$work/rrd"
 XYMONAPI_PASSWD="" start_api
 v1=/xymon/api/v1
-answer '[C1]' GET "$v1/status?entity=not%20a%20name&test=conn" 400 bad_request
-answer '[C1]' GET "$v1/series?entity=host.example.com&test=la" 404 not_found
+answer '[C1]' GET "$v1/status?host=not%20a%20name&test=conn" 400 bad_request
+answer '[C1]' GET "$v1/series?host=host.example.com&test=la" 404 not_found
 answer '[C1]' GET "$v1/alarms" 502 upstream
 # A verdict outside the contract's list, a colour above all, is refused,
 # naming the list, before xymond is asked -- not an empty board (#92).

@@ -5,6 +5,21 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## A host is called host, from xymonapi 8.0.0
+
+The API called a host `entity`, as a query parameter and as a field; it is
+`host` now, Xymon's own word (RFC #113): `/states?host=`, `/status`,
+`/series`, `/graphs`, `/events` and `/histlog` take `host=`, and every
+answer that named the host -- a state, an alarm, a status, an event, a
+saved status, a series' labels, a passage of the history found by `/search`
+-- gives `host`. `entity` is read no more. `/entities` keeps its name for
+now. The MCP server's tools `states`, `status` and `series` take `host`
+(xymonapi-mcp 0.2.0), and xymonapi-mcp and xymonapi-rag need xymonapi
+8.0.0. What to do: a script reads and sends `host`; update the server and
+every machine's tools together (`./xymon-plugin update --server`, then
+`--tools`). The search's history passages say `host` once the next
+`xymonapi-rag index` has run, which keeps their vectors.
+
 ## A task's link becomes tasks.d/NAME.cfg, from November 2026
 
 A plugin's task is on when `etc/tasks.d/NAME.cfg` links to its task file;

@@ -181,9 +181,10 @@ def docs_passages(root: str) -> list[dict]:
 # --- History, through the API -------------------------------------------------------
 def _key(p: dict) -> tuple:
     """What makes a passage the same one across two indexings: a change is
-    its host, test and time; a manual-page passage is its title and text."""
+    its title, which says its host, test and time; a manual-page passage is
+    its title and text."""
     if p["kind"] == "history":
-        return ("history", p["entity"], p["test"], p["epoch"])
+        return ("history", p["title"])
     return ("docs", p["title"], p["text"])
 
 
@@ -215,8 +216,8 @@ class _LocalHistory:
     def events(self, since: str, before: str | None) -> list[dict]:
         return self._call(self.xymon.events, None, None, since, "1000", before)
 
-    def histlog(self, entity: str, test: str, epoch: int) -> str:
-        return self._call(self.xymon.histlog, entity, test, str(epoch))["text"]
+    def histlog(self, host: str, test: str, epoch: int) -> str:
+        return self._call(self.xymon.histlog, host, test, str(epoch))["text"]
 
 
 class _ApiHistory:
@@ -229,8 +230,8 @@ class _ApiHistory:
     def events(self, since: str, before: str | None) -> list[dict]:
         return _events_when_up(self.client, since, before)
 
-    def histlog(self, entity: str, test: str, epoch: int) -> str:
-        return self.client.api("/histlog", entity=entity, test=test, time=str(epoch))["text"]
+    def histlog(self, host: str, test: str, epoch: int) -> str:
+        return self.client.api("/histlog", host=host, test=test, time=str(epoch))["text"]
 
 
 def _history_source():
@@ -260,7 +261,7 @@ def history_passages(since: str) -> list[dict]:
     try:
         for ev in _events_since(src, since):
             try:
-                log = src.histlog(ev["entity"], ev["test"], ev["epoch"])[:HISTLOG_TEXT]
+                log = src.histlog(ev["host"], ev["test"], ev["epoch"])[:HISTLOG_TEXT]
             except client.APIError as e:
                 # 404 is a change whose status was not saved. Anything else --
                 # a wrong password, an API that stopped answering -- would
@@ -268,10 +269,10 @@ def history_passages(since: str) -> list[dict]:
                 if e.status != 404:
                     raise
                 log = ""
-            head = (f'{ev["entity"]} {ev["test"]} at {ev["time"]}: '
+            head = (f'{ev["host"]} {ev["test"]} at {ev["time"]}: '
                     f'{ev["previous"]} to {ev["verdict"]}')
             out.append({"kind": "history", "title": head, "text": f"{head}. {log}".strip(),
-                        "entity": ev["entity"], "test": ev["test"], "epoch": ev["epoch"],
+                        "host": ev["host"], "test": ev["test"], "epoch": ev["epoch"],
                         "trust": UNTRUSTED})
     except client.APIError as e:
         raise SystemExit(f"xymonapi-rag: cannot read the history: {e}\n"

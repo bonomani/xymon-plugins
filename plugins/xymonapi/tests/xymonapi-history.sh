@@ -57,12 +57,12 @@ assert_contains '"verdict":"ok","previous":"critical","previous_duration":600' "
 assert_equal "3" "$(printf '%s' "$all" | grep -o '"epoch":' | wc -l | tr -d ' ')" "/events returns every change"
 
 # Filtered, then cut: the newest db.example.com change is not the newest one.
-db=$(api_get '/events?entity=db.example.com&limit=1')
-assert_contains '"entity":"db.example.com","test":"conn"' "$db" "entity= keeps that host's changes"
+db=$(api_get '/events?host=db.example.com&limit=1')
+assert_contains '"host":"db.example.com","test":"conn"' "$db" "host= keeps that host's changes"
 assert_contains '"epoch":1699400300' "$db" "and limit applies after the filter"
 assert_equal '{"items":[]}' "$(api_get '/events?test=nosuchtest')" "test= with no change of that test"
 
-one=$(api_get '/events?entity=web.example.com&test=http&limit=1')
+one=$(api_get '/events?host=web.example.com&test=http&limit=1')
 assert_equal "1" "$(printf '%s' "$one" | grep -o '"epoch":' | wc -l | tr -d ' ')" "limit=1"
 assert_contains '"epoch":1699400600' "$one" "keeps the newest"
 
@@ -70,28 +70,28 @@ since=$(api_get '/events?since=1699400300')
 assert_not_contains '"epoch":1699400000' "$since" "since leaves out an older change"
 assert_contains '"epoch":1699400300' "$since" "and keeps one at that very time"
 
-log=$(api_get '/histlog?entity=web.example.com&test=http&time=1699400000')
+log=$(api_get '/histlog?host=web.example.com&test=http&time=1699400000')
 assert_contains 'HTTP 500 from /login' "$log" "/histlog returns the saved status text"
 assert_contains '[hidden]' "$log" "with what XYMONAPI_HIDE matches blanked"
 assert_not_contains 's3cret' "$log" "and the secret gone"
 
-assert_equal "404" "$(api_code '/histlog?entity=web.example.com&test=http&time=1699400001')" "a time with no saved status"
-assert_equal "400" "$(api_code '/histlog?entity=../web.example.com&test=http&time=1699400000')" "a host name with ../"
-assert_equal "400" "$(api_code '/histlog?entity=web.example.com&test=http&time=yesterday')" "a time that is not a number"
-assert_equal "400" "$(api_code '/events?entity=..&test=http')" "/events, a host name of .."
+assert_equal "404" "$(api_code '/histlog?host=web.example.com&test=http&time=1699400001')" "a time with no saved status"
+assert_equal "400" "$(api_code '/histlog?host=../web.example.com&test=http&time=1699400000')" "a host name with ../"
+assert_equal "400" "$(api_code '/histlog?host=web.example.com&test=http&time=yesterday')" "a time that is not a number"
+assert_equal "400" "$(api_code '/events?host=..&test=http')" "/events, a host name of .."
 assert_equal "400" "$(api_code '/events?before=soon')" "/events, before that is not a number"
 assert_equal "400" "$(api_code '/events?limit=0')" "/events, limit 0"
 assert_equal "400" "$(api_code '/events?limit=1001')" "/events, a limit above 1000"
 # A digit int() refuses, and a time too large for the calendar.
 assert_equal "400" "$(api_code '/events?since=%C2%B2')" "/events, since=² (a digit, not 0-9)"
-assert_equal "400" "$(api_code '/histlog?entity=web.example.com&test=http&time=%C2%B2')" "/histlog, time=²"
-assert_equal "400" "$(api_code '/histlog?entity=web.example.com&test=http&time=99999999999999999999')" "/histlog, a time out of range"
+assert_equal "400" "$(api_code '/histlog?host=web.example.com&test=http&time=%C2%B2')" "/histlog, time=²"
+assert_equal "400" "$(api_code '/histlog?host=web.example.com&test=http&time=99999999999999999999')" "/histlog, a time out of range"
 
 # The 1 MiB limit is on bytes: 600000 two-byte characters are 1.2 MB on disk,
 # and what comes back must hold about 1 MiB of them, not all.
 awk 'BEGIN { printf "red "; for (i = 0; i < 600000; i++) printf "\303\251" }' \
 	> "$work/histlogs/web_example_com/http/Tue_Nov_7_23:43:20_2023"
-curl -s --max-time 30 -o "$work/big.json" "http://127.0.0.1:$API_PORT/xymon/api/v1/histlog?entity=web.example.com&test=http&time=1699400600"
+curl -s --max-time 30 -o "$work/big.json" "http://127.0.0.1:$API_PORT/xymon/api/v1/histlog?host=web.example.com&test=http&time=1699400600"
 size=$(wc -c < "$work/big.json" | tr -d ' ')
 [ "$size" -gt 1000000 ] && [ "$size" -lt 1100000 ] \
 	|| fail "a saved status of 1.2 MB came back as $size bytes, not about 1 MiB"
@@ -106,7 +106,7 @@ printf 'last.example.com conn 1700030000 1700029940 60 re gr 0' >> "$work/long/a
 XYMONHISTDIR="$work/long" start_api
 page=$(api_get '/events?limit=1000')
 assert_equal "1000" "$(printf '%s' "$page" | grep -o '"epoch":' | wc -l | tr -d ' ')" "limit=1000 gives a thousand"
-assert_contains '"entity":"last.example.com"' "${page:0:200}" "the newest first: the last line, which ends without a newline"
+assert_contains '"host":"last.example.com"' "${page:0:200}" "the newest first: the last line, which ends without a newline"
 assert_contains '"epoch":1700015020' "$page" "down to the thousandth-newest"
 assert_not_contains '"epoch":1700015010' "$page" "and not the one before it"
 page2=$(api_get '/events?limit=1000&before=1700015020')
