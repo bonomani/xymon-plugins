@@ -428,7 +428,8 @@ each, `broken:`, `untidy:`, `edited:`, `note:` or `ok:`, the plugin, what differ
 and the command that puts it right:
 `broken: xymonapi: app.py changed: ./xymon-plugin update --server xymonapi`.
 For each plugin of the part, or those named, what its `MANIFEST` (S29)
-and its files disagree on. Broken, as the plugin may no longer do what was
+and its files disagree on; a part with no plugin installed says `no
+plugin`, as `status` does. Broken, as the plugin may no longer do what was
 installed: a file missing; a file changed that is not the administrator's
 to edit; a link outside the directory gone, or pointing elsewhere; a file
 in the plugin's directory that the manifest does not name and that can run
