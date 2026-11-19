@@ -165,6 +165,8 @@ def series(entity: str, test: str, metric: str | None = None,
     since the epoch, or relative like -30m, -24h, -7d. Xymon writes the
     files every 30 minutes, so the last points may be null while the test
     is fine: say so rather than reading a gap at the end as an outage.
+    updated says when the file last received a value: how fresh the
+    points are.
     """
     return api("/series", entity=entity, test=test, metric=metric,
                **{"from": start, "to": end})
