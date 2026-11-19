@@ -51,7 +51,7 @@
 ROOT=$(cd "$(dirname "$0")" && pwd)
 # This installer's own version, released apart from the plugins under the
 # tag xymon-plugin/vX.Y.Z (build/release-archive.sh checks the two agree).
-INSTALLER_VERSION=0.1.0
+INSTALLER_VERSION=0.1.1
 
 die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
 usage() {
@@ -417,6 +417,8 @@ client_of() {
 # client tree a server found names as its own is part of that server, not
 # told apart. It only tells what is here: nothing is chosen from it.
 xymon_trees() {
+	# Inside $( ), a case pattern opens with "(": bash 3.2, macOS's /bin/sh,
+	# reads a bare "pattern)" there as the end of the substitution.
 	trees=$({
 		printf '%s\n' "${XYMON_PLUGINS_TREES:-}" | tr ':' '\n'
 		# XYMON_PLUGINS_TREES_ONLY, for the tests: the trees named above, and
@@ -434,13 +436,13 @@ xymon_trees() {
 			for (i = 2; i <= NF; i++) if ($i ~ /^--config=/) { c = substr($i, 10); sub(/\/etc\/[^\/]*$/, "", c); print c }
 		}'
 		eval "xh=~xymon" 2>/dev/null
-		case $xh in "~xymon"|'') ;; *) printf '%s\n%s\n%s\n' "$xh" "$xh/server" "$xh/client" ;; esac
+		case $xh in ("~xymon"|'') ;; (*) printf '%s\n%s\n%s\n' "$xh" "$xh/server" "$xh/client" ;; esac
 	} | while IFS= read -r t; do
 		[ -n "$t" ] || continue
 		c=$(canon "$t") || continue
 		[ -n "$c" ] || continue
 		k=$(marks "$t")
-		case $k in server|client) printf '%s %s %s\n' "$c" "$k" "$t" ;; esac
+		case $k in (server|client) printf '%s %s %s\n' "$c" "$k" "$t" ;; esac
 	done | awk '!seen[$1]++ { print }')
 	owned=
 	while read -r c k t; do
