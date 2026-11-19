@@ -89,10 +89,11 @@ VERDICTS = tuple(dict.fromkeys(COLOUR_STATUS.values()))
 # says beside it what xymond added (RFC #113).
 COLOUR_SEVERITY = {"red": "critical", "yellow": "warning", "green": "cleared"}
 SEVERITIES = ("critical", "warning", "indeterminate", "cleared")
-# firing and suppressed as Alertmanager has them; inactive, Prometheus's word
-# for a rule that is not firing, for a green test.
-STATUSES = ("firing", "suppressed", "inactive")
-# The flags a state may carry, each a filter of /states and /alarms.
+# An alarm's state, as Prometheus and TMF642 name the field: firing and
+# suppressed as Alertmanager has them; inactive, Prometheus's word for a rule
+# that is not firing, for a green test.
+STATES = ("firing", "suppressed", "inactive")
+# The flags an alarm may carry, each a filter of /alarms.
 FLAGS = ("stale", "unreachable", "suppressed")
 # The domain a test lies in, the label that groups alarms (RFC #113): read
 # from this table, and the test itself where the table says nothing -- so a
@@ -143,11 +144,12 @@ def _iso(epoch: str) -> str | None:
         return None
 
 
-def states(host: str | None = None, test: str | None = None,
-           severity: str | None = None, status: str | None = None,
+def alarms(host: str | None = None, test: str | None = None,
+           severity: str | None = None, state: str | None = None,
            **flags: str | None) -> list[dict]:
-    """One State per host and test on the board -- one per object, where its
-    status names them -- with the severity it last measured and, beside it,
+    """One Alarm per host and test on the board, green ones too, as TMF642
+    keeps a cleared alarm -- one per object, where its status names them --
+    with the severity it last measured, its state, and, beside it,
     what xymond added: stale for a test gone silent (purple), unreachable
     for one made clear because its host's conn is not green (reportedBy that
     conn's state), suppressed for one disabled or in a DOWNTIME window
@@ -159,15 +161,15 @@ def states(host: str | None = None, test: str | None = None,
     # would read as "nothing is red" (#92).
     if severity and severity not in SEVERITIES:
         raise BadRequest(f"severity must be one of {', '.join(SEVERITIES)}, not a colour")
-    if status and status not in STATUSES:
-        raise BadRequest(f"status must be one of {', '.join(STATUSES)}")
+    if state and state not in STATES:
+        raise BadRequest(f"state must be one of {', '.join(STATES)}")
     for flag, value in flags.items():
         if value is not None and value not in ("true", "false"):
             raise BadRequest(f"{flag} must be true or false")
     out = [st for st in _states()
            if (not host or st["host"] == host) and (not test or st["test"] == test)
            and (not severity or st["severity"] == severity)
-           and (not status or st["status"] == status)]
+           and (not state or st["state"] == state)]
     for flag, value in flags.items():
         if value is not None:
             key = "suppressedBy" if flag == "suppressed" else flag
@@ -175,9 +177,17 @@ def states(host: str | None = None, test: str | None = None,
     return out
 
 
-def alarms(**filters: str | None) -> list[dict]:
-    """Every State that is not inactive: what is not green on the board."""
-    return [st for st in states(**filters) if st["status"] != "inactive"]
+_ID = re.compile(r"[0-9a-f]{16}")
+
+
+def alarm(alarm_id: str) -> dict:
+    """The Alarm ALARM_ID, with its status's text: what the web page shows."""
+    if not _ID.fullmatch(alarm_id):
+        raise NotFound(f"no alarm {alarm_id}")
+    for a in alarms():
+        if a["id"] == alarm_id:
+            return {**a, "text": _status_text(a["host"], a["test"])}
+    raise NotFound(f"no alarm {alarm_id}")
 
 
 def _states() -> list[dict]:
@@ -197,7 +207,7 @@ def _states() -> list[dict]:
         a = {"host": host, "test": tst,
              "domain": DOMAIN.get(tst, tst),
              "severity": COLOUR_SEVERITY.get(own, "indeterminate"),
-             "status": {"blue": "suppressed", "green": "inactive"}.get(colour, "firing")}
+             "state": {"blue": "suppressed", "green": "inactive"}.get(colour, "firing")}
         t = _iso(d.get("lastchange", ""))
         if t:
             a["since"] = t
@@ -230,9 +240,12 @@ def _states() -> list[dict]:
             # Xymon acknowledges a test, all it holds: say so, for the day
             # one instance is acknowledged on its own (RFC #113).
             a["acknowledged"] = {**ack, "of": "test"}
-        a["link"] = "status?" + urlencode({"host": host, "test": tst})
         res += _instances(a) if tst in _INSTANCE_TESTS and colour != "green" else [a]
-    return [{"id": _state_id(a), **a} for a in res]
+    out = []
+    for a in res:
+        i = _state_id(a)
+        out.append({"id": i, **a, "link": f"alarms/{i}"})
+    return out
 
 
 def _state_id(a: dict) -> str:
@@ -301,8 +314,7 @@ def hosts() -> list[dict]:
     return [{"host": h} for h in dict.fromkeys(d.get("hostname", "?") for d in _rows())]
 
 
-_STATUS_FIELDS = ["hostname", "testname", "color", "lastchange", "logtime",
-                  "acktime", "disabletime", "ackmsg", "dismsg", "acklist", "msg"]
+_STATUS_FIELDS = ["hostname", "testname", "msg"]
 _STATUS_MAX = 1024 * 1024
 
 # XYMONAPI_HIDE names a file of regular expressions, one per line; what they
@@ -354,8 +366,8 @@ def _nldecode(text: str) -> str:
 
 
 def _acknowledgement(d: dict, now: int) -> dict | None:
-    """The acknowledgement running on a board line, as /states and /status
-    both give it -- {"until", "text"}, and "since" when xymond kept its
+    """The acknowledgement running on a board line, as /alarms
+    gives it -- {"until", "text"}, and "since" when xymond kept its
     start -- or None.
 
     xymond clears an acknowledgement that ran out only when the next status
@@ -404,45 +416,24 @@ def _acknowledgement(d: dict, now: int) -> dict | None:
 _ACKED_BY = re.compile(r"\A(.*?)\s*\nAcked by: (.+?)(?: \((\S+)\))?[ \t]*\n?\Z", re.S)
 
 
-def status(host: str | None, test: str | None) -> dict:
-    """The current status of HOST's TEST: its verdict, when it last changed
-    and was last updated, whether it is acknowledged or disabled and with
-    what words, and the status text itself -- what the web page shows."""
-    host, tst = _name(host, "host"), _name(test, "test")
+def _status_text(host: str, tst: str) -> str:
+    """The text of HOST's TEST status, as the web page shows it."""
     # xymondboard reads host= and test= as regular expressions, unanchored:
     # host=web1 also finds web10, and "." is any character. The names are
     # anchored and escaped, and the line is checked to be the one asked for.
     board = query(f"xymondboard host=^{re.escape(host)}$ test=^{re.escape(tst)}$"
                   f" fields={','.join(_STATUS_FIELDS)}")
-    d = None
     for line in board.splitlines():
         # msg is last; every "|" inside the texts is encoded, so the split
         # lands on the field boundaries.
         f = line.split("|", len(_STATUS_FIELDS) - 1)
         if len(f) == len(_STATUS_FIELDS) and f[0] == host and f[1] == tst:
-            d = dict(zip(_STATUS_FIELDS, f))
-            break
-    if d is None:
-        raise NotFound(f"no status for {host} {tst}")
-    # The text begins with the command that set it, "status+30
-    # host,example,com.conn red", and xymond's flags comment, which the web
-    # page does not show either.
-    text = hide(_STATUS_HEAD.sub("", _nldecode(d["msg"]), count=1)[:_STATUS_MAX])
-    now = int(time.time())
-    out = {"host": host, "test": tst, "verdict": _verdict(d["color"]),
-           "time": _iso(d["lastchange"]), "updated": _iso(d["logtime"]),
-           "text": text}
-    ack = _acknowledgement(d, now)
-    if ack:
-        out["acknowledged"] = ack
-    # Disabled by hand, with an end time or -1 for "until it is ok again"; or
-    # blue from a DOWNTIME tag in hosts.cfg, with no end time and the words
-    # "Planned downtime".
-    until = d["disabletime"]
-    if d["color"] == "blue" or (_DIGITS.fullmatch(until) and until != "0"):
-        out["disabled"] = {"until": _iso(until) if _DIGITS.fullmatch(until) and until != "0" else None,
-                           "text": "", **_disable_words(d["dismsg"])}
-    return out
+            # The text begins with the command that set it, "status+30
+            # host,example,com.conn red", and xymond's flags comment, which
+            # the web page does not show either.
+            msg = dict(zip(_STATUS_FIELDS, f))["msg"]
+            return hide(_STATUS_HEAD.sub("", _nldecode(msg), count=1)[:_STATUS_MAX])
+    raise NotFound(f"no status for {host} {tst}")
 
 
 # The text the web page gives a disable (web/enadis.c): a fixed form of
@@ -594,7 +585,7 @@ def series(host: str | None, test: str | None, metric: str | None,
     points = [{"t": _iso(str(first + i * step)), "v": row[0] if row else None}
               for i, row in enumerate(doc.get("data", []))]
     # When the file last received a value: the client judges how fresh the
-    # points are, against now or /status's updated.
+    # points are, against now or an alarm's updated.
     return {"labels": {"host": host, "test": tst}, "metric": ds,
             "updated": _iso(str(last)) if last is not None else None,
             "points": points}

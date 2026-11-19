@@ -15,8 +15,8 @@ Its operations, under `/xymon/api/v1`, all GET but for `/tokens`:
 | path | gives |
 |---|---|
 | `/health` | whether xymond answers, its version, the search index, this API's version |
-| `/states`, `/alarms`, `/hosts` | the board, each state with its acknowledgement when it has one; what is not ok; the hosts |
-| `/status` | one test's current status, text and acknowledgement included |
+| `/alarms`, `/hosts` | the board, one alarm per test, green ones too, each with its severity, state and acknowledgement; the hosts |
+| `/alarms/{id}` | one alarm, its status's text included |
 | `/series`, `/graphs` | the values of one RRD dataset; the PNG showgraph draws |
 | `/events`, `/histlog` | the colour changes, newest first; the status text saved at one |
 | `/search` | the manual-page and history passages nearest a question, when the server has a search index |

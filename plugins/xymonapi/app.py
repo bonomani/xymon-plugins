@@ -166,25 +166,24 @@ def _search(request):
     return JSONResponse({"items": items})
 
 
-_STATE_FILTERS = ("host", "test", "severity", "status") + xymon.FLAGS
-
-
-def _states(request):
-    return _board(request, xymon.states)
+_ALARM_FILTERS = ("host", "test", "severity", "state") + xymon.FLAGS
 
 
 def _alarms(request):
-    return _board(request, xymon.alarms)
-
-
-def _board(request, read):
-    """/states and /alarms: the same States, filtered alike."""
     q = request.query_params
     try:
-        items = read(**{k: q.get(k) for k in _STATE_FILTERS})
+        items = xymon.alarms(**{k: q.get(k) for k in _ALARM_FILTERS})
     except Exception as exc:                        # noqa: BLE001
         return _refused(exc)
     return JSONResponse({"items": items})
+
+
+def _alarm(request):
+    try:
+        a = xymon.alarm(request.path_params["id"])
+    except Exception as exc:                        # noqa: BLE001
+        return _refused(exc)
+    return JSONResponse(a)
 
 
 def _hosts(request):
@@ -193,15 +192,6 @@ def _hosts(request):
     except Exception as exc:                        # noqa: BLE001
         return _upstream(exc)
     return JSONResponse({"items": items})
-
-
-def _status(request):
-    q = request.query_params
-    try:
-        s = xymon.status(q.get("host"), q.get("test"))
-    except Exception as exc:                        # noqa: BLE001
-        return _refused(exc)
-    return JSONResponse(s)
 
 
 def _series(request):
@@ -457,10 +447,9 @@ async def _ask(request):
 
 ROUTES = {
     "/health": _health,
-    "/states": _states,
     "/alarms": _alarms,
+    "/alarms/{id}": _alarm,
     "/hosts": _hosts,
-    "/status": _status,
     "/series": _series,
     "/graphs": _graphs,
     "/events": _events,
@@ -490,13 +479,15 @@ def build_app() -> FastAPI:
     # (C2): a client on a name the API dropped, entity from 8.0.0, or a
     # mistyped one, start for from, would read an unfiltered answer. Added
     # before the password check, so inside it: a stranger is told 401 first.
-    takes = {(base + path, method.upper()):
-             {p["name"] for p in op.get("parameters", []) if p.get("in") == "query"}
-             for path, ops in spec["paths"].items() for method, op in ops.items()}
+    # A path's {name} matches one segment, as the router reads it.
+    takes = [(re.compile(re.sub(r"\\\{[^/]+?\\\}", "[^/]+", re.escape(base + path)) + "$"), method.upper(),
+              {p["name"] for p in op.get("parameters", []) if p.get("in") == "query"})
+             for path, ops in spec["paths"].items() for method, op in ops.items()]
 
     @app.middleware("http")
     async def _unknown_query(request, call_next):
-        known = takes.get((request.url.path, request.method))
+        known = next((k for rx, m, k in takes
+                      if m == request.method and rx.fullmatch(request.url.path)), None)
         extra = sorted(set(request.query_params) - known) if known is not None else []
         if extra:
             return JSONResponse({"error": "bad_request",

@@ -56,28 +56,31 @@ answer() {
 export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" XYMONRRDS="$work/rrd"
 XYMONAPI_PASSWD="" start_api
 v1=/xymon/api/v1
-answer '[C1]' GET "$v1/status?host=not%20a%20name&test=conn" 400 bad_request
+answer '[C1]' GET "$v1/alarms/not-an-id" 404 not_found
 answer '[C1]' GET "$v1/series?host=host.example.com&test=la" 404 not_found
 answer '[C1]' GET "$v1/alarms" 502 upstream
 # A severity outside the contract's list, a colour above all, is refused,
 # naming the list, before xymond is asked -- not an empty board (#92); so
-# is a status or a flag's filter outside theirs, on /alarms as on /states.
-answer '[C1]' GET "$v1/states?severity=red" 400 bad_request
+# is a state or a flag's filter outside theirs.
+answer '[C1]' GET "$v1/alarms?severity=red" 400 bad_request
 assert_contains "severity must be one of critical, warning, indeterminate, cleared" "$(cat "$work/body")" \
 	"[C1] the refusal names the severities"
-answer '[C1]' GET "$v1/states?severity=AAA" 400 bad_request
-answer '[C1]' GET "$v1/alarms?status=ok" 400 bad_request
+answer '[C1]' GET "$v1/alarms?severity=AAA" 400 bad_request
+answer '[C1]' GET "$v1/alarms?state=ok" 400 bad_request
 answer '[C1]' GET "$v1/alarms?stale=yes" 400 bad_request
-answer '[C1]' GET "$v1/states?severity=critical&stale=true" 502 upstream
+answer '[C1]' GET "$v1/alarms?severity=critical&stale=true" 502 upstream
 answer '[C2]' GET "$v1/no-such-path" 404 not_found
 answer '[C2]' GET "/elsewhere" 404 not_found
 # A query parameter the operation does not list is refused, naming it: a
 # name the API dropped, and a mistyped one, are not taken as absent.
-answer '[C2]' GET "$v1/states?entity=localhost" 400 bad_request
-assert_contains "unknown parameter: entity; this takes host, severity, stale, status, suppressed, test, unreachable" "$(cat "$work/body")" \
+answer '[C2]' GET "$v1/alarms?entity=localhost" 400 bad_request
+assert_contains "unknown parameter: entity; this takes host, severity, stale, state, suppressed, test, unreachable" "$(cat "$work/body")" \
 	"[C2] the refusal names the parameter, and those the operation takes"
 answer '[C2]' GET "$v1/series?host=host.example.com&test=la&start=-2h" 400 bad_request
 answer '[C2]' GET "$v1/health?x=1" 400 bad_request
+answer '[C2]' GET "$v1/alarms/0123456789abcdef?x=1" 400 bad_request
+answer '[C2]' GET "$v1/states" 404 not_found
+answer '[C2]' GET "$v1/status?host=a&test=b" 404 not_found
 answer '[C2]' DELETE "$v1/alarms" 405 method_not_allowed
 answer '[C2]' POST "$v1/health" 405 method_not_allowed
 

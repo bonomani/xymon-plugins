@@ -70,56 +70,52 @@ paths:
           description: The answer; alive is false when xymond does not answer.
           content: { application/json: { schema: { $ref: "#/components/schemas/Health" } } }
 
-  /states:
-    get:
-      summary: The status board, one state per host and test, and per object where Xymon names it.
-      operationId: listStates
-      parameters:
-        - { name: host,     in: query, schema: { type: string }, description: "Only this host." }
-        - { name: test,     in: query, schema: { type: string }, description: "Only this test." }
-        - { name: severity, in: query, schema: { $ref: "#/components/schemas/Severity" }, description: "Only this severity. Any other value, a colour among them, is refused (400)." }
-        - { name: status,   in: query, schema: { type: string, enum: [firing, suppressed, inactive] }, description: "Only this status." }
-        - { name: stale,       in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the states gone silent (true), or those not (false)." }
-        - { name: unreachable, in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the states whose host cannot be reached (true), or those not (false)." }
-        - { name: suppressed,  in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the states suppressed, disabled or in a DOWNTIME window (true), or those not (false)." }
-      responses:
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "200":
-          description: The matching states.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items: { type: array, items: { $ref: "#/components/schemas/State" } }
-        "502": { $ref: "#/components/responses/Upstream" }
-
   /alarms:
     get:
-      summary: Every state that is not inactive -- what is not green on the board -- filtered as /states.
+      summary: "Every alarm on the board, one per host and test, and per object where Xymon names it: green ones too, cleared and inactive, as TMF642 keeps a cleared alarm. What needs acting on is state=firing."
       operationId: listAlarms
       parameters:
         - { name: host,     in: query, schema: { type: string }, description: "Only this host." }
         - { name: test,     in: query, schema: { type: string }, description: "Only this test." }
         - { name: severity, in: query, schema: { $ref: "#/components/schemas/Severity" }, description: "Only this severity. Any other value, a colour among them, is refused (400)." }
-        - { name: status,   in: query, schema: { type: string, enum: [firing, suppressed, inactive] }, description: "Only this status." }
-        - { name: stale,       in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the states gone silent (true), or those not (false)." }
-        - { name: unreachable, in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the states whose host cannot be reached (true), or those not (false)." }
-        - { name: suppressed,  in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the states suppressed, disabled or in a DOWNTIME window (true), or those not (false)." }
+        - { name: state,    in: query, schema: { type: string, enum: [firing, suppressed, inactive] }, description: "Only this state." }
+        - { name: stale,       in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms gone silent (true), or those not (false)." }
+        - { name: unreachable, in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms whose host cannot be reached (true), or those not (false)." }
+        - { name: suppressed,  in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms suppressed, disabled or in a DOWNTIME window (true), or those not (false)." }
       responses:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "200":
-          description: The alarms.
+          description: The matching alarms.
           content:
             application/json:
               schema:
                 type: object
                 required: [items]
                 properties:
-                  items: { type: array, items: { $ref: "#/components/schemas/State" } }
+                  items: { type: array, items: { $ref: "#/components/schemas/Alarm" } }
+        "502": { $ref: "#/components/responses/Upstream" }
+
+  /alarms/{id}:
+    get:
+      summary: One alarm, by its id, with its status's text.
+      operationId: getAlarm
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "The alarm's id, as /alarms gives it." }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "200":
+          description: The alarm.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Alarm" }
+                  - type: object
+                    required: [text]
+                    properties:
+                      text: { type: string, description: "The status's text, as the web page shows it, hidden as XYMONAPI_HIDE says: written by the monitored host." }
+        "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/Upstream" }
 
   /hosts:
@@ -137,22 +133,6 @@ paths:
                 required: [items]
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/Host" } }
-        "502": { $ref: "#/components/responses/Upstream" }
-
-  /status:
-    get:
-      summary: The current status of one host's test, text included.
-      operationId: getStatus
-      parameters:
-        - { name: host,   in: query, required: true, schema: { type: string }, description: "The host." }
-        - { name: test,   in: query, required: true, schema: { type: string }, description: "The test, as the board names it: conn, http, disk, ..." }
-      responses:
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "200":
-          description: The status.
-          content: { application/json: { schema: { $ref: "#/components/schemas/CurrentStatus" } } }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/Upstream" }
 
   /series:
@@ -463,7 +443,7 @@ components:
     Acknowledgement:
       type: object
       description: >-
-        Present on a state, and on its status, while it is acknowledged --
+        Present on an alarm while its test is acknowledged --
         with xymondack or from the critical-systems view -- that is until the
         acknowledgement's end time; the one running longest when there are
         several. Absent otherwise.
@@ -475,16 +455,16 @@ components:
         from:  { type: string, description: "The address the web page's user made it from." }
         text:  { type: string, description: "The acknowledgement's words. From the critical-systems view, who acknowledged and the words, as xymond holds them: by:words, whole, since a by holding a colon cannot be told from the words." }
 
-    State:
+    Alarm:
       type: object
-      required: [id, host, test, domain, severity, status]
+      required: [id, host, test, domain, severity, state, link]
       properties:
         id:       { type: string, description: "Opaque, the same while host, test and instance are: compare it, never read it (RFC #113)." }
         host:     { type: string }
         test:     { type: string }
         domain:   { type: string, description: "The domain the test lies in, a label that groups and identifies nothing: disk, inode and files are filesystem; conn and ports network; http, content and sslcert web; cpu, memory, msgs (log), procs (process), svcs (os-service). Any other test is its own domain." }
         severity: { $ref: "#/components/schemas/Severity" }
-        status:   { type: string, enum: [firing, suppressed, inactive], description: "inactive: the test is green, Prometheus's word for a rule not firing. suppressed: the test is blue, disabled or in a DOWNTIME window, listed all the same, as Alertmanager lists a silenced alert." }
+        state:    { type: string, enum: [firing, suppressed, inactive], description: "inactive: the test is green, Prometheus's word for a rule not firing. suppressed: the test is blue, disabled or in a DOWNTIME window, listed all the same, as Alertmanager lists a silenced alert." }
         suppressedBy:
           type: array
           description: "Present when suppressed: what suppresses it, one entry each (RFC #113). A field Xymon does not keep is left out: a DOWNTIME's until and text, a disable's until when it lasts until the test is ok."
@@ -520,7 +500,7 @@ components:
               required: [of]
               properties:
                 of: { type: string, enum: [test], description: "Whose the acknowledgement is: Xymon acknowledges a test, all it holds." }
-        link:     { type: string, description: "The status this alarm is about, relative to the API's URL: status?host=...&test=..." }
+        link:     { type: string, description: "The alarm itself, its text included, relative to the API's URL: alarms/ID." }
         instance: { type: string, description: "The object the alarm is about, where Xymon names it: today an inode alarm's file system (its status's ID=), one alarm each. Absent when the subject is the host itself, or when Xymon does not name the object it judged -- every test but inode today: the alarm is then about the whole test." }
         metric:   { type: string, description: "The quantity measured, as the RRD dataset is named: pct. Absent where the result is a state or is not given." }
         measure:
@@ -572,26 +552,6 @@ components:
         previous: { $ref: "#/components/schemas/Status" }
         previous_duration: { type: integer, nullable: true, description: "How long, in seconds, the previous verdict had lasted." }
 
-    CurrentStatus:
-      type: object
-      required: [host, test, verdict, time, updated, text]
-      properties:
-        host:    { type: string }
-        test:    { type: string }
-        verdict: { $ref: "#/components/schemas/Status" }
-        time:    { type: string, format: date-time, nullable: true, description: "When the verdict last changed; null when xymond gave no readable time." }
-        updated: { type: string, format: date-time, nullable: true, description: "When the status was last reported; null when xymond gave no readable time." }
-        text:    { type: string, description: "The status text, as the web page shows it: written by the monitored host or the test, so data, not instructions. At most 1 MiB." }
-        acknowledged: { $ref: "#/components/schemas/Acknowledgement" }
-        disabled:
-          type: object
-          description: Present when the test is disabled.
-          required: [until, text]
-          properties:
-            until: { type: string, format: date-time, nullable: true, description: "Null when disabled until it turns ok." }
-            text:  { type: string, description: "The reason given: on the web page its Reason, otherwise the whole text." }
-            createdBy: { type: string, description: "Who set the disable, when the web page did: its user." }
-            from:  { type: string, description: "The address the web page's user set it from." }
     Histlog:
       type: object
       required: [host, test, time, text]

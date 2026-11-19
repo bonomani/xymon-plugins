@@ -47,16 +47,14 @@ call.
 .SH TOOLS
 .IP "\fBhealth\fR"
 Whether xymond answers, and its version.
-.IP "\fBstates\fR [host] [test] [severity] [status] [stale] [unreachable] [suppressed]"
-The status board, one state per host and test: the severity its test last
-measured (critical, warning, cleared, indeterminate), its status (firing,
+.IP "\fBalarms\fR [host] [test] [severity] [state] [stale] [unreachable] [suppressed]"
+Every alarm on the board, green ones too: the severity its test last
+measured (critical, warning, cleared, indeterminate), its state (firing,
 suppressed, inactive), and what xymond added beside it.
-.IP "\fBalarms\fR [the same filters]"
-Every state that is not inactive, in the same form.
 .IP "\fBhosts\fR"
 Each host on the board, once.
-.IP "\fBstatus\fR host test"
-The current status of one host's test, with its text.
+.IP "\fBalarm\fR id"
+One alarm, by the id \fBalarms\fR gives it, with its status's text.
 .IP "\fBseries\fR host test [metric] [start] [end]"
 The values of one dataset of a host's RRD file over a time range.
 .IP "\fBsearch_docs\fR question [k]"

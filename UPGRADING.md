@@ -5,60 +5,57 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
-## An unknown query parameter is refused, from xymonapi 9.0.0
+## The board is /alarms, one alarm per test, from xymonapi 9.0.0
 
-A query parameter an operation does not list was ignored: `/states?entity=web1`,
-with the name 8.0.0 dropped, answered the whole board as if no host had been
-named, and `/series?start=-2h`, for `from`, the last 24 hours. It is refused
-now, `400 bad_request`, naming it and those the operation takes (openapi.yaml,
-C2). What to do: a script sends only the parameters `openapi.yaml` lists --
-`host`, not `entity`; `from` and `to`, not `start` and `end`. The MCP server,
-the search and the agent send none other, and need no change.
+**One resource.** The board is `/alarms`, as TMF642 has `/alarm` and
+`/alarm/{id}`: every alarm, green ones too, and `/alarms/{id}` one alarm
+with its status's `text`. `/states` and `/status` are gone.
 
-`/states` and `/alarms` give one object, the State, and take the same
-filters: `/alarms` is every state that is not `inactive`.
+| before | from 9.0.0 |
+|---|---|
+| `/states` | `/alarms` |
+| `/alarms` (what is not green) | `/alarms?state=firing`, and `state=suppressed` for blue |
+| `/status?host=H&test=T` | `/alarms/{id}`, the id from `/alarms?host=H&test=T` |
+| `/entities`, items `{"id", "composition", "labels"}` | `/hosts`, items `{"host"}` |
 
-- `verdict` is gone from `/states`: a state has the `severity` its test last
-  measured, red `critical`, yellow `warning`, green `cleared`,
-  `indeterminate` where nothing was; and a `status`, `firing`, `suppressed`
-  (blue) or `inactive` (green). Red was `major` and yellow `minor` in
-  `/alarms`, `critical` and `warning` in `/states`: both now say `critical`
-  and `warning`. Purple, clear and blue no longer replace what was
-  measured: they are said beside it, `stale`, `unreachable`, `suppressedBy`.
-- Filters: `host`, `test`, `severity`, `status`, and `stale`,
-  `unreachable`, `suppressed` as `true` or `false`, on both. `verdict=` is
-  refused.
-- `unreachable` is an object, `{"reportedBy": [id]}`, the id of the host's
-  conn state, which says it cannot be reached; it was `true`. It is given
-  when the host's conn is not green -- yellow and blue too, as xymond reads
-  it, where it was red only -- and not for a dialup host.
-- A state has the fields an alarm had: `since` (it was `time`), `updated`,
-  `source`, `message`, `domain`, `link`, `id`.
+**One alarm object**, in every answer:
 
-What to do: read `severity` and `status` in place of `verdict`; filter
-with `severity=` or `status=`; test `unreachable` for presence, not `true`.
+- `severity`, what the test last measured, in ITU-T X.733's words: red
+  `critical`, yellow `warning`, green `cleared`, `indeterminate` where
+  nothing was. `verdict` is gone, and so are `major` and `minor`.
+- `state`: `firing`, `suppressed` (blue: disabled, or a DOWNTIME window),
+  `inactive` (green). It was the field `status`.
+- Purple, clear and blue no longer replace what was measured: they are
+  said beside it. `stale: {since}` for a test gone silent;
+  `unreachable: {reportedBy: [id]}` for one made clear because its host's
+  conn is not green, the id that conn alarm's (it was `true`, and given
+  for a red conn only); `suppressedBy`, a list (it was a word): `{kind:
+  disable, of: test, until, createdBy, from, text}` or `{kind: downtime,
+  of: test}`, a field Xymon does not keep left out -- `createdBy` and
+  `from` only for a disable set from the web page.
+- `acknowledged`: `since` when xymond keeps it (the critical-systems
+  view), `ackedBy` and `from` when the web page made it.
+- `id` is opaque, the same while host, test and instance are: it was
+  `host:test`, which every inode alarm of a host shared. `link` is
+  `alarms/{id}`. `since` was `time` in `/states`.
+- A time xymond gives as 0, a test such as `trends` that never changed,
+  is left out, not `1970-01-01T00:00:00Z`.
 
-In the same version, three answers take the form RFC #113 gives them:
+**Filters**, on `/alarms`: `host`, `test`, `severity`, `state`, and
+`stale`, `unreachable`, `suppressed` as `true` or `false`. **A query
+parameter an operation does not list is refused**, `400 bad_request`,
+naming it and those the operation takes (openapi.yaml, C2): it was
+ignored, so `/states?entity=web1` answered the whole board and
+`/series?start=-2h` the last 24 hours.
 
-- An alarm's `id` is opaque, the same while its host, test and instance are:
-  it was `host:test`, which every `inode` alarm of a host shared. Compare
-  it; read the host and the test from their fields.
-- `suppressedBy` is a list, one entry per what suppresses: `{"kind":
-  "disable", "of": "test", "until": ..., "text": ...}`, or `{"kind":
-  "downtime", "of": "test"}`; it was the word alone. A disable set from the web page
-  says who set it and from where, `createdBy` and `from`, its `text` then the
-  reason alone; `/status`'s `disabled` the same.
-- An acknowledgement made from the critical-systems view says when, `since`;
-  one made with xymondack has none, xymond not keeping it. One made from the web
-  page says who made it and from where, `ackedBy` and `from`, its `text` then
-  the words alone, as a disable does.
-- A time xymond gives as 0, a test such as `trends` that never changed, is
-  left out, not `1970-01-01T00:00:00Z`.
+**The MCP server** (xymonapi-mcp 0.3.0) follows: its tools `alarms` (with
+the same filters) and `alarm` by id; `states`, `status` and `entities` are
+gone, `hosts` in their place for the last.
 
-`/entities` is `/hosts`, each item `{"host": "srv1"}`: it was `{"id":
-"srv1", "composition": "measured", "labels": {"role": "host"}}`, what is
-left of the word entity. The MCP server's tool `entities` is `hosts`
-(xymonapi-mcp 0.3.0).
+What to do: read `/alarms?state=firing` where you read `/alarms`, and
+`/alarms` where you read `/states`; `severity` and `state` in place of
+`verdict` and `status`; find an alarm's text at its `link`; test
+`unreachable` for presence; send only the parameters `openapi.yaml` lists.
 
 ## An alarm keeps the severity its test measured, from xymonapi 8.0.0
 

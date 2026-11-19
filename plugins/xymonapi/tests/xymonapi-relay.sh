@@ -150,11 +150,11 @@ mkdir -p "$work/safe"; ln -s "$work/safe" "$work/via"
 if command -v htpasswd >/dev/null 2>&1; then
 	htpasswd -cb "$work/htpasswd" alice secret 2>/dev/null
 	XYMONAPI_PASSWD="$work/htpasswd" XYMONAPI_RELAY_SOCKET=$relay start_api
-	assert_equal "401" "$(code --unix-socket "$relay" http://localhost/xymon/api/v1/states)" "[C3] the relay socket asks for a user"
+	assert_equal "401" "$(code --unix-socket "$relay" http://localhost/xymon/api/v1/alarms)" "[C3] the relay socket asks for a user"
 	assert_equal "401" "$(code --unix-socket "$relay" http://localhost/xymon/api/v1/health/)" "[C3] before anything else, a path it does not list too"
 	assert_equal "200" "$(code --unix-socket "$relay" -u alice:secret http://localhost/xymon/api/v1/health)" "[C3] and answers one with its password"
 	assert_equal "404" "$(code --unix-socket "$relay" -u alice:secret http://localhost/xymon/api/v1/health/)" "[C2] which then finds no such path"
-	assert_equal "401" "$(code --cacert "$XYMONAPI_TLS_CERT" "https://127.0.0.1:$API_PORT/xymon/api/v1/states")" "as the port does"
+	assert_equal "401" "$(code --cacert "$XYMONAPI_TLS_CERT" "https://127.0.0.1:$API_PORT/xymon/api/v1/alarms")" "as the port does"
 	assert_equal "200" "$(code --unix-socket "$work/api.sock" http://localhost/xymon/api/v1/health)" "while the other socket asks none"
 else
 	echo "NOTE: the part with a password was not run: Apache's htpasswd is not installed"
