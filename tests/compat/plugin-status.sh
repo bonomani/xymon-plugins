@@ -5,7 +5,7 @@
 #
 # status-server says, for each server plugin of this checkout, whether it is
 # installed, the version installed -- its VERSION, a release tag read as its
-# X.Y.Z -- whether its task is on, and the version this checkout has, with
+# X.Y.Z -- whether its task is on, and the version this copy has, with
 # "newer" when it is newer than the one installed; status-tools the same on
 # your own machine, without on or off. A plugin named is the only one told
 # of; a name that is no plugin is refused. status installs, enables and
@@ -28,7 +28,7 @@ st() { "$ROOT/xymon-plugin" status --server "$@" XYMONHOME="$home" 2>&1; }
 # Each entry under $home with its own details, and no ".." line: on some
 # systems (macOS) the file written here beside $home changes its parent's.
 find "$home" -exec ls -ld {} + | sort > "$work/before"
-assert_contains "xymonapi: not installed; this checkout has $here" "$(st)" "[S15] a plugin not installed is said to be"
+assert_contains "xymonapi: not installed; this copy has $here" "$(st)" "[S15] a plugin not installed is said to be"
 find "$home" -exec ls -ld {} + | sort > "$work/after"
 cmp -s "$work/before" "$work/after" || fail "[S15] status changed the tree: $(diff "$work/before" "$work/after")"
 
@@ -36,7 +36,7 @@ cmp -s "$work/before" "$work/after" || fail "[S15] status changed the tree: $(di
 	|| fail "install-server failed: $(tail -n 5 "$work/install.log")"
 find "$home" | sort > "$work/before"
 out=$(st)
-assert_contains "xymonapi: $here installed, off; this checkout has $here" "$out" "[S15] installed, its version, off"
+assert_contains "xymonapi: $here installed, off; this copy has $here" "$out" "[S15] installed, its version, off"
 assert_not_contains "newer" "$out" "[S15] nothing newer when the versions agree"
 find "$home" | sort > "$work/after"
 cmp -s "$work/before" "$work/after" || fail "[S15] status changed the installation: $(diff "$work/before" "$work/after")"
@@ -46,7 +46,7 @@ assert_contains "xymonapi: $here installed, on;" "$(st xymonapi)" "[S15] on once
 assert_equal 1 "$(st xymonapi | grep -cE "^ *xymonapi[a-z-]*: ")" "[S15] a plugin named is the only one told of"
 
 echo "xymonapi/v0.0.1" > "$home/ext/xymonapi/VERSION"
-assert_contains "xymonapi: 0.0.1 installed, on; this checkout has $here, newer" "$(st xymonapi)" "[S15] an older install, by its release tag, has a newer version here"
+assert_contains "xymonapi: 0.0.1 installed, on; this copy has $here, newer" "$(st xymonapi)" "[S15] an older install, by its release tag, has a newer version here"
 
 rc=0
 st no-such-plugin > "$work/bad" || rc=$?
@@ -55,7 +55,7 @@ st no-such-plugin > "$work/bad" || rc=$?
 prefix=$work/tools
 "$ROOT/xymon-plugin" install --tools xymonapi PREFIX="$prefix" >"$work/tools.log" 2>&1 || fail "install-tools failed: $(tail -n 5 "$work/tools.log")"
 out=$("$ROOT/xymon-plugin" status --tools xymonapi PREFIX="$prefix" 2>&1)
-assert_contains "xymonapi: $here installed; this checkout has $here" "$out" "[S15] status-tools: installed, its version, no on or off"
+assert_contains "xymonapi: $here installed; this copy has $here" "$out" "[S15] status-tools: installed, its version, no on or off"
 assert_not_contains "other code" "$out" "[S15] the same code is not said to differ"
 # At the same version, a checkout whose code differs from what MANIFEST
 # says was installed says so, naming the update.
@@ -64,6 +64,6 @@ mkdir -p "$other"
 cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$other/"
 echo "# changed" >> "$other/plugins/xymonapi/xymonapi_client.py"
 out=$("$other/xymon-plugin" status --tools xymonapi PREFIX="$prefix" 2>&1)
-assert_contains "xymonapi: $here installed; this checkout has $here, with other code: ./xymon-plugin update --tools xymonapi" "$out" "[S15] at the same version, other code is said, naming the update"
+assert_contains "xymonapi: $here installed; this copy has $here, with other code: ./xymon-plugin update --tools xymonapi" "$out" "[S15] at the same version, other code is said, naming the update"
 
-pass "status-server and status-tools say what is installed, at which version, whether its task is on, and whether this checkout is newer, changing nothing"
+pass "status-server and status-tools say what is installed, at which version, whether its task is on, and whether this copy is newer, changing nothing"

@@ -983,7 +983,7 @@ disable() {
 # status SIDE ROOT PLUGIN -- one line for the plugin on that side: the
 # version installed, from its VERSION -- a release tag, NAME/vX.Y.Z, read as
 # its X.Y.Z -- or that it is not; on the server, whether its task is on; and
-# the version in this checkout, with "newer" when it is, or that the
+# the version in this copy -- a checkout or unpacked releases --, with "newer" when it is, or that the
 # checkout has it no more. The side and the task are read from the
 # installed copy of its PLUGIN file. A plugin that has nothing on that
 # side says nothing.
@@ -1005,7 +1005,7 @@ status() {
 	[ -n "$(held "$2" "$3" "$1-files")" ] || return 0
 	here=$(field "$3" version)
 	if [ ! -f "$2/$3/VERSION" ]; then
-		echo "$3: not installed; this checkout has $here"
+		echo "$3: not installed; this copy has $here"
 		return 0
 	fi
 	v=$(sed -e 's|^.*/v||' "$2/$3/VERSION")
@@ -1020,14 +1020,14 @@ status() {
 		m=$(missing_modules "$3"); [ -z "$m" ] || lack="; its Python lacks $m"
 	fi
 	if [ -z "$here" ]; then
-		echo "$3: $v installed$state$lack; not in this checkout"
+		echo "$3: $v installed$state$lack; not in this copy"
 		return 0
 	fi
 	newer=
 	if older "$v" "$here"; then newer=", newer"
 	elif [ "$v" = "$here" ] && other_code "$1" "$2" "$3"; then newer=", with other code: ./xymon-plugin update --$1 $3"
 	fi
-	echo "$3: $v installed$state$lack; this checkout has $here$newer"
+	echo "$3: $v installed$state$lack; this copy has $here$newer"
 }
 
 # installed_tasks -- the plugins named, or every one installed with a task.
@@ -1421,10 +1421,10 @@ DONE=
 install_server() {
 	case " $DONE " in *" $1 "*) return 0 ;; esac
 	# Installed already, and not updating: --all, or a plugin needed,
-	# passes over it, said, with a note when this checkout's is newer.
+	# passes over it, said, with a note when this copy's is newer.
 	if [ -z "${UPDATING:-}" ] && v=$(installed "$EXTROOT" "$1"); then
 		here=$(field "$1" version)
-		if [ -n "$here" ] && older "$v" "$here"; then w="; this checkout has $here: ./xymon-plugin update"; else w=; fi
+		if [ -n "$here" ] && older "$v" "$here"; then w="; this copy has $here: ./xymon-plugin update"; else w=; fi
 		echo "$1 is installed already ($v): left as it is$w"
 		DONE="$DONE $1"
 		return 0
@@ -1503,10 +1503,10 @@ install_server() {
 install_tools() {
 	case " $DONE " in *" $1 "*) return 0 ;; esac
 	# Installed already, and not updating: --all, or a plugin needed,
-	# passes over it, said, with a note when this checkout's is newer.
+	# passes over it, said, with a note when this copy's is newer.
 	if [ -z "${UPDATING:-}" ] && v=$(installed "$TOOLSROOT" "$1"); then
 		here=$(field "$1" version)
-		if [ -n "$here" ] && older "$v" "$here"; then w="; this checkout has $here: ./xymon-plugin update"; else w=; fi
+		if [ -n "$here" ] && older "$v" "$here"; then w="; this copy has $here: ./xymon-plugin update"; else w=; fi
 		echo "$1 is installed already ($v): left as it is$w"
 		DONE="$DONE $1"
 		return 0
