@@ -472,7 +472,7 @@ components:
 
     Alarm:
       type: object
-      required: [id, severity, status]
+      required: [id, host, test, domain, severity, status]
       properties:
         id:       { type: string, description: "Opaque, the same while host, test and instance are: compare it, never read it (RFC #113)." }
         host:     { type: string }
@@ -510,7 +510,7 @@ components:
               properties:
                 of: { type: string, enum: [test], description: "Whose the acknowledgement is: Xymon acknowledges a test, all it holds." }
         link:     { type: string, description: "The status this alarm is about, relative to the API's URL: status?host=...&test=..." }
-        instance: { type: string, description: "The object the alarm is about, where Xymon names it: today an inode alarm's file system (its status's ID=), one alarm each. Absent otherwise: the alarm is the test's." }
+        instance: { type: string, description: "The object the alarm is about, where Xymon names it: today an inode alarm's file system (its status's ID=), one alarm each. Absent when the subject is the host itself, or when Xymon does not name the object it judged -- every test but inode today: the alarm is then about the whole test." }
         metric:   { type: string, description: "The quantity measured, as the RRD dataset is named: pct. Absent where the result is a state or is not given." }
         measure:
           type: object
