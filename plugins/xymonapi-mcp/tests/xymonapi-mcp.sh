@@ -84,8 +84,8 @@ mcp "http://127.0.0.1:$API_PORT" \
 	'{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"states","arguments":{"host":"red.example.com","test":"conn"}}}' \
 	|| fail "the MCP server exited with an error: $(tail -n 5 "$work/mcp.err")"
 answer=$(grep '"id":3' "$work/mcp.out") || fail "no answer to the states call"
-assert_contains 'red.example.com:conn' "$answer" "the states tool returns the red status"
-assert_contains 'critical' "$answer" "as a critical verdict"
+assert_contains '\"host\": \"red.example.com\"' "$answer" "the states tool returns the red status"
+assert_contains 'critical' "$answer" "as a critical severity"
 assert_not_contains '"isError":true' "$answer" "and not as an error"
 while IFS= read -r line; do
 	case $line in '{"jsonrpc":"2.0"'*) ;; *) fail "stdout carried something other than a protocol message: $line" ;; esac

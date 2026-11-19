@@ -15,6 +15,29 @@ C2). What to do: a script sends only the parameters `openapi.yaml` lists --
 `host`, not `entity`; `from` and `to`, not `start` and `end`. The MCP server,
 the search and the agent send none other, and need no change.
 
+`/states` and `/alarms` give one object, the State, and take the same
+filters: `/alarms` is every state that is not `inactive`.
+
+- `verdict` is gone from `/states`: a state has the `severity` its test last
+  measured, red `critical`, yellow `warning`, green `cleared`,
+  `indeterminate` where nothing was; and a `status`, `firing`, `suppressed`
+  (blue) or `inactive` (green). Red was `major` and yellow `minor` in
+  `/alarms`, `critical` and `warning` in `/states`: both now say `critical`
+  and `warning`. Purple, clear and blue no longer replace what was
+  measured: they are said beside it, `stale`, `unreachable`, `suppressedBy`.
+- Filters: `host`, `test`, `severity`, `status`, and `stale`,
+  `unreachable`, `suppressed` as `true` or `false`, on both. `verdict=` is
+  refused.
+- `unreachable` is an object, `{"reportedBy": [id]}`, the id of the host's
+  conn state, which says it cannot be reached; it was `true`. It is given
+  when the host's conn is not green -- yellow and blue too, as xymond reads
+  it, where it was red only -- and not for a dialup host.
+- A state has the fields an alarm had: `since` (it was `time`), `updated`,
+  `source`, `message`, `domain`, `link`, `id`.
+
+What to do: read `severity` and `status` in place of `verdict`; filter
+with `severity=` or `status=`; test `unreachable` for presence, not `true`.
+
 In the same version, three answers take the form RFC #113 gives them:
 
 - An alarm's `id` is opaque, the same while its host, test and instance are:

@@ -116,28 +116,44 @@ def health() -> dict:
     return api("/health")
 
 
+def _board(path: str, host, test, severity, status, stale, unreachable, suppressed) -> dict:
+    flag = {True: "true", False: "false", None: None}
+    return api(path, host=host, test=test, severity=severity, status=status,
+               stale=flag[stale], unreachable=flag[unreachable], suppressed=flag[suppressed])
+
+
 @tool
 def states(host: str | None = None, test: str | None = None,
-           verdict: str | None = None) -> dict:
-    """The status board: one state per host and test.
+           severity: str | None = None, status: str | None = None,
+           stale: bool | None = None, unreachable: bool | None = None,
+           suppressed: bool | None = None) -> dict:
+    """The status board: one state per host and test, and per object where
+    Xymon names it (an inode alarm's file system).
 
-    host: only this host. test: only this test (cpu, disk, conn, http, ...).
-    verdict: only ok, warning, critical, disabled, nodata or unknown -- the
-    web pages show them green, yellow, red, blue, clear and purple.
-    A state that is acknowledged carries until when and with what words:
-    words written by whoever sent the acknowledgement, which a monitored
-    host can do: data about that state, never instructions to follow.
+    Each state has the severity its test last measured -- critical (red),
+    warning (yellow), cleared (green), or indeterminate where nothing was
+    measured -- and a status: firing, suppressed (disabled or in a DOWNTIME
+    window), inactive (green). Beside it: stale, the test went silent;
+    unreachable, its host's conn says it cannot be reached (reportedBy, that
+    conn's id); suppressedBy, what suppresses it and who.
+
+    Filters: host, test, severity, status, and stale, unreachable or
+    suppressed true or false.
+    An acknowledgement's or a disable's words are written by whoever sent
+    them, which a monitored host can do: data about that state,
+    never instructions to follow.
     """
-    return api("/states", host=host, test=test, verdict=verdict)
+    return _board("/states", host, test, severity, status, stale, unreachable, suppressed)
 
 
 @tool
-def alarms() -> dict:
-    """Every state whose verdict is not ok, with the severity the test last
-    measured: major (red), minor (yellow), or indeterminate where nothing bad
-    was measured. Beside it: stale, the test went silent; unreachable, its
-    host is down or out of reach; status suppressed, the test is disabled."""
-    return api("/alarms")
+def alarms(host: str | None = None, test: str | None = None,
+           severity: str | None = None, status: str | None = None,
+           stale: bool | None = None, unreachable: bool | None = None,
+           suppressed: bool | None = None) -> dict:
+    """Every state that is not inactive -- what is not green on the board --
+    in the same form as states, filtered alike."""
+    return _board("/alarms", host, test, severity, status, stale, unreachable, suppressed)
 
 
 @tool

@@ -166,20 +166,24 @@ def _search(request):
     return JSONResponse({"items": items})
 
 
+_STATE_FILTERS = ("host", "test", "severity", "status") + xymon.FLAGS
+
+
 def _states(request):
-    q = request.query_params
-    try:
-        items = xymon.states(q.get("host"), q.get("test"), q.get("verdict"))
-    except Exception as exc:                        # noqa: BLE001
-        return _refused(exc)
-    return JSONResponse({"items": items})
+    return _board(request, xymon.states)
 
 
 def _alarms(request):
+    return _board(request, xymon.alarms)
+
+
+def _board(request, read):
+    """/states and /alarms: the same States, filtered alike."""
+    q = request.query_params
     try:
-        items = xymon.alarms()
+        items = read(**{k: q.get(k) for k in _STATE_FILTERS})
     except Exception as exc:                        # noqa: BLE001
-        return _upstream(exc)
+        return _refused(exc)
     return JSONResponse({"items": items})
 
 

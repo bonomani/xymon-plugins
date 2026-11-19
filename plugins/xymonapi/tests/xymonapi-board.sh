@@ -147,11 +147,13 @@ assert_contains '"answer":"xymond' "$health" "/health gives the xymond it asked,
 assert_contains '"api":{"version":' "$health" "/health gives the API's version under api"
 
 red=$(api_get '/states?host=red.example.com&test=conn')
-assert_contains '"id":"red.example.com:conn"' "$red" "/states for the red host"
-assert_contains '"verdict":"critical"' "$red" "a red status is a critical verdict"
+assert_contains '"host":"red.example.com","test":"conn"' "$red" "/states for the red host"
+assert_contains '"severity":"critical","status":"firing"' "$red" "a red status is critical, firing"
 
 green=$(api_get '/states?host=green.example.com&test=conn')
-assert_contains '"verdict":"ok"' "$green" "a green status is an ok verdict"
+assert_contains '"severity":"cleared","status":"inactive"' "$green" "a green status is cleared, inactive"
+assert_not_contains '"host":"green.example.com"' "$(api_get /alarms)" "and no alarm"
+assert_equal "$(api_get '/alarms?host=red.example.com&test=conn')" "$red" "/alarms gives the same state as /states, filtered alike"
 
 # /states says when a state is acknowledged, in the same shape as /status:
 # a page drawing the board picks its icon by it. Both ways, xymondack's
@@ -159,20 +161,21 @@ assert_contains '"verdict":"ok"' "$green" "a green status is an ok verdict"
 acked=$(api_get '/states?host=disk.example.com&test=disk')
 assert_contains '"acknowledged":{"until":"' "$acked" "/states gives an acknowledgement made with xymondack, with its end time"
 assert_contains 'cleaning old kernels' "$acked" "and its words"
-assert_not_contains '"since"' "$acked" "and no start: xymondack keeps none"
+ackof() { printf '%s' "$1" | grep -o '"acknowledged":{[^}]*}'; }
+assert_not_contains '"since"' "$(ackof "$acked")" "and no start: xymondack keeps none"
 assert_not_contains '"ackedBy":' "$acked" "and no one, sent with xymon(1)"
 assert_contains '"ackedBy":"bruno","from":"10.0.0.9","text":"rebooting it"' "$(api_get '/states?host=wack.example.com&test=conn')" \
 	"the web page's acknowledgement: who, from where, and the words alone"
 crit=$(api_get '/states?host=crit.example.com&test=conn')
 assert_contains '"acknowledged":{"until":"' "$crit" "/states gives one from the critical-systems view, in acklist alone"
 assert_contains '"text":"alice:on it from the critical view"' "$crit" "with who acknowledged and the words, whole"
-assert_contains '"since":"20' "$crit" "and when it was made, which acklist keeps"
+assert_contains '"since":"20' "$(ackof "$crit")" "and when it was made, which acklist keeps"
 assert_contains '"text":"dom:alice:by with a colon"' "$(api_get '/states?host=critcolon.example.com&test=conn')" \
 	"a name holding a colon does not shift the words: who and the words come whole"
 assert_not_contains '"acknowledged"' "$red" "an acknowledgement with xymondack that ran out is not given, though xymond still carries it"
 assert_not_contains '"acknowledged"' "$(api_get '/states?host=critold.example.com&test=conn')" "nor one in acklist that ran out"
 assert_not_contains '"acknowledged"' "$green" "a state nobody acknowledged has none"
-assert_not_contains '"acknowledged"' "$(api_get '/states?host=dis.example.com&test=conn')" "nor has a disabled one, whose verdict says it"
+assert_not_contains '"acknowledged"' "$(api_get '/states?host=dis.example.com&test=conn')" "nor has a disabled one, whose status says it"
 ack_st=$(api_get '/status?host=disk.example.com&test=disk')
 ack_st=${ack_st#*\"acknowledged\":}; ack_st=${ack_st%%\}*}
 assert_contains "$ack_st" "$acked" "/states and /status give the same acknowledgement"
@@ -181,9 +184,9 @@ alarms=$(api_get /alarms)
 assert_contains '"host":"red.example.com","test":"conn"' "$alarms" "a red status is an alarm"
 assert_not_contains 'green.example.com' "$alarms" "a green status is not an alarm"
 alarm() { a=${alarms#*\"host\":\"${1%%:*}\",\"test\":\"${1#*:}\"}; printf '%s' "${a%%\}*}"; }
-assert_contains '"severity":"major","status":"firing"' "$(alarm red.example.com:conn)" "red: major, firing"
-assert_contains '"severity":"minor","status":"firing"' "$(alarm disk.example.com:disk)" "yellow: minor, firing"
-assert_contains '"severity":"major","status":"suppressed"' "$(alarm dis.example.com:conn)" "blue over red: the red it measured, major, and suppressed"
+assert_contains '"severity":"critical","status":"firing"' "$(alarm red.example.com:conn)" "red: critical, firing"
+assert_contains '"severity":"warning","status":"firing"' "$(alarm disk.example.com:disk)" "yellow: warning, firing"
+assert_contains '"severity":"critical","status":"suppressed"' "$(alarm dis.example.com:conn)" "blue over red: the red it measured, critical, and suppressed"
 assert_contains '"suppressedBy":[{"kind":"disable","of":"test","until":"' "$(alarm dis.example.com:conn)" "by a disable, the test's, with its end"
 assert_contains '"text":"maintenance window"' "$(alarm dis.example.com:conn)" "and its text"
 assert_not_contains '"createdBy":' "$(alarm dis.example.com:conn)" "a disable sent with xymon(1) says no one"
@@ -193,7 +196,10 @@ assert_contains '"suppressedBy":[{"kind":"downtime","of":"test"' "$(alarm dt.exa
 assert_not_contains '"suppressedBy"' "$(alarm red.example.com:conn)" "red is not suppressed"
 assert_contains '"severity":"indeterminate","status":"firing"' "$(alarm clr.example.com:conn)" "a clear with nothing behind it, indeterminate"
 assert_not_contains '"unreachable"' "$(alarm clr.example.com:conn)" "and not unreachable: no conn red, no colour kept behind it"
-assert_contains '"unreachable":true' "$(alarm red.example.com:ssh)" "a clear ssh on a host whose conn is red: unreachable"
+id_re='"id":"([0-9a-f]+)"'
+[[ $red =~ $id_re ]] || fail "the red state has no id"
+conn_id=${BASH_REMATCH[1]}
+assert_contains "\"unreachable\":{\"reportedBy\":[\"$conn_id\"]" "$(alarm red.example.com:ssh)" "a clear ssh on a host whose conn is red: unreachable, reported by that conn"
 assert_not_contains '"unreachable"' "$(alarm red.example.com:conn)" "red is not unreachable"
 disk_alarm=$(alarm disk.example.com:disk)
 assert_contains '"message":"Filesystems NOT ok"' "$disk_alarm" "an alarm gives its status's first line, the colour left out"
@@ -205,7 +211,7 @@ assert_contains '"link":"status?host=disk.example.com&test=disk"' "$alarms" "a l
 assert_not_contains '"acknowledged"' "$(alarm red.example.com:conn)" "an acknowledgement run out is not given"
 assert_contains '"message":"port 80 | port 443 down"' "$(alarm pipe.example.com:conn)" "a first line holding a | is given whole"
 assert_contains '"message":"no answer"' "$(alarm clr.example.com:conn)" "the date a status opens with is left out of its message"
-assert_contains '"severity":"major"' "$(alarm pipe.example.com:conn)" "and the fields before it are read in their place"
+assert_contains '"severity":"critical"' "$(alarm pipe.example.com:conn)" "and the fields before it are read in their place"
 assert_contains '"domain":"filesystem"' "$disk_alarm" "disk lies in the filesystem domain"
 assert_contains '"domain":"network"' "$(alarm red.example.com:conn)" "conn in network"
 # inode: one alarm for each file system its status names.
@@ -213,10 +219,10 @@ ino() { printf '%s' "$alarms" | sed 's/},{"id"/}\n{"id"/g' | grep -F "\"instance
 inos=$(printf '%s' "$alarms" | sed 's/},{"id"/}\n{"id"/g' | grep -F '"host":"ino.example.com","test":"inode"')
 assert_equal 3 "$(printf '%s\n' "$inos" | wc -l | tr -d ' ')" "an inode alarm, one for each file system in alarm"
 assert_equal 3 "$(printf '%s\n' "$inos" | grep -o '"id":"[0-9a-f]\{16\}"' | sort -u | wc -l | tr -d ' ')" "each its own id, opaque: not host:test, which the three share"
-assert_contains '"severity":"major"' "$(ino /var)" "/var: major"
+assert_contains '"severity":"critical"' "$(ino /var)" "/var: critical"
 assert_contains '"message":"/var (95% used) has reached the PANIC level (90%)"' "$(ino /var)" "its own line"
 assert_contains '"metric":"pct","measure":{"value":95,"unit":"%","critical":90}' "$(ino /var)" "its pct and the panic level crossed"
-assert_contains '"severity":"minor"' "$(ino /home)" "/home: minor, from its own line"
+assert_contains '"severity":"warning"' "$(ino /home)" "/home: warning, from its own line"
 assert_contains '"measure":{"value":75,"unit":"%","warning":70' "$(ino /home)" "and the warning level crossed"
 assert_contains '"measure":{"state":"unreachable"' "$(ino /mnt/nfs)" "/mnt/nfs: unreachable, a state"
 assert_not_contains '"instance":"/"' "$alarms" "a file system that is ok is no alarm"

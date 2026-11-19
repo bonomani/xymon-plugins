@@ -40,13 +40,14 @@ XYMONHISTLOGS = os.environ.get("XYMONHISTLOGS", "")
 # disable -- and "none" at every other time. disabletime is when a disable
 # ends, -1 until the test is ok again, and 0 when none runs: a blue status
 # with 0 is a DOWNTIME's (xymond.c, the rewrite in handle_status), a blue
-# one with any other a disable's, dismsg its text. logtime is when the status was last
+# one with any other a disable's, dismsg its text. XMH_FLAG_DIALUP is
+# hosts.cfg's dialup tag, empty without it. logtime is when the status was last
 # reported, sender who sent it. line1, the status's first line, is not
 # encoded and may hold a "|": it comes last, and a line splits on the
 # fields before it only.
 BOARD_FIELDS = ["hostname", "testname", "color", "lastchange",
                 "acktime", "ackmsg", "acklist", "prevgapcolor", "disabletime",
-                "dismsg", "logtime", "sender", "line1"]
+                "dismsg", "logtime", "sender", "XMH_FLAG_DIALUP", "line1"]
 
 # A name from the request becomes part of a file path, so it may not hold
 # "/" or "..": a path outside XYMONRRDS. A host name never holds ":" either;
@@ -80,11 +81,19 @@ class Upstream(RuntimeError):
 # A verdict, never a colour: the colour is how the web pages show it.
 COLOUR_STATUS = {"green": "ok", "yellow": "warning", "red": "critical",
                  "blue": "disabled", "clear": "nodata", "purple": "unknown"}
-# What a test measured, as a severity in ITU-T X.733's words. Purple, clear
-# and blue are xymond's, not the test's: an alarm keeps the severity last
-# measured and says beside it what xymond added (RFC #113, version 2).
-COLOUR_SEVERITY = {"red": "major", "yellow": "minor"}
 VERDICTS = tuple(dict.fromkeys(COLOUR_STATUS.values()))
+# What a test measured, as a severity in ITU-T X.733's words: red critical
+# ("immediate corrective action"), yellow warning, green cleared, and
+# indeterminate where nothing was measured. Purple, clear and blue are
+# xymond's, not the test's: a state keeps the severity last measured, and
+# says beside it what xymond added (RFC #113).
+COLOUR_SEVERITY = {"red": "critical", "yellow": "warning", "green": "cleared"}
+SEVERITIES = ("critical", "warning", "indeterminate", "cleared")
+# firing and suppressed as Alertmanager has them; inactive, Prometheus's word
+# for a rule that is not firing, for a green test.
+STATUSES = ("firing", "suppressed", "inactive")
+# The flags a state may carry, each a filter of /states and /alarms.
+FLAGS = ("stale", "unreachable", "suppressed")
 # The domain a test lies in, the label that groups alarms (RFC #113): read
 # from this table, and the test itself where the table says nothing -- so a
 # network service (ssh, smtp, dns) or a script's own test is its own domain.
@@ -135,73 +144,72 @@ def _iso(epoch: str) -> str | None:
 
 
 def states(host: str | None = None, test: str | None = None,
-           verdict: str | None = None) -> list[dict]:
-    """One State per host and test on the board."""
-    # A verdict outside the contract's list matches no state: refused, not
-    # an empty board -- "verdict=red", a colour where a verdict is asked,
+           severity: str | None = None, status: str | None = None,
+           **flags: str | None) -> list[dict]:
+    """One State per host and test on the board -- one per object, where its
+    status names them -- with the severity it last measured and, beside it,
+    what xymond added: stale for a test gone silent (purple), unreachable
+    for one made clear because its host's conn is not green (reportedBy that
+    conn's state), suppressed for one disabled or in a DOWNTIME window
+    (blue), with suppressedBy saying which, until when, by whom and why,
+    where Xymon keeps it. Filtered on each argument given; a flag's filter
+    is true or false."""
+    # A value outside the contract's list matches nothing: refused, not an
+    # empty board -- "severity=red", a colour where a severity is asked,
     # would read as "nothing is red" (#92).
-    if verdict and verdict not in VERDICTS:
-        raise BadRequest(f"verdict must be one of {', '.join(VERDICTS)}, not a colour")
-    out: list[dict] = []
-    now = int(time.time())
-    for d in _rows():
-        h, tst = d.get("hostname", "?"), d.get("testname", "?")
-        st = {"id": f"{h}:{tst}", "host": h, "test": tst,
-              "verdict": COLOUR_STATUS.get(d.get("color", "clear"), "unknown")}
-        t = _iso(d.get("lastchange", ""))
-        if t:
-            st["time"] = t
-        ack = _acknowledgement(d, now)
-        if ack:
-            st["acknowledged"] = ack
-        out.append(st)
-    if host:
-        out = [s for s in out if s["host"] == host]
-    if test:
-        out = [s for s in out if s["test"] == test]
-    if verdict:
-        out = [s for s in out if s["verdict"] == verdict]
+    if severity and severity not in SEVERITIES:
+        raise BadRequest(f"severity must be one of {', '.join(SEVERITIES)}, not a colour")
+    if status and status not in STATUSES:
+        raise BadRequest(f"status must be one of {', '.join(STATUSES)}")
+    for flag, value in flags.items():
+        if value is not None and value not in ("true", "false"):
+            raise BadRequest(f"{flag} must be true or false")
+    out = [st for st in _states()
+           if (not host or st["host"] == host) and (not test or st["test"] == test)
+           and (not severity or st["severity"] == severity)
+           and (not status or st["status"] == status)]
+    for flag, value in flags.items():
+        if value is not None:
+            key = "suppressedBy" if flag == "suppressed" else flag
+            out = [st for st in out if (key in st) == (value == "true")]
     return out
 
 
-def alarms() -> list[dict]:
-    """Every state that is not ok, as an Alarm: the severity the test last
-    measured, and what xymond adds said beside it -- stale for a test gone
-    silent (purple), unreachable for one whose host is down or that
-    xymonnet could not reach (clear: a colour of its own kept behind it, or
-    its host's conn red), suppressed for one disabled or in a
-    DOWNTIME window (blue), with suppressedBy saying which, until when and
-    why, where Xymon keeps it.
-    Where nothing was measured that is not ok -- a clear from xymonnet, a
-    test that was green -- the severity is indeterminate."""
+def alarms(**filters: str | None) -> list[dict]:
+    """Every State that is not inactive: what is not green on the board."""
+    return [st for st in states(**filters) if st["status"] != "inactive"]
+
+
+def _states() -> list[dict]:
     res: list[dict] = []
     now = int(time.time())
     rows = _rows()
-    # A host xymonnet cannot reach: its conn is red, and its other network
-    # tests are made clear behind it. A clear on a host whose conn is not
-    # red -- a client test with no rule, no data -- says nothing of reach.
-    down = {d.get("hostname") for d in rows if d.get("testname") == "conn" and d.get("color") == "red"}
+    # xymond makes a silent test clear, not purple, when its host's conn is
+    # not green (xymond.c, "go CLEAR, instead of PURPLE"), and xymonnet its
+    # network tests when the conn fails: that conn is what says the host
+    # cannot be reached. A dialup host's tests go clear because it is one,
+    # nothing failed: not unreachable.
+    conn = {d.get("hostname"): d.get("color") for d in rows if d.get("testname") == "conn"}
     for d in rows:
         colour = d.get("color", "clear")
-        if COLOUR_STATUS.get(colour, "unknown") == "ok":
-            continue
         host, tst = d.get("hostname", "?"), d.get("testname", "?")
         own = colour if colour in COLOUR_SEVERITY else d.get("prevgapcolor", "none")
         a = {"host": host, "test": tst,
              "domain": DOMAIN.get(tst, tst),
              "severity": COLOUR_SEVERITY.get(own, "indeterminate"),
-             "status": "suppressed" if colour == "blue" else "firing"}
+             "status": {"blue": "suppressed", "green": "inactive"}.get(colour, "firing")}
         t = _iso(d.get("lastchange", ""))
         if t:
             a["since"] = t
         if colour == "purple":
             a["stale"] = {"since": t}
-        elif colour == "clear" and (d.get("prevgapcolor", "none") not in ("", "none") or host in down):
-            a["unreachable"] = True
+        elif (colour == "clear" and tst != "conn" and not d.get("XMH_FLAG_DIALUP")
+              and conn.get(host, "green") in ("red", "yellow", "blue", "clear")):
+            a["unreachable"] = {"reportedBy": [_state_id({"host": host, "test": "conn"})]}
         elif colour == "blue":
-            # RFC #113: a list, one entry per what suppresses, a field Xymon
-            # does not keep left out -- a DOWNTIME's end and cause are not
-            # on the board, nor a disable's end when it lasts until ok (-1).
+            # A list, one entry per what suppresses, a field Xymon does not
+            # keep left out -- a DOWNTIME's end and cause are not on the
+            # board, nor a disable's end when it lasts until ok (-1).
             until = d.get("disabletime", "0")
             by = {"kind": "downtime" if until in ("", "0") else "disable", "of": "test"}
             if by["kind"] == "disable":
@@ -223,12 +231,12 @@ def alarms() -> list[dict]:
             # one instance is acknowledged on its own (RFC #113).
             a["acknowledged"] = {**ack, "of": "test"}
         a["link"] = "status?" + urlencode({"host": host, "test": tst})
-        res += _instances(a) if tst in _INSTANCE_TESTS else [a]
-    return [{"id": _alarm_id(a), **a} for a in res]
+        res += _instances(a) if tst in _INSTANCE_TESTS and colour != "green" else [a]
+    return [{"id": _state_id(a), **a} for a in res]
 
 
-def _alarm_id(a: dict) -> str:
-    """An alarm's id: opaque, the same while its host, test and instance are
+def _state_id(a: dict) -> str:
+    """A state's id: opaque, the same while its host, test and instance are
     (RFC #113: not composed from the levels, which an instance's ":" would
     make ambiguous)."""
     key = "\0".join((a["host"], a["test"], a.get("instance", "")))

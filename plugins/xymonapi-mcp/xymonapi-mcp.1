@@ -47,11 +47,12 @@ call.
 .SH TOOLS
 .IP "\fBhealth\fR"
 Whether xymond answers, and its version.
-.IP "\fBstates\fR [host] [test] [verdict]"
-The status board, one state per host and test, with, for one that is
-acknowledged, until when and with what words.
-.IP "\fBalarms\fR"
-Every state whose verdict is not ok.
+.IP "\fBstates\fR [host] [test] [severity] [status] [stale] [unreachable] [suppressed]"
+The status board, one state per host and test: the severity its test last
+measured (critical, warning, cleared, indeterminate), its status (firing,
+suppressed, inactive), and what xymond added beside it.
+.IP "\fBalarms\fR [the same filters]"
+Every state that is not inactive, in the same form.
 .IP "\fBhosts\fR"
 Each host on the board, once.
 .IP "\fBstatus\fR host test"
