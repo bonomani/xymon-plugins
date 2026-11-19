@@ -152,9 +152,11 @@ assert_contains '"verdict":"ok"' "$green" "a green status is an ok verdict"
 acked=$(api_get '/states?host=disk.example.com&test=disk')
 assert_contains '"acknowledged":{"until":"' "$acked" "/states gives an acknowledgement made with xymondack, with its end time"
 assert_contains 'cleaning old kernels' "$acked" "and its words"
+assert_not_contains '"since"' "$acked" "and no start: xymondack keeps none"
 crit=$(api_get '/states?host=crit.example.com&test=conn')
 assert_contains '"acknowledged":{"until":"' "$crit" "/states gives one from the critical-systems view, in acklist alone"
 assert_contains '"text":"alice:on it from the critical view"' "$crit" "with who acknowledged and the words, whole"
+assert_contains '"since":"20' "$crit" "and when it was made, which acklist keeps"
 assert_contains '"text":"dom:alice:by with a colon"' "$(api_get '/states?host=critcolon.example.com&test=conn')" \
 	"a name holding a colon does not shift the words: who and the words come whole"
 assert_not_contains '"acknowledged"' "$red" "an acknowledgement with xymondack that ran out is not given, though xymond still carries it"

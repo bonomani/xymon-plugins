@@ -352,7 +352,8 @@ def _nldecode(text: str) -> str:
 
 def _acknowledgement(d: dict, now: int) -> dict | None:
     """The acknowledgement running on a board line, as /states and /status
-    both give it -- {"until", "text"} -- or None.
+    both give it -- {"until", "text"}, and "since" when xymond kept its
+    start -- or None.
 
     xymond clears an acknowledgement that ran out only when the next status
     arrives; until then the board still carries it, and its XML output too
@@ -360,7 +361,8 @@ def _acknowledgement(d: dict, now: int) -> dict | None:
     xymondack sets acktime and ackmsg; the critical-systems view's ackinfo
     adds to acklist, one "start:until:level:by:text" line each, acktime left
     at 0. Xymon's pages show either (xymongen/loaddata.c); the one running
-    longest is given.
+    longest is given. xymondack keeps no start (xymond.c: acktime is now
+    plus its duration); an acklist line does, its first field.
 
     An acklist line's text is given as "by:text", whole: neither field is
     escaped, so a "by" holding a ":" -- dom:alice -- cannot be told from the
@@ -368,15 +370,19 @@ def _acknowledgement(d: dict, now: int) -> dict | None:
     acks = []
     acktime = d.get("acktime", "")
     if _DIGITS.fullmatch(acktime) and int(acktime) > now:
-        acks.append((int(acktime), _nldecode(d.get("ackmsg", ""))))
+        acks.append((int(acktime), _nldecode(d.get("ackmsg", "")), ""))
     for line in _nldecode(d.get("acklist", "")).splitlines():
         a = line.split(":", 3)
         if len(a) == 4 and _DIGITS.fullmatch(a[1]) and int(a[1]) > now:
-            acks.append((int(a[1]), a[3]))
+            acks.append((int(a[1]), a[3], a[0]))
     if not acks:
         return None
-    until, words = max(acks)
-    return {"until": _iso(str(until)), "text": hide(words)}
+    until, words, start = max(acks)
+    ack = {"until": _iso(str(until)), "text": hide(words)}
+    since = _iso(start)
+    if since:
+        ack["since"] = since
+    return ack
 
 
 def status(host: str | None, test: str | None) -> dict:
