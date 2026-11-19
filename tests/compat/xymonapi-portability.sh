@@ -3,7 +3,8 @@
 #
 # tests/compat/xymonapi-portability.sh
 #
-# The plugins' test scripts, and ./xymon-plugin, keep to Xymon's portability rules: bash 3.2,
+# The plugins' test scripts, ./xymon-plugin, and every other script a user's
+# machine runs -- each plugin's launchers and build/*.sh -- keep to Xymon's portability rules: bash 3.2,
 # portable tool flags and regular expressions, no early-exit pipes under
 # pipefail, and the rest of what Xymon's BSD and macOS lanes taught it. The
 # rules are Xymon's own, read from XYMON_SRC at each run, not a copy kept
@@ -43,6 +44,13 @@ done
 # And the installer, which runs on every machine the plugins go to: placed
 # where the check looks, and named back as it is here.
 cp "$ROOT/xymon-plugin" "$tree/tests/install-sh-under-check.sh"
+# The launchers and the build scripts, run on those machines too, placed
+# the same way under tests/shipped/, with their paths.
+for f in "$ROOT"/plugins/*/*.sh "$ROOT"/build/*.sh; do
+	rel=${f#"$ROOT"/}
+	mkdir -p "$tree/tests/shipped/$(dirname "$rel")"
+	cp "$f" "$tree/tests/shipped/$rel"
+done
 # The check sources ../lib/assert.sh; this repository has its own file of
 # that name, so Xymon's goes in under another, and the check is pointed at it.
 sed -e 's|/\.\./lib/assert\.sh"|/../lib/assert-xymon.sh"|' "$tree/tests/buildsystem/$(basename "$check")" \
@@ -70,7 +78,7 @@ awk '
 	}
 	/^      / { if (keep) print; next }
 	{ keep = 0 }
-' "$work/report" | sed -e 's|tests/plugins/\([^/]*\)/|plugins/\1/tests/|' -e 's|tests/install-sh-under-check\.sh|xymon-plugin|' > "$work/violations"
+' "$work/report" | sed -e 's|tests/shipped/||' -e 's|^\(  \[[a-z-]*\] \)tests/plugins/\([^/]*\)/|\1plugins/\2/tests/|' -e 's|tests/install-sh-under-check\.sh|xymon-plugin|' > "$work/violations"
 
 if [ -s "$work/violations" ]; then
 	fail "[S12] the plugins' tests break Xymon's portability rules:
@@ -82,4 +90,4 @@ if [ "$rc" -ne 0 ] && ! grep -q 'violation(s); see above' "$work/report"; then
 	fail "Xymon's portability check did not run: $(tail -n 5 "$work/report")"
 fi
 
-pass "the plugins' tests and xymon-plugin keep to Xymon's portability rules, but the one against Python, which every plugin needs, and the one against the rrdtool command, which the API runs"
+pass "the plugins' tests, xymon-plugin, the launchers and build/*.sh keep to Xymon's portability rules, but the one against Python, which every plugin needs, and the one against the rrdtool command, which the API runs"
