@@ -378,11 +378,27 @@ def _acknowledgement(d: dict, now: int) -> dict | None:
     if not acks:
         return None
     until, words, start = max(acks)
-    ack = {"until": _iso(str(until)), "text": hide(words)}
+    ack = {"until": _iso(str(until))}
     since = _iso(start)
     if since:
         ack["since"] = since
+    # The web page's acknowledgement ends its words with who made it, and
+    # from where (web/acknowledge.c), which Xymon's own feed reads back
+    # (web/appfeed.c): read here too. An acklist line's who is not split
+    # from its words, above.
+    m = _ACKED_BY.match(words) if not start else None
+    if m:
+        ack["by"] = hide(m[2].strip())
+        if m[3]:
+            ack["from"] = hide(m[3])
+        words = m[1]
+    ack["text"] = hide(words.strip())
     return ack
+
+
+# "WORDS \nAcked by: USER (ADDR)", the address there when the web server
+# gave one.
+_ACKED_BY = re.compile(r"\A(.*?)\s*\nAcked by: (.+?)(?: \((\S+)\))?[ \t]*\n?\Z", re.S)
 
 
 def status(host: str | None, test: str | None) -> dict:

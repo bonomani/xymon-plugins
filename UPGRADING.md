@@ -26,7 +26,9 @@ In the same version, three answers take the form RFC #113 gives them:
   says who set it and from where, `by` and `from`, its `text` then the
   reason alone; `/status`'s `disabled` the same.
 - An acknowledgement made from the critical-systems view says when, `since`;
-  one made with xymondack has none, xymond not keeping it.
+  one made with xymondack has none, xymond not keeping it. One made from the web
+  page says who made it and from where, `by` and `from`, its `text` then
+  the words alone, as a disable does.
 - A time xymond gives as 0, a test such as `trends` that never changed, is
   left out, not `1970-01-01T00:00:00Z`.
 

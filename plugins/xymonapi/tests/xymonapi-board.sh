@@ -29,7 +29,7 @@ work=$(mktempdir)
 XYMOND_PID=""
 register_cleanup 'stop_process "$API_PID" "$XYMOND_PID"'
 
-printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 wdis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n127.0.0.1 ino.example.com # inode\n' > "$work/hosts.cfg"
+printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 wdis.example.com # conn\n127.0.0.1 wack.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n127.0.0.1 ino.example.com # inode\n' > "$work/hosts.cfg"
 
 mkdir -p "$work/home/etc" "$work/home/tmp" "$work/home/www"
 require_cfg XYMONSERVER_CFG "$XYMON_SRC/xymond/etcfiles/xymonserver.cfg"
@@ -61,6 +61,13 @@ sleep 0.4
 cookie=$("$XYMONCLIENT" "127.0.0.1:$PORT" "xymondboard host=disk.example.com test=disk fields=cookie")
 [ -n "$cookie" ] || fail "xymond gave the yellow status no cookie"
 send "xymondack $cookie 60 cleaning old kernels, back in an hour"
+# Acknowledged from the web page: its words, then who and from where
+# (web/acknowledge.c).
+send "status wack,example,com.conn red down"
+cookie=$("$XYMONCLIENT" "127.0.0.1:$PORT" "xymondboard host=wack.example.com test=conn fields=cookie")
+[ -n "$cookie" ] || fail "xymond gave the red status no cookie"
+send "xymondack $cookie 60 rebooting it 
+Acked by: bruno (10.0.0.9)"
 send "status dis,example,com.conn red down"
 send "disable dis,example,com.conn 7200 maintenance window"
 # A disable as the web page sends it (web/enadis.c), who and from where
@@ -153,6 +160,9 @@ acked=$(api_get '/states?host=disk.example.com&test=disk')
 assert_contains '"acknowledged":{"until":"' "$acked" "/states gives an acknowledgement made with xymondack, with its end time"
 assert_contains 'cleaning old kernels' "$acked" "and its words"
 assert_not_contains '"since"' "$acked" "and no start: xymondack keeps none"
+assert_not_contains '"by":' "$acked" "and no one, sent with xymon(1)"
+assert_contains '"by":"bruno","from":"10.0.0.9","text":"rebooting it"' "$(api_get '/states?host=wack.example.com&test=conn')" \
+	"the web page's acknowledgement: who, from where, and the words alone"
 crit=$(api_get '/states?host=crit.example.com&test=conn')
 assert_contains '"acknowledged":{"until":"' "$crit" "/states gives one from the critical-systems view, in acklist alone"
 assert_contains '"text":"alice:on it from the critical view"' "$crit" "with who acknowledged and the words, whole"
