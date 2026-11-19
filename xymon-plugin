@@ -49,13 +49,18 @@
 # or a | in its name is a directory like any other.
 
 ROOT=$(cd "$(dirname "$0")" && pwd)
+# This installer's own version, released apart from the plugins under the
+# tag xymon-plugin/vX.Y.Z (build/release-archive.sh checks the two agree).
+INSTALLER_VERSION=0.1.0
 
 die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
 usage() {
 	echo "usage: ./xymon-plugin install|update|enable|disable|remove|status|verify|clean [--server|--tools] [--all] [--venv] [--force] [--yes] [--xymon-home PATH] [PLUGIN...] [NAME=value...]" >&2
+	echo "       ./xymon-plugin --version" >&2
 	exit 2
 }
 
+if [ "${1:-}" = --version ]; then echo "xymon-plugin $INSTALLER_VERSION"; exit 0; fi
 # No verb: on a terminal, the dialogue; off one, the usage (S17).
 if [ $# -eq 0 ]; then
 	[ -t 0 ] && [ -t 1 ] || usage

@@ -102,8 +102,27 @@ draft. A behaviour that breaks outside the contract is for you to see.
 
 `main` takes every change. When every check of a push to `main` passes, CI
 moves the branch `stable` forward to it, never back: `stable` is the newest
-code everything passed, and what outside users install. There are no release tags; to publish one, tag `stable`'s commit
-`NAME/vX.Y.Z` with the plugin's version.
+code everything passed, and what outside users install.
+
+### Releases
+
+Each plugin is released on its own, from this repository, under the tag
+`NAME/vX.Y.Z`, its version; the installer too, as `xymon-plugin/vX.Y.Z`,
+its `INSTALLER_VERSION`, which moves as a plugin's version does. To release
+one, tag a commit of `stable` and push the tag:
+
+```sh
+git tag xymonapi/v8.0.0 origin/stable && git push origin xymonapi/v8.0.0
+```
+
+The release workflow refuses a tag that is not on `stable`, or whose
+version is not the plugin's at that commit. It builds the archive
+(`build/release-archive.sh`: the plugin's directory, or the installer, and
+`LICENSE`, under `xymon-plugins/`, the same bytes for the same tag), its
+`.sha256` and a provenance attestation, and attaches them to a draft
+release. Read it, then publish it. Every archive unpacks into the same
+`xymon-plugins/`: the installer and the plugins wanted, unpacked side by
+side, install as a checkout does.
 
 ### The contract
 
