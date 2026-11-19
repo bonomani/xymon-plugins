@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# A release of one plugin, or of the installer, from its tag: NAME/vX.Y.Z.
+# The archive build/release-archive.sh makes, its sha256, and a provenance
+# attestation signed for this repository's workflow, attached to a draft
+# release a maintainer reads and publishes. Every plugin is released from
+# this one repository; the tag's NAME says which.
+name: release
+
+on:
+  push:
+    tags: ["*/v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # the draft release and its assets
+      id-token: write      # the OIDC token the provenance attestation is signed with
+      attestations: write  # storing that attestation with the repository
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Only code every check passed: stable, which CI moves forward only to
+      # a commit of main whose run passed (CONTRIBUTING.md, stable).
+      - name: The tag is on stable
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/stable \
+            || { echo "::error::$GITHUB_REF_NAME is not on stable: tag a commit every check passed"; exit 1; }
+
+      - name: Build the archive
+        id: build
+        run: |
+          archive=$(build/release-archive.sh "$GITHUB_REF_NAME" dist)
+          (cd dist && sha256sum "${archive##*/}" > "${archive##*/}.sha256" && cat "${archive##*/}.sha256")
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      # The .sha256 beside the archive catches a corrupted download, not a
+      # replaced one. The attestation is signed for this workflow and the
+      # commit it ran on: "gh attestation verify ARCHIVE --repo
+      # xymon-monitoring/xymon-plugins" checks a download against it.
+      - name: Attest where the archive was built
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: ${{ steps.build.outputs.archive }}
+
+      # A draft, and never marked latest: GitHub marks one release latest
+      # for the whole repository, which says nothing of which plugin.
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE: ${{ steps.build.outputs.archive }}
+        run: |
+          name=${GITHUB_REF_NAME%/v*} version=${GITHUB_REF_NAME##*/v}
+          gh release create "$GITHUB_REF_NAME" "$ARCHIVE" "$ARCHIVE.sha256" \
+            --draft --latest=false --verify-tag \
+            --title "$name $version" \
+            --notes "$name $version: unpack it beside the installer's archive, xymon-plugin, and the plugins it needs, then ./xymon-plugin install. Check it with: gh attestation verify ${ARCHIVE##*/} --repo $GITHUB_REPOSITORY"
