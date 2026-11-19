@@ -475,7 +475,8 @@ components:
         host:     { type: string }
         test:     { type: string }
         severity: { $ref: "#/components/schemas/Severity" }
-        status:   { type: string, enum: [firing, suppressed], description: "suppressed: the test is disabled (blue), listed all the same, as Alertmanager lists a silenced alert." }
+        status:   { type: string, enum: [firing, suppressed], description: "suppressed: the test is blue, disabled or in a DOWNTIME window, listed all the same, as Alertmanager lists a silenced alert." }
+        suppressedBy: { type: string, enum: [disable, downtime], description: "Present when suppressed: what suppresses it -- a disable (xymon's disable, the web page's), or a DOWNTIME window of hosts.cfg." }
         since:    { type: string, format: date-time }
         stale:
           type: object

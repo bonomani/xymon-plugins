@@ -37,8 +37,11 @@ XYMONHISTLOGS = os.environ.get("XYMONHISTLOGS", "")
 # prevgapcolor (Xymon 4.3.31) is the test's own colour while xymond shows
 # another -- purple for a silence, clear for a host down, blue for a
 # disable -- and "none" at every other time.
+# disabletime is when a disable ends, -1 until the test is ok again, and 0
+# when none runs: a blue status with 0 is a DOWNTIME's (xymond.c, the
+# rewrite in handle_status), a blue one with any other a disable's.
 BOARD_FIELDS = ["hostname", "testname", "color", "lastchange",
-                "acktime", "ackmsg", "acklist", "prevgapcolor"]
+                "acktime", "ackmsg", "acklist", "prevgapcolor", "disabletime"]
 
 # A name from the request becomes part of a file path, so it may not hold
 # "/" or "..": a path outside XYMONRRDS. A host name never holds ":" either;
@@ -148,7 +151,8 @@ def alarms() -> list[dict]:
     """Every state that is not ok, as an Alarm: the severity the test last
     measured, and what xymond adds said beside it -- stale for a test gone
     silent (purple), unreachable for one whose host is down or that
-    xymonnet could not reach (clear), suppressed for one disabled (blue).
+    xymonnet could not reach (clear), suppressed for one disabled or in a
+    DOWNTIME window (blue), with suppressedBy saying which.
     Where nothing was measured that is not ok -- a clear from xymonnet, a
     test that was green -- the severity is indeterminate."""
     res: list[dict] = []
@@ -168,6 +172,8 @@ def alarms() -> list[dict]:
             a["stale"] = {"since": t}
         elif colour == "clear":
             a["unreachable"] = True
+        elif colour == "blue":
+            a["suppressedBy"] = "downtime" if d.get("disabletime", "0") in ("", "0") else "disable"
         res.append(a)
     return res
 

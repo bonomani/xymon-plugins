@@ -36,23 +36,25 @@ sys.path.insert(0, sys.argv[1])
 import xymon
 xymon.query = lambda req: sys.argv[2]
 for a in xymon.alarms():
-    flags = [k for k in ("stale", "unreachable") if k in a]
+    flags = [k for k in ("stale", "unreachable") if k in a] + ([f'by:{a["suppressedBy"]}'] if "suppressedBy" in a else [])
     print(a["host"], a["severity"], a["status"], *flags)
 EOF
 }
 
-# line HOST COLOR PREVGAPCOLOR -- a board line in BOARD_FIELDS' order.
-line() { printf '%s|conn|%s|1700000000|0|||%s\n' "$1" "$2" "$3"; }
+# line HOST COLOR PREVGAPCOLOR [DISABLETIME] -- a board line in
+# BOARD_FIELDS' order, no disable unless DISABLETIME is given.
+line() { printf '%s|conn|%s|1700000000|0|||%s|%s\n' "$1" "$2" "$3" "${4:-0}"; }
 
-out=$(alarms "$(line silent purple red; line silentyel purple yellow; line silentgreen purple green; line down clear red; line nonet clear none; line off blue red; line offgreen blue green; line red red none; line ok green none)")
+out=$(alarms "$(line silent purple red; line silentyel purple yellow; line silentgreen purple green; line down clear red; line nonet clear none; line off blue red 1700007200; line offgreen blue green -1; line dt blue red; line red red none; line ok green none)")
 
 assert_contains 'silent major firing stale' "$out" "purple over red: the red it measured, major, and stale"
 assert_contains 'silentyel minor firing stale' "$out" "purple over yellow: minor, and stale"
 assert_contains 'silentgreen indeterminate firing stale' "$out" "purple over green: nothing bad measured, indeterminate, and stale"
 assert_contains 'down major firing unreachable' "$out" "xymond's clear over red, a host down: major, and unreachable"
 assert_contains 'nonet indeterminate firing unreachable' "$out" "xymonnet's clear, nothing behind it: indeterminate, and unreachable"
-assert_contains 'off major suppressed' "$out" "blue over red: major, suppressed"
-assert_contains 'offgreen indeterminate suppressed' "$out" "blue over green: indeterminate, suppressed"
+assert_contains 'off major suppressed by:disable' "$out" "blue over red, disabled until a time: major, suppressed by a disable"
+assert_contains 'offgreen indeterminate suppressed by:disable' "$out" "blue over green, disabled until ok (-1): suppressed by a disable"
+assert_contains 'dt major suppressed by:downtime' "$out" "blue with no disable set: a DOWNTIME window"
 assert_contains 'red major firing' "$out" "red: major, firing, nothing beside it"
 assert_not_contains 'red major firing stale' "$out" "red is not stale"
 assert_not_contains 'ok ' "$out" "green is no alarm"
