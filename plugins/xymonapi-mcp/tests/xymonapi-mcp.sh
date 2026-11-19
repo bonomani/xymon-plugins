@@ -100,7 +100,7 @@ call() {
 assert_contains 'alive' "$(call health '{}')" "the health tool reaches /health"
 assert_contains 'xymond' "$(call health '{}')" "and names the xymond"
 assert_contains '\"host\": \"red.example.com\"' "$(call alarms '{}')" "the alarms tool lists the red status"
-assert_contains 'measured' "$(call hosts '{}')" "the hosts tool lists the host"
+assert_contains '\"host\": \"red.example.com\"' "$(call hosts '{}')" "the hosts tool lists the host"
 st=$(call status '{"host":"red.example.com","test":"conn"}')
 assert_contains 'down' "$st" "the status tool returns the status text"
 assert_contains 'critical' "$st" "and the verdict"

@@ -64,7 +64,7 @@ or a client token, when XYMONAPI_PASSWD is set.
 Its "search" field describes the index /search reads -- how many passages
 of manual pages and of history, when it was built -- and is null when there
 is none.
-.IP "\fB/states\fR [\fBentity\fR=HOST] [\fBtest\fR=TEST] [\fBverdict\fR=VERDICT]"
+.IP "\fB/states\fR [\fBhost\fR=HOST] [\fBtest\fR=TEST] [\fBverdict\fR=VERDICT]"
 The status board, one state per host and test. The colour is given as a
 verdict: green is ok, yellow warning, red critical, blue disabled, clear
 nodata and purple unknown. \fBverdict\fR takes one of those six; any
@@ -98,9 +98,9 @@ An inode alarm is given once for each file system its status names
 (xymond's \fBID=\fR), with that \fBinstance\fR, the severity of its own
 line, and, where the line says so, the \fBmetric\fR pct and a
 \fBmeasure\fR with its value and the threshold crossed.
-.IP "\fB/entities\fR"
+.IP "\fB/hosts\fR"
 Each host on the board, once.
-.IP "\fB/status\fR \fBentity\fR=HOST \fBtest\fR=TEST"
+.IP "\fB/status\fR \fBhost\fR=HOST \fBtest\fR=TEST"
 The current status of HOST's TEST, from xymondboard: its verdict, when it
 last changed (time) and was last reported (updated), and its text -- what
 the web page shows, written by the monitored host or the test. When it is
@@ -139,7 +139,7 @@ though a stranger learns from it which plugins, at which versions, run
 here. It answers not_found when nothing is staged. Whoever controls this
 server, or the certificate a machine trusts for it, controls the code that
 machine installs from here.
-.IP "\fB/series\fR \fBentity\fR=HOST \fBtest\fR=TEST [\fBmetric\fR=DATASET] [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
+.IP "\fB/series\fR \fBhost\fR=HOST \fBtest\fR=TEST [\fBmetric\fR=DATASET] [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
 The values of one dataset of the RRD file TEST.rrd of HOST, under
 $XYMONRRDS, read with rrdtool. TEST is the file's name, not the column on
 the status board: xymond_rrd names the files after the data it keeps, so
@@ -160,13 +160,13 @@ says in \fBupdated\fR when the file last received a value, so how fresh
 its points are. The step in progress may still be null, which is not a test
 that stopped; without those sockets the file is read as it is. To see
 what a host has, list $XYMONRRDS/HOST/ there, or run rrdtool info on a file.
-.IP "\fB/graphs\fR \fBentity\fR=HOST \fBtest\fR=TEST [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
+.IP "\fB/graphs\fR \fBhost\fR=HOST \fBtest\fR=TEST [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
 The graph
 .I showgraph.cgi(1)
 draws for HOST and TEST, fetched from showgraph.sh, its wrapper, at
 $XYMONSERVERCGIURL -- prefixed with $XYMONWEBHOST when that is a path, as
 xymonserver.cfg ships it.
-.IP "\fB/events\fR [\fBentity\fR=HOST] [\fBtest\fR=TEST] [\fBsince\fR=TIME] [\fBlimit\fR=N] [\fBbefore\fR=SECONDS]"
+.IP "\fB/events\fR [\fBhost\fR=HOST] [\fBtest\fR=TEST] [\fBsince\fR=TIME] [\fBlimit\fR=N] [\fBbefore\fR=SECONDS]"
 The colour changes xymond_history recorded in $XYMONHISTDIR/allevents, the
 newest first: when, the verdict before and after, and how long the one
 before had lasted. N is 1 to 1000, 100 by default. With before, only the
@@ -174,7 +174,7 @@ changes older than that time: the epoch of an answer's last item asks for
 the page after it. The file is read from its end, so the newest changes
 cost the same however long the history. A server where nothing has changed
 colour yet has none.
-.IP "\fB/histlog\fR \fBentity\fR=HOST \fBtest\fR=TEST \fBtime\fR=SECONDS"
+.IP "\fB/histlog\fR \fBhost\fR=HOST \fBtest\fR=TEST \fBtime\fR=SECONDS"
 The status text xymond_history saved under $XYMONHISTLOGS when HOST's TEST
 changed colour at that time, the epoch of an /events item; 404 when none was
 saved. At most 1 MiB of it.

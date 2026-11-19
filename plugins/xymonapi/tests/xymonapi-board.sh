@@ -235,6 +235,9 @@ dis=$(api_get '/status?host=dis.example.com&test=conn')
 assert_contains '"disabled":{' "$dis" "a disabled test says so"
 assert_contains 'maintenance window' "$dis" "with the reason given"
 assert_contains '"verdict":"disabled"' "$dis" "and its verdict is disabled, as the board shows it blue"
+hosts=$(api_get '/hosts')
+assert_contains '{"host":"red.example.com"}' "$hosts" "/hosts gives each host by its name"
+assert_equal 1 "$(printf '%s' "$hosts" | grep -o '"host":"red.example.com"' | wc -l | tr -d ' ')" "once, though it has several tests"
 wdis=$(api_get '/status?host=wdis.example.com&test=conn')
 assert_contains '"text":"disk being replaced","createdBy":"bruno","from":"10.0.0.9"' "$wdis" "/status reads the web page's disable as /alarms does"
 assert_equal "404" "$(api_code '/status?host=green.example.com&test=disk')" "/status of a test the host has not"

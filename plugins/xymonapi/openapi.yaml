@@ -109,10 +109,10 @@ paths:
                   items: { type: array, items: { $ref: "#/components/schemas/Alarm" } }
         "502": { $ref: "#/components/responses/Upstream" }
 
-  /entities:
+  /hosts:
     get:
       summary: Each host on the board, once.
-      operationId: listEntities
+      operationId: listHosts
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "200":
@@ -123,7 +123,7 @@ paths:
                 type: object
                 required: [items]
                 properties:
-                  items: { type: array, items: { $ref: "#/components/schemas/Entity" } }
+                  items: { type: array, items: { $ref: "#/components/schemas/Host" } }
         "502": { $ref: "#/components/responses/Upstream" }
 
   /status:
@@ -527,13 +527,11 @@ components:
             critical: { type: number, description: "The panic threshold, when it is the one crossed." }
             state:    { type: string, description: "In place of a number: unreachable, a file system that could not be measured." }
 
-    Entity:
+    Host:
       type: object
-      required: [id, composition]
+      required: [host]
       properties:
-        id:          { type: string, description: "The host name." }
-        composition: { type: string, enum: [measured] }
-        labels:      { $ref: "#/components/schemas/Labels" }
+        host: { type: string, description: "The host's name, as Xymon knows it." }
 
     Time:
       type: string

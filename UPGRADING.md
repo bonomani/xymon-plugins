@@ -32,8 +32,10 @@ In the same version, three answers take the form RFC #113 gives them:
 - A time xymond gives as 0, a test such as `trends` that never changed, is
   left out, not `1970-01-01T00:00:00Z`.
 
-The MCP server's tool `entities` is `hosts` (xymonapi-mcp 0.3.0), as RFC
-#113 asks; the API's `/entities` keeps its name.
+`/entities` is `/hosts`, each item `{"host": "srv1"}`: it was `{"id":
+"srv1", "composition": "measured", "labels": {"role": "host"}}`, what is
+left of the word entity. The MCP server's tool `entities` is `hosts`
+(xymonapi-mcp 0.3.0).
 
 ## An alarm keeps the severity its test measured, from xymonapi 8.0.0
 

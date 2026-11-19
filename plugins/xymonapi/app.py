@@ -183,9 +183,9 @@ def _alarms(request):
     return JSONResponse({"items": items})
 
 
-def _entities(request):
+def _hosts(request):
     try:
-        items = xymon.entities()
+        items = xymon.hosts()
     except Exception as exc:                        # noqa: BLE001
         return _upstream(exc)
     return JSONResponse({"items": items})
@@ -455,7 +455,7 @@ ROUTES = {
     "/health": _health,
     "/states": _states,
     "/alarms": _alarms,
-    "/entities": _entities,
+    "/hosts": _hosts,
     "/status": _status,
     "/series": _series,
     "/graphs": _graphs,

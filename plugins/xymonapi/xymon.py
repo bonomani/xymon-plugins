@@ -288,14 +288,9 @@ def _message(line1: str) -> str:
     return hide(_LINE1_DATE.sub("", words, count=1).strip()[:_MESSAGE_MAX])
 
 
-def entities() -> list[dict]:
+def hosts() -> list[dict]:
     """Each host on the board, once."""
-    seen: dict[str, dict] = {}
-    for d in _rows():
-        host = d.get("hostname", "?")
-        seen.setdefault(host, {"id": host, "composition": "measured",
-                               "labels": {"role": "host"}})
-    return list(seen.values())
+    return [{"host": h} for h in dict.fromkeys(d.get("hostname", "?") for d in _rows())]
 
 
 _STATUS_FIELDS = ["hostname", "testname", "color", "lastchange", "logtime",
