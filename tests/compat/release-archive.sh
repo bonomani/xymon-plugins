@@ -82,5 +82,12 @@ PREFIX="$work/prefix" XDG_CONFIG_HOME="$work/cfg" HOME="$work" \
 assert_file_exists "$work/prefix/libexec/xymon-plugins/xymonapi-mcp/VERSION"
 assert_file_exists "$work/prefix/libexec/xymon-plugins/xymonapi/xymonapi_client.py"
 assert_equal "$mcp" "$(cat "$work/prefix/libexec/xymon-plugins/xymonapi-mcp/VERSION")" "the plugin installed records its version"
+# And from the scratch checkout itself, at the release tags: the same X.Y.Z,
+# not the tag (S2).
+PREFIX="$work/prefix2" XDG_CONFIG_HOME="$work/cfg2" HOME="$work" \
+	"$repo/xymon-plugin" install --tools xymonapi-mcp </dev/null >"$work/install2.log" 2>&1 \
+	|| fail "install --tools from the tagged checkout failed: $(tail -n 5 "$work/install2.log")"
+assert_equal "$mcp" "$(cat "$work/prefix2/libexec/xymon-plugins/xymonapi-mcp/VERSION")" \
+	"[S2] from a checkout at a release tag, VERSION is the same X.Y.Z as from its archive"
 
 pass "a release's archive holds one plugin, or the installer, under xymon-plugins/, the same bytes for the same tag, refused when its version is not the tag's, and installs unpacked beside the others"

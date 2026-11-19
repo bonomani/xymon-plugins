@@ -70,8 +70,9 @@ file, and names none.
 
 **S2. A plugin carries its version.**
 The `version:` line, `X.Y.Z`, moves as `CONTRIBUTING.md` (Versions) says. The
-install writes beside the installed files, in `VERSION`, the plugin's
-release tag when the checkout is at one, else that version.
+install writes it beside the installed files, in `VERSION`, from a checkout
+or a release's archive alike: whether the code is exactly a release's is
+said by `status` and `verify` (S15, S30), and an archive's attestation.
 
 **S3. A plugin names the plugins it needs, part by part.**
 Its `server-needs:` and `tools-needs:` lines name them for that part: the
