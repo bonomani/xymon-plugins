@@ -28,7 +28,7 @@ work=$(mktempdir)
 XYMOND_PID=""
 register_cleanup 'stop_process "$API_PID" "$XYMOND_PID"'
 
-printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n' > "$work/hosts.cfg"
+printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n' > "$work/hosts.cfg"
 
 mkdir -p "$work/home/etc" "$work/home/tmp" "$work/home/www"
 require_cfg XYMONSERVER_CFG "$XYMON_SRC/xymond/etcfiles/xymonserver.cfg"
@@ -62,6 +62,13 @@ cookie=$("$XYMONCLIENT" "127.0.0.1:$PORT" "xymondboard host=disk.example.com tes
 send "xymondack $cookie 60 cleaning old kernels, back in an hour"
 send "status dis,example,com.conn red down"
 send "disable dis,example,com.conn 7200 maintenance window"
+# Clear as xymonnet sends it, for a host it could not reach: xymond chose
+# nothing, so no colour of the test's own is behind it.
+send "status clr,example,com.conn clear no answer"
+# xymonnet's clear behind a host it cannot reach: red's conn is red.
+send "status red,example,com.ssh clear Ping failed, or dialup host"
+# Red in a DOWNTIME window, all day: xymond records it blue, no disable set.
+send "status dt,example,com.conn red down"
 # A host whose name begins with another's, with a status of its own.
 send "status disk2,example,com.disk green Filesystems all ok"
 # Characters xymondboard encodes on its way out: | tab \ and a literal \n.
@@ -143,6 +150,18 @@ assert_contains "$ack_st" "$acked" "/states and /status give the same acknowledg
 alarms=$(api_get /alarms)
 assert_contains '"id":"red.example.com:conn"' "$alarms" "a red status is an alarm"
 assert_not_contains 'green.example.com' "$alarms" "a green status is not an alarm"
+alarm() { a=${alarms#*\"id\":\"$1\"}; printf '%s' "${a%%\}*}"; }
+assert_contains '"severity":"major","status":"firing"' "$(alarm red.example.com:conn)" "red: major, firing"
+assert_contains '"severity":"minor","status":"firing"' "$(alarm disk.example.com:disk)" "yellow: minor, firing"
+assert_contains '"severity":"major","status":"suppressed"' "$(alarm dis.example.com:conn)" "blue over red: the red it measured, major, and suppressed"
+assert_contains '"suppressedBy":"disable"' "$(alarm dis.example.com:conn)" "by a disable"
+assert_contains '"status":"suppressed"' "$(alarm dt.example.com:conn)" "red in a DOWNTIME window: suppressed"
+assert_contains '"suppressedBy":"downtime"' "$(alarm dt.example.com:conn)" "by the DOWNTIME, no disable set"
+assert_not_contains '"suppressedBy"' "$(alarm red.example.com:conn)" "red is not suppressed"
+assert_contains '"severity":"indeterminate","status":"firing"' "$(alarm clr.example.com:conn)" "a clear with nothing behind it, indeterminate"
+assert_not_contains '"unreachable"' "$(alarm clr.example.com:conn)" "and not unreachable: no conn red, no colour kept behind it"
+assert_contains '"unreachable":true' "$(alarm red.example.com:ssh)" "a clear ssh on a host whose conn is red: unreachable"
+assert_not_contains '"unreachable"' "$(alarm red.example.com:conn)" "red is not unreachable"
 
 # /status: the text behind a colour, with what was done about it.
 st=$(api_get '/status?host=disk.example.com&test=disk')

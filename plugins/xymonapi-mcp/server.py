@@ -133,7 +133,10 @@ def states(host: str | None = None, test: str | None = None,
 
 @tool
 def alarms() -> dict:
-    """Every state whose verdict is not ok, with its severity."""
+    """Every state whose verdict is not ok, with the severity the test last
+    measured: major (red), minor (yellow), or indeterminate where nothing bad
+    was measured. Beside it: stale, the test went silent; unreachable, its
+    host is down or out of reach; status suppressed, the test is disabled."""
     return api("/alarms")
 
 

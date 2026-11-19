@@ -5,6 +5,20 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## An alarm keeps the severity its test measured, from xymonapi 8.0.0
+
+`/alarms` turned xymond's colours into severities: purple critical, clear
+and blue minor. Purple, clear and blue are xymond's, not the test's (RFC
+#113): an alarm now keeps the severity the test last reported -- `major`
+for red, `minor` for yellow, read from xymond's `prevgapcolor`, Xymon
+4.3.31 -- and says beside it `stale: {since}` for a test gone silent,
+`unreachable: true` for one that is clear, and the status `suppressed` for
+one disabled. `indeterminate` is the severity where nothing that is not ok
+was measured: a clear from xymonnet, a test that was green. `critical` is
+given no more. What to do: a client that read `critical` for a silent test
+reads `stale`; one that left out clear or blue by their severity leaves out
+`unreachable`, `suppressed` or `indeterminate`.
+
 ## A host is called host, from xymonapi 8.0.0
 
 The API called a host `entity`, as a query parameter and as a field; it is
