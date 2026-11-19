@@ -77,8 +77,8 @@ xymond escapes neither, so a name holding a colon cannot be told apart.
 Every state whose verdict is not ok, with the severity the test last
 measured, in ITU-T X.733's words: red major, yellow minor. What xymond adds
 is said beside it: \fBstale\fR for a test gone silent (purple),
-\fBunreachable\fR for one that is clear, its host down or out of
-xymonnet's reach, and the status \fBsuppressed\fR for one blue, which is
+\fBunreachable\fR for one that is clear because its host cannot be reached
+(xymond made it clear, or the host's conn is red), and the status \fBsuppressed\fR for one blue, which is
 listed all the same, with \fBsuppressedBy\fR saying why: \fBdisable\fR
 for a disable, \fBdowntime\fR for a DOWNTIME window of hosts.cfg. Where nothing that is not ok was measured --
 a clear from xymonnet, a test that was green -- the severity is

@@ -151,12 +151,18 @@ def alarms() -> list[dict]:
     """Every state that is not ok, as an Alarm: the severity the test last
     measured, and what xymond adds said beside it -- stale for a test gone
     silent (purple), unreachable for one whose host is down or that
-    xymonnet could not reach (clear), suppressed for one disabled or in a
+    xymonnet could not reach (clear: a colour of its own kept behind it, or
+    its host's conn red), suppressed for one disabled or in a
     DOWNTIME window (blue), with suppressedBy saying which.
     Where nothing was measured that is not ok -- a clear from xymonnet, a
     test that was green -- the severity is indeterminate."""
     res: list[dict] = []
-    for d in _rows():
+    rows = _rows()
+    # A host xymonnet cannot reach: its conn is red, and its other network
+    # tests are made clear behind it. A clear on a host whose conn is not
+    # red -- a client test with no rule, no data -- says nothing of reach.
+    down = {d.get("hostname") for d in rows if d.get("testname") == "conn" and d.get("color") == "red"}
+    for d in rows:
         colour = d.get("color", "clear")
         if COLOUR_STATUS.get(colour, "unknown") == "ok":
             continue
@@ -170,7 +176,7 @@ def alarms() -> list[dict]:
             a["since"] = t
         if colour == "purple":
             a["stale"] = {"since": t}
-        elif colour == "clear":
+        elif colour == "clear" and (d.get("prevgapcolor", "none") not in ("", "none") or host in down):
             a["unreachable"] = True
         elif colour == "blue":
             a["suppressedBy"] = "downtime" if d.get("disabletime", "0") in ("", "0") else "disable"

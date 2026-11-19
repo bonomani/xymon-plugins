@@ -51,12 +51,20 @@ assert_contains 'silent major firing stale' "$out" "purple over red: the red it 
 assert_contains 'silentyel minor firing stale' "$out" "purple over yellow: minor, and stale"
 assert_contains 'silentgreen indeterminate firing stale' "$out" "purple over green: nothing bad measured, indeterminate, and stale"
 assert_contains 'down major firing unreachable' "$out" "xymond's clear over red, a host down: major, and unreachable"
-assert_contains 'nonet indeterminate firing unreachable' "$out" "xymonnet's clear, nothing behind it: indeterminate, and unreachable"
+assert_contains 'nonet indeterminate firing' "$out" "a clear with nothing behind it: indeterminate"
+assert_not_contains 'nonet indeterminate firing unreachable' "$out" "and not unreachable: its host's conn is not red"
 assert_contains 'off major suppressed by:disable' "$out" "blue over red, disabled until a time: major, suppressed by a disable"
 assert_contains 'offgreen indeterminate suppressed by:disable' "$out" "blue over green, disabled until ok (-1): suppressed by a disable"
 assert_contains 'dt major suppressed by:downtime' "$out" "blue with no disable set: a DOWNTIME window"
 assert_contains 'red major firing' "$out" "red: major, firing, nothing beside it"
 assert_not_contains 'red major firing stale' "$out" "red is not stale"
 assert_not_contains 'ok ' "$out" "green is no alarm"
+
+# xymonnet's clear for a host it cannot reach: its conn red, its other tests
+# clear behind it -- unreachable. A client test with no rule on a host that
+# answers: clear, and not unreachable.
+reach=$(alarms "$(printf 'far|conn|red|1700000000|0|||none|0\nfar|ssh|clear|1700000000|0|||none|0\nnear|conn|green|1700000000|0|||none|0\nnear|procs|clear|1700000000|0|||none|0\n')")
+assert_contains 'far indeterminate firing unreachable' "$reach" "a clear ssh on a host whose conn is red: unreachable"
+assert_not_contains 'near indeterminate firing unreachable' "$reach" "a clear procs on a host that answers: not unreachable"
 
 pass "an alarm keeps the severity its test last measured, with stale, unreachable or suppressed beside it"

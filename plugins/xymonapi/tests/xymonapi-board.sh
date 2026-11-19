@@ -65,6 +65,8 @@ send "disable dis,example,com.conn 7200 maintenance window"
 # Clear as xymonnet sends it, for a host it could not reach: xymond chose
 # nothing, so no colour of the test's own is behind it.
 send "status clr,example,com.conn clear no answer"
+# xymonnet's clear behind a host it cannot reach: red's conn is red.
+send "status red,example,com.ssh clear Ping failed, or dialup host"
 # Red in a DOWNTIME window, all day: xymond records it blue, no disable set.
 send "status dt,example,com.conn red down"
 # A host whose name begins with another's, with a status of its own.
@@ -156,8 +158,9 @@ assert_contains '"suppressedBy":"disable"' "$(alarm dis.example.com:conn)" "by a
 assert_contains '"status":"suppressed"' "$(alarm dt.example.com:conn)" "red in a DOWNTIME window: suppressed"
 assert_contains '"suppressedBy":"downtime"' "$(alarm dt.example.com:conn)" "by the DOWNTIME, no disable set"
 assert_not_contains '"suppressedBy"' "$(alarm red.example.com:conn)" "red is not suppressed"
-assert_contains '"severity":"indeterminate","status":"firing"' "$(alarm clr.example.com:conn)" "a clear from xymonnet: nothing measured behind it, indeterminate"
-assert_contains '"unreachable":true' "$(alarm clr.example.com:conn)" "and unreachable"
+assert_contains '"severity":"indeterminate","status":"firing"' "$(alarm clr.example.com:conn)" "a clear with nothing behind it, indeterminate"
+assert_not_contains '"unreachable"' "$(alarm clr.example.com:conn)" "and not unreachable: no conn red, no colour kept behind it"
+assert_contains '"unreachable":true' "$(alarm red.example.com:ssh)" "a clear ssh on a host whose conn is red: unreachable"
 assert_not_contains '"unreachable"' "$(alarm red.example.com:conn)" "red is not unreachable"
 
 # /status: the text behind a colour, with what was done about it.
