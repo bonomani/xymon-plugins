@@ -67,7 +67,7 @@ mcp "http://127.0.0.1:$API_PORT" '{"jsonrpc":"2.0","id":3,"method":"tools/list"}
 [ "$rc" -eq 77 ] && skip "$(cat "$work/mcp.err")"
 [ "$rc" -eq 0 ] || fail "the MCP server exited with $rc: $(tail -n 5 "$work/mcp.err")"
 list=$(grep '"id":3' "$work/mcp.out") || fail "no answer to tools/list: $(tail -n 5 "$work/mcp.err")"
-for tool in health states alarms entities status series search_docs search_history; do
+for tool in health states alarms hosts status series search_docs search_history; do
 	assert_contains "\"name\":\"$tool\"" "$list" "tools/list names $tool"
 done
 assert_equal "8" "$(printf '%s' "$list" | grep -o '"readOnlyHint":true' | wc -l | tr -d ' ')" "every tool is marked read-only"
@@ -99,8 +99,8 @@ call() {
 }
 assert_contains 'alive' "$(call health '{}')" "the health tool reaches /health"
 assert_contains 'xymond' "$(call health '{}')" "and names the xymond"
-assert_contains 'red.example.com:conn' "$(call alarms '{}')" "the alarms tool lists the red status"
-assert_contains 'measured' "$(call entities '{}')" "the entities tool lists the host"
+assert_contains '\"host\": \"red.example.com\"' "$(call alarms '{}')" "the alarms tool lists the red status"
+assert_contains 'measured' "$(call hosts '{}')" "the hosts tool lists the host"
 st=$(call status '{"host":"red.example.com","test":"conn"}')
 assert_contains 'down' "$st" "the status tool returns the status text"
 assert_contains 'critical' "$st" "and the verdict"

@@ -159,15 +159,16 @@ ack_st=${ack_st#*\"acknowledged\":}; ack_st=${ack_st%%\}*}
 assert_contains "$ack_st" "$acked" "/states and /status give the same acknowledgement"
 
 alarms=$(api_get /alarms)
-assert_contains '"id":"red.example.com:conn"' "$alarms" "a red status is an alarm"
+assert_contains '"host":"red.example.com","test":"conn"' "$alarms" "a red status is an alarm"
 assert_not_contains 'green.example.com' "$alarms" "a green status is not an alarm"
-alarm() { a=${alarms#*\"id\":\"$1\"}; printf '%s' "${a%%\}*}"; }
+alarm() { a=${alarms#*\"host\":\"${1%%:*}\",\"test\":\"${1#*:}\"}; printf '%s' "${a%%\}*}"; }
 assert_contains '"severity":"major","status":"firing"' "$(alarm red.example.com:conn)" "red: major, firing"
 assert_contains '"severity":"minor","status":"firing"' "$(alarm disk.example.com:disk)" "yellow: minor, firing"
 assert_contains '"severity":"major","status":"suppressed"' "$(alarm dis.example.com:conn)" "blue over red: the red it measured, major, and suppressed"
-assert_contains '"suppressedBy":"disable"' "$(alarm dis.example.com:conn)" "by a disable"
+assert_contains '"suppressedBy":[{"kind":"disable","of":"test","until":"' "$(alarm dis.example.com:conn)" "by a disable, the test's, with its end"
+assert_contains '"text":"maintenance window"' "$(alarm dis.example.com:conn)" "and its text"
 assert_contains '"status":"suppressed"' "$(alarm dt.example.com:conn)" "red in a DOWNTIME window: suppressed"
-assert_contains '"suppressedBy":"downtime"' "$(alarm dt.example.com:conn)" "by the DOWNTIME, no disable set"
+assert_contains '"suppressedBy":[{"kind":"downtime","of":"test"' "$(alarm dt.example.com:conn)" "by the DOWNTIME, no disable set"
 assert_not_contains '"suppressedBy"' "$(alarm red.example.com:conn)" "red is not suppressed"
 assert_contains '"severity":"indeterminate","status":"firing"' "$(alarm clr.example.com:conn)" "a clear with nothing behind it, indeterminate"
 assert_not_contains '"unreachable"' "$(alarm clr.example.com:conn)" "and not unreachable: no conn red, no colour kept behind it"
@@ -188,7 +189,9 @@ assert_contains '"domain":"filesystem"' "$disk_alarm" "disk lies in the filesyst
 assert_contains '"domain":"network"' "$(alarm red.example.com:conn)" "conn in network"
 # inode: one alarm for each file system its status names.
 ino() { printf '%s' "$alarms" | sed 's/},{"id"/}\n{"id"/g' | grep -F "\"instance\":\"$1\""; }
-assert_equal 3 "$(printf '%s' "$alarms" | grep -o '"id":"ino.example.com:inode"' | wc -l | tr -d ' ')" "an inode alarm, one for each file system in alarm"
+inos=$(printf '%s' "$alarms" | sed 's/},{"id"/}\n{"id"/g' | grep -F '"host":"ino.example.com","test":"inode"')
+assert_equal 3 "$(printf '%s\n' "$inos" | wc -l | tr -d ' ')" "an inode alarm, one for each file system in alarm"
+assert_equal 3 "$(printf '%s\n' "$inos" | grep -o '"id":"[0-9a-f]\{16\}"' | sort -u | wc -l | tr -d ' ')" "each its own id, opaque: not host:test, which the three share"
 assert_contains '"severity":"major"' "$(ino /var)" "/var: major"
 assert_contains '"message":"/var (95% used) has reached the PANIC level (90%)"' "$(ino /var)" "its own line"
 assert_contains '"metric":"pct","measure":{"value":95,"unit":"%","critical":90}' "$(ino /var)" "its pct and the panic level crossed"

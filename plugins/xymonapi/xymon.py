@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import json
 import os
 import re
@@ -39,13 +40,13 @@ XYMONHISTLOGS = os.environ.get("XYMONHISTLOGS", "")
 # disable -- and "none" at every other time. disabletime is when a disable
 # ends, -1 until the test is ok again, and 0 when none runs: a blue status
 # with 0 is a DOWNTIME's (xymond.c, the rewrite in handle_status), a blue
-# one with any other a disable's. logtime is when the status was last
+# one with any other a disable's, dismsg its text. logtime is when the status was last
 # reported, sender who sent it. line1, the status's first line, is not
 # encoded and may hold a "|": it comes last, and a line splits on the
 # fields before it only.
 BOARD_FIELDS = ["hostname", "testname", "color", "lastchange",
                 "acktime", "ackmsg", "acklist", "prevgapcolor", "disabletime",
-                "logtime", "sender", "line1"]
+                "dismsg", "logtime", "sender", "line1"]
 
 # A name from the request becomes part of a file path, so it may not hold
 # "/" or "..": a path outside XYMONRRDS. A host name never holds ":" either;
@@ -124,9 +125,11 @@ def _rows() -> list[dict]:
 
 
 def _iso(epoch: str) -> str | None:
+    """EPOCH as an ISO time; None for none, xymond's 0 among them -- a test
+    such as trends that never changed, not a change in 1970."""
     try:
-        return datetime.fromtimestamp(int(epoch), timezone.utc) \
-            .isoformat().replace("+00:00", "Z")
+        n = int(epoch)
+        return datetime.fromtimestamp(n, timezone.utc).isoformat().replace("+00:00", "Z") if n > 0 else None
     except (ValueError, TypeError, OSError, OverflowError):
         return None
 
@@ -167,7 +170,8 @@ def alarms() -> list[dict]:
     silent (purple), unreachable for one whose host is down or that
     xymonnet could not reach (clear: a colour of its own kept behind it, or
     its host's conn red), suppressed for one disabled or in a
-    DOWNTIME window (blue), with suppressedBy saying which.
+    DOWNTIME window (blue), with suppressedBy saying which, until when and
+    why, where Xymon keeps it.
     Where nothing was measured that is not ok -- a clear from xymonnet, a
     test that was green -- the severity is indeterminate."""
     res: list[dict] = []
@@ -183,7 +187,7 @@ def alarms() -> list[dict]:
             continue
         host, tst = d.get("hostname", "?"), d.get("testname", "?")
         own = colour if colour in COLOUR_SEVERITY else d.get("prevgapcolor", "none")
-        a = {"id": f"{host}:{tst}", "host": host, "test": tst,
+        a = {"host": host, "test": tst,
              "domain": DOMAIN.get(tst, tst),
              "severity": COLOUR_SEVERITY.get(own, "indeterminate"),
              "status": "suppressed" if colour == "blue" else "firing"}
@@ -195,7 +199,18 @@ def alarms() -> list[dict]:
         elif colour == "clear" and (d.get("prevgapcolor", "none") not in ("", "none") or host in down):
             a["unreachable"] = True
         elif colour == "blue":
-            a["suppressedBy"] = "downtime" if d.get("disabletime", "0") in ("", "0") else "disable"
+            # RFC #113: a list, one entry per what suppresses, a field Xymon
+            # does not keep left out -- a DOWNTIME's end and cause are not
+            # on the board, nor a disable's end when it lasts until ok (-1).
+            until = d.get("disabletime", "0")
+            by = {"kind": "downtime" if until in ("", "0") else "disable", "of": "test"}
+            if by["kind"] == "disable":
+                if until != "-1" and _iso(until):
+                    by["until"] = _iso(until)
+                text = hide(_nldecode(d.get("dismsg", ""))).strip()
+                if text:
+                    by["text"] = text
+            a["suppressedBy"] = [by]
         updated = _iso(d.get("logtime", ""))
         if updated:
             a["updated"] = updated
@@ -211,7 +226,15 @@ def alarms() -> list[dict]:
             a["acknowledged"] = {**ack, "of": "test"}
         a["link"] = "status?" + urlencode({"host": host, "test": tst})
         res += _instances(a) if tst in _INSTANCE_TESTS else [a]
-    return res
+    return [{"id": _alarm_id(a), **a} for a in res]
+
+
+def _alarm_id(a: dict) -> str:
+    """An alarm's id: opaque, the same while its host, test and instance are
+    (RFC #113: not composed from the levels, which an instance's ":" would
+    make ambiguous)."""
+    key = "\0".join((a["host"], a["test"], a.get("instance", "")))
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
 # The tests whose status names each object it judged: xymond writes inode's

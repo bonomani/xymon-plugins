@@ -141,7 +141,7 @@ def alarms() -> dict:
 
 
 @tool
-def entities() -> dict:
+def hosts() -> dict:
     """Each host on the board, once."""
     return api("/entities")
 

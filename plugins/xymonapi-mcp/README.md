@@ -3,7 +3,7 @@
 An MCP server: it gives an AI tool that speaks the Model Context Protocol
 -- Claude Code, Claude Desktop, Codex, opencode and others -- read-only tools
 over the [Xymon API](../xymonapi/README.md): `health`, `states`, `alarms`,
-`entities`, `status`, `series`, and two searches, `search_docs` and
+`hosts`, `status`, `series`, and two searches, `search_docs` and
 `search_history`, which ask the API's `/search`.
 Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
 

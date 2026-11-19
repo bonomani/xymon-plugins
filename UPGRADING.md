@@ -15,6 +15,20 @@ C2). What to do: a script sends only the parameters `openapi.yaml` lists --
 `host`, not `entity`; `from` and `to`, not `start` and `end`. The MCP server,
 the search and the agent send none other, and need no change.
 
+In the same version, three answers take the form RFC #113 gives them:
+
+- An alarm's `id` is opaque, the same while its host, test and instance are:
+  it was `host:test`, which every `inode` alarm of a host shared. Compare
+  it; read the host and the test from their fields.
+- `suppressedBy` is a list, one entry per what suppresses: `{"kind":
+  "disable", "of": "test", "until": ..., "text": ...}`, or `{"kind":
+  "downtime", "of": "test"}`; it was the word alone.
+- A time xymond gives as 0, a test such as `trends` that never changed, is
+  left out, not `1970-01-01T00:00:00Z`.
+
+The MCP server's tool `entities` is `hosts` (xymonapi-mcp 0.3.0), as RFC
+#113 asks; the API's `/entities` keeps its name.
+
 ## An alarm keeps the severity its test measured, from xymonapi 8.0.0
 
 `/alarms` turned xymond's colours into severities: purple critical, clear

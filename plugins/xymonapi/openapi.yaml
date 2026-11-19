@@ -474,13 +474,23 @@ components:
       type: object
       required: [id, severity, status]
       properties:
-        id:       { type: string, description: "host:test" }
+        id:       { type: string, description: "Opaque, the same while host, test and instance are: compare it, never read it (RFC #113)." }
         host:     { type: string }
         test:     { type: string }
         domain:   { type: string, description: "The domain the test lies in, a label that groups and identifies nothing: disk, inode and files are filesystem; conn and ports network; http, content and sslcert web; cpu, memory, msgs (log), procs (process), svcs (os-service). Any other test is its own domain." }
         severity: { $ref: "#/components/schemas/Severity" }
         status:   { type: string, enum: [firing, suppressed], description: "suppressed: the test is blue, disabled or in a DOWNTIME window, listed all the same, as Alertmanager lists a silenced alert." }
-        suppressedBy: { type: string, enum: [disable, downtime], description: "Present when suppressed: what suppresses it -- a disable (xymon's disable, the web page's), or a DOWNTIME window of hosts.cfg." }
+        suppressedBy:
+          type: array
+          description: "Present when suppressed: what suppresses it, one entry each (RFC #113). A field Xymon does not keep is left out: a DOWNTIME's until and text, a disable's until when it lasts until the test is ok."
+          items:
+            type: object
+            required: [kind, of]
+            properties:
+              kind:  { type: string, enum: [disable, downtime], description: "A disable (xymon's disable, the web page's), or a DOWNTIME window of hosts.cfg." }
+              of:    { type: string, enum: [test], description: "Where it was set: Xymon disables a test, all it holds." }
+              until: { type: string, format: date-time, description: "When a disable ends." }
+              text:  { type: string, description: "The disable's text, hidden as the status text is." }
         since:    { type: string, format: date-time }
         stale:
           type: object

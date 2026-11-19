@@ -2,7 +2,7 @@
 # it alone. One key per line, a key repeated for each line of a message;
 # ./xymon-plugin at the repository's top installs it from the lines below.
 name: xymonapi-mcp
-version: 0.2.0
+version: 0.3.0
 summary: an MCP server that gives an AI client read-only tools over the Xymon API
 server-short: the MCP server, beside the API for /ask
 tools-short: the MCP server for your AI tools

@@ -79,8 +79,11 @@ measured, in ITU-T X.733's words: red major, yellow minor. What xymond adds
 is said beside it: \fBstale\fR for a test gone silent (purple),
 \fBunreachable\fR for one that is clear because its host cannot be reached
 (xymond made it clear, or the host's conn is red), and the status \fBsuppressed\fR for one blue, which is
-listed all the same, with \fBsuppressedBy\fR saying why: \fBdisable\fR
-for a disable, \fBdowntime\fR for a DOWNTIME window of hosts.cfg. Where nothing that is not ok was measured --
+listed all the same, with \fBsuppressedBy\fR saying why, one entry
+each: its \fBkind\fR, \fBdisable\fR or \fBdowntime\fR (a DOWNTIME window of
+hosts.cfg), \fBof\fR \fBtest\fR, and for a disable its \fBuntil\fR and
+\fBtext\fR where Xymon keeps them. An alarm's \fBid\fR is opaque: the same
+while its host, test and instance are, and to be compared, not read. Where nothing that is not ok was measured --
 a clear from xymonnet, a test that was green -- the severity is
 \fBindeterminate\fR. Needs xymond's \fBprevgapcolor\fR, Xymon 4.3.31.
 An alarm also gives when the status was last reported (\fBupdated\fR), who
