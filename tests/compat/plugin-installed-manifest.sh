@@ -157,7 +157,7 @@ server "$v2" uninstall xymonapi-mcp xymonapi-agent \
 server "$v1" install xymonapi-agent || fail "install-server xymonapi-agent failed: $(tail -n 5 "$work/server.log")"
 out=$("$v3/xymon-plugin" status --server XYMONHOME="$home" 2>&1)
 assert_contains "xymonapi-agent: " "$out" "[S20] status tells of a plugin gone from the checkout"
-assert_contains "not in this checkout" "$out" "[S20] and says it is gone from it"
+assert_contains "not in this copy" "$out" "[S20] and says it is gone from it"
 server "$v3" uninstall --all || fail "[S20] uninstall with no names, a plugin gone from the checkout installed, failed: $(tail -n 5 "$work/server.log")"
 [ -e "$home/ext/xymonapi-agent" ] && fail "[S20] uninstall with no names left a plugin gone from the checkout"
 

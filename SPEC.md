@@ -287,8 +287,9 @@ the command.
 `status --server` and `status --tools` say, for each plugin of the part, or
 those named: whether it is installed, the version installed, from its
 `VERSION`, a release tag read as its `X.Y.Z`; on the server, whether its
-task is on; and the version of the checkout run from, marked newer when it
-is, and, at the same version, said to have other code when its files differ
+task is on; and the version of the copy run from -- a checkout, or
+releases unpacked side by side -- said as "this copy has", marked newer
+when it is, and, at the same version, said to have other code when its files differ
 from those `MANIFEST` says were installed (S29), naming the update. A name that is no plugin is refused. `status` changes nothing. It
 says them by section, each always there, empty or not: the Xymon server,
 its own client tree -- the one its `XYMONCLIENTHOME` names -- and the
