@@ -5,6 +5,16 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## An unknown query parameter is refused, from xymonapi 9.0.0
+
+A query parameter an operation does not list was ignored: `/states?entity=web1`,
+with the name 8.0.0 dropped, answered the whole board as if no host had been
+named, and `/series?start=-2h`, for `from`, the last 24 hours. It is refused
+now, `400 bad_request`, naming it and those the operation takes (openapi.yaml,
+C2). What to do: a script sends only the parameters `openapi.yaml` lists --
+`host`, not `entity`; `from` and `to`, not `start` and `end`. The MCP server,
+the search and the agent send none other, and need no change.
+
 ## An alarm keeps the severity its test measured, from xymonapi 8.0.0
 
 `/alarms` turned xymond's colours into severities: purple critical, clear

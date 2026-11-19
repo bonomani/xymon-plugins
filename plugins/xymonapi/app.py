@@ -482,6 +482,25 @@ def build_app() -> FastAPI:
     # version reads.
     app.router.redirect_slashes = False
 
+    # A query parameter the operation does not list is refused, not ignored
+    # (C2): a client on a name the API dropped, entity from 8.0.0, or a
+    # mistyped one, start for from, would read an unfiltered answer. Added
+    # before the password check, so inside it: a stranger is told 401 first.
+    takes = {(base + path, method.upper()):
+             {p["name"] for p in op.get("parameters", []) if p.get("in") == "query"}
+             for path, ops in spec["paths"].items() for method, op in ops.items()}
+
+    @app.middleware("http")
+    async def _unknown_query(request, call_next):
+        known = takes.get((request.url.path, request.method))
+        extra = sorted(set(request.query_params) - known) if known is not None else []
+        if extra:
+            return JSONResponse({"error": "bad_request",
+                                 "detail": f"unknown parameter: {', '.join(extra)}; this takes "
+                                           f"{', '.join(sorted(known)) or 'none'}"},
+                                status_code=400)
+        return await call_next(request)
+
     # A path that is none of ours, or a method a path does not take, is
     # answered by the framework with {"detail": ...}: put in the spec's form,
     # an error of its closed list (openapi.yaml, C1 and C2).

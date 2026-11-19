@@ -16,7 +16,10 @@ info:
         unauthorized 401, not_found 404, method_not_allowed 405, too_many 429,
         upstream 502. D, when present, says why, for a person.
     C2. A path this document does not list answers not_found; a method a
-        listed path does not take answers method_not_allowed.
+        listed path does not take answers method_not_allowed; a query
+        parameter the operation does not list answers bad_request, naming
+        it -- never ignored, so that a name the API dropped or a mistyped
+        one is not answered as if it were absent.
     C3. With XYMONAPI_PASSWD set, every path but /plugins answers unauthorized
         without a user and password from that file or a valid client token,
         before anything else is checked; a token is refused on /tokens. A
