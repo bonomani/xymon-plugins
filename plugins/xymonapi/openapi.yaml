@@ -474,6 +474,7 @@ components:
         id:       { type: string, description: "host:test" }
         host:     { type: string }
         test:     { type: string }
+        domain:   { type: string, description: "The domain the test lies in, a label that groups and identifies nothing: disk, inode and files are filesystem; conn and ports network; http, content and sslcert web; cpu, memory, msgs (log), procs (process), svcs (os-service). Any other test is its own domain." }
         severity: { $ref: "#/components/schemas/Severity" }
         status:   { type: string, enum: [firing, suppressed], description: "suppressed: the test is blue, disabled or in a DOWNTIME window, listed all the same, as Alertmanager lists a silenced alert." }
         suppressedBy: { type: string, enum: [disable, downtime], description: "Present when suppressed: what suppresses it -- a disable (xymon's disable, the web page's), or a DOWNTIME window of hosts.cfg." }

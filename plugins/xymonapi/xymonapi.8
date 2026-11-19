@@ -87,7 +87,10 @@ An alarm also gives when the status was last reported (\fBupdated\fR), who
 sent it (\fBsource\fR), its first line without the date it opens with
 (\fBmessage\fR), its
 \fBacknowledged\fR, saying it is the test's, and a \fBlink\fR to its
-\fB/status\fR.
+\fB/status\fR. Its \fBdomain\fR groups it: \fBfilesystem\fR for disk, inode
+and files, \fBnetwork\fR for conn and ports, \fBweb\fR for http, content and
+sslcert, \fBlog\fR for msgs, \fBprocess\fR for procs, \fBos-service\fR for
+svcs, cpu and memory their own; any other test is its own domain.
 .IP "\fB/entities\fR"
 Each host on the board, once.
 .IP "\fB/status\fR \fBentity\fR=HOST \fBtest\fR=TEST"

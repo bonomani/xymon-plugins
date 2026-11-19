@@ -84,6 +84,16 @@ COLOUR_STATUS = {"green": "ok", "yellow": "warning", "red": "critical",
 # measured and says beside it what xymond added (RFC #113, version 2).
 COLOUR_SEVERITY = {"red": "major", "yellow": "minor"}
 VERDICTS = tuple(dict.fromkeys(COLOUR_STATUS.values()))
+# The domain a test lies in, the label that groups alarms (RFC #113): read
+# from this table, and the test itself where the table says nothing -- so a
+# network service (ssh, smtp, dns) or a script's own test is its own domain.
+# ponytail: a fixed table; one an admin can extend when a site asks for it.
+DOMAIN = {"cpu": "cpu", "memory": "memory",
+          "disk": "filesystem", "inode": "filesystem", "files": "filesystem",
+          "msgs": "log", "procs": "process", "svcs": "os-service",
+          "ports": "network", "conn": "network",
+          "http": "web", "content": "web", "sslcert": "web"}
+
 # xymond_history writes a colour to allevents as its first two letters:
 # "gr ye" is green after yellow. The full names are taken too.
 _SHORT = {c[:2]: c for c in COLOUR_STATUS}
@@ -174,6 +184,7 @@ def alarms() -> list[dict]:
         host, tst = d.get("hostname", "?"), d.get("testname", "?")
         own = colour if colour in COLOUR_SEVERITY else d.get("prevgapcolor", "none")
         a = {"id": f"{host}:{tst}", "host": host, "test": tst,
+             "domain": DOMAIN.get(tst, tst),
              "severity": COLOUR_SEVERITY.get(own, "indeterminate"),
              "status": "suppressed" if colour == "blue" else "firing"}
         t = _iso(d.get("lastchange", ""))
