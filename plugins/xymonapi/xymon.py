@@ -307,11 +307,11 @@ def epoch(value: str, now: int | None = None) -> int:
     raise BadRequest(f"time '{value}' must be now, seconds since the epoch, or like -24h")
 
 
-def _flush(host: str) -> None:
+def _flush(host: str) -> bool:
     """Ask xymond_rrd to write HOST's cached updates now, as showgraph does
     before drawing a graph: the text /HOST/ to each of its control sockets,
     rrdctl.<pid> in XYMONTMP -- in XYMONRUNDIR too, where a newer Xymon puts
-    them -- then 0.3 s for the write. It only makes an answer fresher: a
+    them. True when one took the request. It only makes an answer fresher: a
     directory missing, a left-over file nobody listens on, a send refused or
     a path too long for a socket, and the file is read as it stands."""
     req = f"/{host}/".encode()
@@ -331,8 +331,7 @@ def _flush(host: str) -> None:
                         sent = True
                     except OSError:
                         pass
-    if sent:
-        time.sleep(0.3)
+    return sent
 
 
 # xymond_rrd holds updates for up to 30 minutes before writing them: a range
@@ -340,18 +339,35 @@ def _flush(host: str) -> None:
 CACHE_SECONDS = 1800
 
 
+# How long, at most, to wait for xymond_rrd to write a host's cached updates
+# once asked: until the file's last update moves, read every _FLUSH_POLL.
+# showgraph waits a fixed 0.3 s; on a Xymon that serves the request at once
+# the file moves sooner, on one that serves it late the answer says so in
+# its updated (#128, xymon-monitoring/xymon#911).
+_FLUSH_WAIT = 1.0
+_FLUSH_POLL = 0.1
 _DSINFO = re.compile(r"^ds\[([^\]]+)\]\.index = ", re.M)
+_LASTUPDATE = re.compile(r"^last_update = ([0-9]+)$", re.M)
 
 
-def _dataset(rrd: str, host: str, tst: str) -> str:
+def _info(rrd: str) -> str:
+    out = subprocess.run(["rrdtool", "info", rrd], capture_output=True, text=True, timeout=30)
+    if out.returncode != 0:
+        raise Upstream(out.stderr.strip() or "rrdtool info failed")
+    return out.stdout
+
+
+def _last_update(info: str) -> int | None:
+    m = _LASTUPDATE.search(info)
+    return int(m.group(1)) if m else None
+
+
+def _dataset(info: str, host: str, tst: str) -> str:
     """The dataset to read when none is named: the file's only one -- la in
     la.rrd, sec in a tcp.*.rrd, as most of Xymon's files hold one -- else
     lambda when it is among several, the default before there was a choice;
     else none can be picked for the caller, who is told the names."""
-    out = subprocess.run(["rrdtool", "info", rrd], capture_output=True, text=True, timeout=30)
-    if out.returncode != 0:
-        raise Upstream(out.stderr.strip() or "rrdtool info failed")
-    names = _DSINFO.findall(out.stdout)
+    names = _DSINFO.findall(info)
     if len(names) == 1:
         return names[0]
     if "lambda" in names:
@@ -373,9 +389,19 @@ def series(entity: str | None, test: str | None, metric: str | None,
     rrd = os.path.join(XYMONRRDS, host, f"{tst}.rrd")
     if not os.path.isfile(rrd):
         raise NotFound(f"no RRD file for {host} {tst}")
-    ds = metric or _dataset(rrd, host, tst)
-    if end >= time.time() - CACHE_SECONDS:
-        _flush(host)
+    info = _info(rrd)
+    ds = metric or _dataset(info, host, tst)
+    last = _last_update(info)
+    if end >= time.time() - CACHE_SECONDS and _flush(host):
+        # Waited for until the file moves, at most _FLUSH_WAIT: a host with
+        # nothing cached leaves it as it is, and costs the whole wait.
+        deadline = time.monotonic() + _FLUSH_WAIT
+        while time.monotonic() < deadline:
+            time.sleep(_FLUSH_POLL)
+            now_last = _last_update(_info(rrd))
+            if now_last != last:
+                last = now_last
+                break
     # xport keeps to 400 rows unless told otherwise (--maxrows), so a span of
     # years comes back consolidated, not as every step: the answer is bounded.
     out = subprocess.run(["rrdtool", "xport", "--json", "--start", str(start),
@@ -392,7 +418,10 @@ def series(entity: str | None, test: str | None, metric: str | None,
     first, step = int(meta.get("start", 0)), int(meta.get("step", 1) or 1)
     points = [{"t": _iso(str(first + i * step)), "v": row[0] if row else None}
               for i, row in enumerate(doc.get("data", []))]
+    # When the file last received a value: the client judges how fresh the
+    # points are, against now or /status's updated.
     return {"labels": {"entity": host, "test": tst}, "metric": ds,
+            "updated": _iso(str(last)) if last is not None else None,
             "points": points}
 
 

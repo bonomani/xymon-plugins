@@ -12,6 +12,8 @@
 # it to write that host's -- /HOST/ to its control socket, as showgraph
 # does -- an older range does not; a left-over rrdctl file, or no XYMONTMP,
 # leaves /series answering as before.
+# It then waits for the file to move, at most a second, and says in updated
+# when the file last received a value.
 #
 # The RRD is made here, with three known values at fixed times, so the answer
 # is known in advance. Skips where the API cannot run (tests/lib/xymonapi.sh).
@@ -77,6 +79,23 @@ assert_equal "" "$(cat "$work/rrdctl.req")" "a range long past asks xymond_rrd f
 body=$(api_get "/series?entity=host.example.com&test=la&metric=la&from=-1h")
 assert_contains '"metric":"la"' "$body" "/series up to now answers"
 assert_contains "/host.example.com/" "$(cat "$work/rrdctl.req")" "and first asks xymond_rrd to write that host's cached updates"
+
+# updated: when the file last received a value -- here the last of the three.
+assert_contains '"updated":"2023-11-14T22:25:00Z"' "$(api_get "/series?entity=host.example.com&test=la&metric=la&from=$t0&to=$((t0 + 900))")" \
+	"/series says when the file last received a value"
+
+# A write that comes 0.6 s after the request, later than the 0.3 s a graph
+# waits: /series waits for the file to move, at most a second, and gives the
+# new value's time in updated.
+now=$(date +%s)
+"${XYMONAPI_PYTHON:-python3}" "$ROOT/tests/lib/fake-rrdctl.py" "$work/tmp/rrdctl.2" "$work/rrdctl2.req" 0.6 "$rrd" "$now:9" &
+RRDCTL2_PID=$!
+register_cleanup 'stop_process "$RRDCTL2_PID"'
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ -e "$work/rrdctl2.req" ] && break; sleep 0.2; done
+[ -e "$work/rrdctl2.req" ] || fail "the second stand-in control socket did not start"
+want=$("${XYMONAPI_PYTHON:-python3}" -c 'import datetime, sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]), datetime.timezone.utc).isoformat().replace("+00:00", "Z"))' "$now")
+assert_contains "\"updated\":\"$want\"" "$(api_get "/series?entity=host.example.com&test=la&metric=la&from=-1h")" \
+	"/series waits for a write that comes after the request, and says its time"
 
 # An HTTP test's file is named after its URL, colon and all; rrdtool reads
 # the colon as its separator unless it is escaped.

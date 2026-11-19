@@ -491,6 +491,7 @@ components:
       properties:
         labels: { $ref: "#/components/schemas/Labels" }
         metric: { type: string }
+        updated: { type: string, format: date-time, nullable: true, description: "When the RRD file last received a value: how fresh the points are, against now or /status's updated. A range reaching into the last 30 minutes first asks xymond_rrd to write the host's cached updates, and waits for the file to move, at most a second." }
         points:
           type: array
           items:
