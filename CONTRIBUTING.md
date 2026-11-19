@@ -88,6 +88,24 @@ The plugins that read the API through `xymonapi_client.py` --
 that the three agree, so change them together. A client raises its floor
 only to a version the API already has.
 
+### Branches, and when a version is settled
+
+Work goes on a branch made from `main`, and reaches `main` by its own pull
+request. For now there is no integration branch, `dev` or other, in this
+repository or in a fork; one would make versions provisional, as follows.
+A version is settled only on `main`: each pull
+request raises its plugin's version from its own base, so two open at once
+that change one plugin both write the same next version, and the one merged
+second raises it again before it is. On a branch that combines unmerged
+work, versions are provisional, and the same number may hold other code
+than it will on `main`.
+
+To run unmerged code on a machine, install from that branch's checkout,
+`./xymon-plugin update`; `status` then says "with other code" wherever it
+differs from what the version installed, and `verify` checks the files
+against what was installed. Only a release, `NAME/vX.Y.Z` on `stable`,
+names one exact code.
+
 ### Breaking changes
 
 A change that breaks something adds, in the same commit, a section to
