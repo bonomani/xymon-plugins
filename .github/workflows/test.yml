@@ -149,11 +149,28 @@ jobs:
           git fetch -q origin stable || true
           OASDIFF="$RUNNER_TEMP/oasdiff" build/contract-check.sh origin/stable | tee -a "$GITHUB_STEP_SUMMARY"
 
+  # macOS's /bin/sh is bash 3.2, older than any shell the Linux lanes run:
+  # it reads a bare case "pattern)" inside a multi-line $( ) as the end of
+  # the substitution, and refuses the whole script. Every script a user's
+  # machine runs is parsed by it here.
+  macos-sh:
+    runs-on: macos-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Parse the scripts with macOS's /bin/sh
+        run: |
+          /bin/sh --version | head -n 1
+          for f in xymon-plugin build/*.sh plugins/*/*.sh; do
+            /bin/sh -n "$f" || { echo "::error file=$f::/bin/sh (bash 3.2) cannot parse $f"; rc=1; }
+          done
+          exit "${rc:-0}"
+
   # stable: the newest commit of main every check passed, which outside users
   # install. Moved forward only, never back nor forced; a run that finishes
   # after a newer one leaves it where it is.
   stable:
-    needs: [test, contract]
+    needs: [test, contract, macos-sh]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
