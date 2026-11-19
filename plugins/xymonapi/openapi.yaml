@@ -490,7 +490,9 @@ components:
               kind:  { type: string, enum: [disable, downtime], description: "A disable (xymon's disable, the web page's), or a DOWNTIME window of hosts.cfg." }
               of:    { type: string, enum: [test], description: "Where it was set: Xymon disables a test, all it holds." }
               until: { type: string, format: date-time, description: "When a disable ends." }
-              text:  { type: string, description: "The disable's text, hidden as the status text is." }
+              by:    { type: string, description: "Who set the disable, when the web page did: its user." }
+              from:  { type: string, description: "The address the web page's user set it from." }
+              text:  { type: string, description: "Why: the reason given on the web page, or the whole text of a disable sent otherwise; hidden as the status text is." }
         since:    { type: string, format: date-time }
         stale:
           type: object
@@ -580,7 +582,9 @@ components:
           required: [until, text]
           properties:
             until: { type: string, format: date-time, nullable: true, description: "Null when disabled until it turns ok." }
-            text:  { type: string, description: "The reason given." }
+            text:  { type: string, description: "The reason given: on the web page its Reason, otherwise the whole text." }
+            by:    { type: string, description: "Who set the disable, when the web page did: its user." }
+            from:  { type: string, description: "The address the web page's user set it from." }
     Histlog:
       type: object
       required: [host, test, time, text]

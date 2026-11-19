@@ -207,9 +207,7 @@ def alarms() -> list[dict]:
             if by["kind"] == "disable":
                 if until != "-1" and _iso(until):
                     by["until"] = _iso(until)
-                text = hide(_nldecode(d.get("dismsg", ""))).strip()
-                if text:
-                    by["text"] = text
+                by.update(_disable_words(d.get("dismsg", "")))
             a["suppressedBy"] = [by]
         updated = _iso(d.get("logtime", ""))
         if updated:
@@ -418,8 +416,25 @@ def status(host: str | None, test: str | None) -> dict:
     until = d["disabletime"]
     if d["color"] == "blue" or (_DIGITS.fullmatch(until) and until != "0"):
         out["disabled"] = {"until": _iso(until) if _DIGITS.fullmatch(until) and until != "0" else None,
-                           "text": hide(_nldecode(d["dismsg"]))}
+                           "text": "", **_disable_words(d["dismsg"])}
     return out
+
+
+# The text the web page gives a disable (web/enadis.c): a fixed form of
+# Xymon's own, which a disable sent with xymon(1) does not have.
+_DISABLED_BY = re.compile(r"\A\s*Disabled by: (.*?) @ (\S+)[ \t]*\nReason: (.*)\Z", re.S)
+
+
+def _disable_words(dismsg: str) -> dict:
+    """A disable's text, encoded as the board gives it: its reason, and who
+    set it from which address when the web page did (by and from, as
+    Alertmanager's createdBy and TMF642's ackUserId and ackSystemId);
+    the text whole otherwise. Each hidden as the status text is; what is
+    empty is left out."""
+    text = _nldecode(dismsg)
+    m = _DISABLED_BY.match(text)
+    words = {"by": m[1], "from": m[2], "text": m[3]} if m else {"text": text}
+    return {k: hide(v.strip()) for k, v in words.items() if v.strip()}
 
 
 def _name(value: str | None, what: str) -> str:

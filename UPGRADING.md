@@ -22,7 +22,9 @@ In the same version, three answers take the form RFC #113 gives them:
   it; read the host and the test from their fields.
 - `suppressedBy` is a list, one entry per what suppresses: `{"kind":
   "disable", "of": "test", "until": ..., "text": ...}`, or `{"kind":
-  "downtime", "of": "test"}`; it was the word alone.
+  "downtime", "of": "test"}`; it was the word alone. A disable set from the web page
+  says who set it and from where, `by` and `from`, its `text` then the
+  reason alone; `/status`'s `disabled` the same.
 - A time xymond gives as 0, a test such as `trends` that never changed, is
   left out, not `1970-01-01T00:00:00Z`.
 

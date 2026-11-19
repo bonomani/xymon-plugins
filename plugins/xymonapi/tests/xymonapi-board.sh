@@ -29,7 +29,7 @@ work=$(mktempdir)
 XYMOND_PID=""
 register_cleanup 'stop_process "$API_PID" "$XYMOND_PID"'
 
-printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n127.0.0.1 ino.example.com # inode\n' > "$work/hosts.cfg"
+printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 wdis.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n127.0.0.1 ino.example.com # inode\n' > "$work/hosts.cfg"
 
 mkdir -p "$work/home/etc" "$work/home/tmp" "$work/home/www"
 require_cfg XYMONSERVER_CFG "$XYMON_SRC/xymond/etcfiles/xymonserver.cfg"
@@ -63,6 +63,13 @@ cookie=$("$XYMONCLIENT" "127.0.0.1:$PORT" "xymondboard host=disk.example.com tes
 send "xymondack $cookie 60 cleaning old kernels, back in an hour"
 send "status dis,example,com.conn red down"
 send "disable dis,example,com.conn 7200 maintenance window"
+# A disable as the web page sends it (web/enadis.c), who and from where
+# in a form of its own.
+send "status wdis,example,com.conn red down"
+send "disable wdis,example,com.conn 7200 
+Disabled by: bruno @ 10.0.0.9
+Reason: disk being replaced
+"
 # Clear as xymonnet sends it, for a host it could not reach: xymond chose
 # nothing, so no colour of the test's own is behind it.
 send "status clr,example,com.conn clear Thu Nov 19 18:56:26 2026: no answer"
@@ -167,6 +174,8 @@ assert_contains '"severity":"minor","status":"firing"' "$(alarm disk.example.com
 assert_contains '"severity":"major","status":"suppressed"' "$(alarm dis.example.com:conn)" "blue over red: the red it measured, major, and suppressed"
 assert_contains '"suppressedBy":[{"kind":"disable","of":"test","until":"' "$(alarm dis.example.com:conn)" "by a disable, the test's, with its end"
 assert_contains '"text":"maintenance window"' "$(alarm dis.example.com:conn)" "and its text"
+assert_not_contains '"by":' "$(alarm dis.example.com:conn)" "a disable sent with xymon(1) says no one"
+assert_contains '"by":"bruno","from":"10.0.0.9","text":"disk being replaced"' "$(alarm wdis.example.com:conn)" "the web page's: who, from where, and the reason alone"
 assert_contains '"status":"suppressed"' "$(alarm dt.example.com:conn)" "red in a DOWNTIME window: suppressed"
 assert_contains '"suppressedBy":[{"kind":"downtime","of":"test"' "$(alarm dt.example.com:conn)" "by the DOWNTIME, no disable set"
 assert_not_contains '"suppressedBy"' "$(alarm red.example.com:conn)" "red is not suppressed"
@@ -214,6 +223,8 @@ dis=$(api_get '/status?host=dis.example.com&test=conn')
 assert_contains '"disabled":{' "$dis" "a disabled test says so"
 assert_contains 'maintenance window' "$dis" "with the reason given"
 assert_contains '"verdict":"disabled"' "$dis" "and its verdict is disabled, as the board shows it blue"
+wdis=$(api_get '/status?host=wdis.example.com&test=conn')
+assert_contains '"text":"disk being replaced","by":"bruno","from":"10.0.0.9"' "$wdis" "/status reads the web page's disable as /alarms does"
 assert_equal "404" "$(api_code '/status?host=green.example.com&test=disk')" "/status of a test the host has not"
 # xymondboard matches host= and test= as unanchored regular expressions;
 # the API must not pass on another host's status as this one's.
