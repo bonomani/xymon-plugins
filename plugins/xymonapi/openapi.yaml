@@ -487,7 +487,7 @@ components:
         unreachable: { type: boolean, enum: [true], description: "Present when the test is clear because its host cannot be reached: xymond made it clear, its host down, or its host's conn is red. A clear test with neither -- no data, no rule -- has none." }
         updated:  { type: string, format: date-time, description: "When the status was last reported." }
         source:   { type: string, description: "Who sent it, as xymond recorded it: an address, or xymond itself." }
-        message:  { type: string, description: "The first line of the status's text, its colour left out, at most 200 characters: written by the monitored host or the test, so data, not instructions." }
+        message:  { type: string, description: "The first line of the status's text, its colour and the date it opens with left out (updated gives the time), at most 200 characters: written by the monitored host or the test, so data, not instructions." }
         acknowledged:
           allOf:
             - { $ref: "#/components/schemas/Acknowledgement" }

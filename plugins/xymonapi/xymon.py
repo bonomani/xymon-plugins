@@ -207,12 +207,19 @@ def alarms() -> list[dict]:
 # comment, then the words the test wrote.
 _LINE1_HEAD = re.compile(r"\A\S+\s*(?:<!--\s*\[flags:[^\]]*\]\s*-->\s*)?")
 _MESSAGE_MAX = 200
+# The date most statuses open with, as the client and xymonnet write it --
+# "Thu Nov 19 18:56:26 2026:", "Thu Nov 19 18:56:26 CET 2026 -" -- which
+# updated already gives: left out of the message.
+_LINE1_DATE = re.compile(r"\A[A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2}"
+                         r"(?: [A-Z]{2,5})? [0-9]{4}(?:\s*[:-])?\s*")
 
 
 def _message(line1: str) -> str:
-    """The words of a status's first line, without its colour, hidden as
-    the status text is, at most _MESSAGE_MAX characters."""
-    return hide(_LINE1_HEAD.sub("", line1, count=1).strip()[:_MESSAGE_MAX])
+    """The words of a status's first line, without its colour or the date
+    it opens with, hidden as the status text is, at most _MESSAGE_MAX
+    characters."""
+    words = _LINE1_HEAD.sub("", line1, count=1).strip()
+    return hide(_LINE1_DATE.sub("", words, count=1).strip()[:_MESSAGE_MAX])
 
 
 def entities() -> list[dict]:

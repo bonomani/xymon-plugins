@@ -64,7 +64,7 @@ send "status dis,example,com.conn red down"
 send "disable dis,example,com.conn 7200 maintenance window"
 # Clear as xymonnet sends it, for a host it could not reach: xymond chose
 # nothing, so no colour of the test's own is behind it.
-send "status clr,example,com.conn clear no answer"
+send "status clr,example,com.conn clear Thu Nov 19 18:56:26 2026: no answer"
 # xymonnet's clear behind a host it cannot reach: red's conn is red.
 send "status red,example,com.ssh clear Ping failed, or dialup host"
 # Red in a DOWNTIME window, all day: xymond records it blue, no disable set.
@@ -174,6 +174,7 @@ assert_contains '"text":"cleaning old kernels, back in an hour","of":"test"' "$d
 assert_contains '"link":"status?host=disk.example.com&test=disk"' "$alarms" "a link to its status"
 assert_not_contains '"acknowledged"' "$(alarm red.example.com:conn)" "an acknowledgement run out is not given"
 assert_contains '"message":"port 80 | port 443 down"' "$(alarm pipe.example.com:conn)" "a first line holding a | is given whole"
+assert_contains '"message":"no answer"' "$(alarm clr.example.com:conn)" "the date a status opens with is left out of its message"
 assert_contains '"severity":"major"' "$(alarm pipe.example.com:conn)" "and the fields before it are read in their place"
 
 # /status: the text behind a colour, with what was done about it.
