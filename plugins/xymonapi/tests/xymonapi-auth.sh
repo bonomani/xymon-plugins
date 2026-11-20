@@ -96,7 +96,7 @@ assert_not_contains "Stopped" "$(cat "$work/stage.log")" "and says nothing of it
 rc=0
 "$ROOT/xymon-plugin" update --server xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/reinstall.log" 2>&1 || rc=$?
 assert_equal "0" "$rc" "an install over a running API succeeds, not stopping itself ($(tail -n 3 "$work/reinstall.log"))"
-assert_contains "Stopped the API that ran the old code (PID $API_PID)" "$(cat "$work/reinstall.log")" "and stops the API, saying which"
+assert_contains "Sent xymonapi's app.py (PID $API_PID) the signal to stop, so that it runs the code just installed: if its task is on, xymonlaunch starts it again." "$(cat "$work/reinstall.log")" "and signals the API to stop, saying which"
 for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$API_PID" 2>/dev/null || break; sleep 0.5; done
 kill -0 "$API_PID" 2>/dev/null && fail "the API still runs after an install over it"
 API_PID=""

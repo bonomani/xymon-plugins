@@ -51,7 +51,7 @@
 ROOT=$(cd "$(dirname "$0")" && pwd)
 # This installer's own version, released apart from the plugins under the
 # tag xymon-plugin/vX.Y.Z (build/release-archive.sh checks the two agree).
-INSTALLER_VERSION=0.1.2
+INSTALLER_VERSION=0.1.3
 
 die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
 usage() {
@@ -1222,16 +1222,19 @@ selinux() {
 restart() {
 	prog=$(field "$1" restart); [ -n "$prog" ] || return 0
 	if ! command -v pgrep >/dev/null 2>&1; then
-		echo "An API that runs keeps the old code until it is stopped; xymonlaunch then starts the new."
+		echo "pgrep is missing: $1's $prog was not looked for; if it runs, it keeps the code it started with until it is stopped." >&2
 		return 0
 	fi
 	pat=$(printf '%s/%s' "$EXTROOT/$1" "$prog" | sed -e 's/[][\\.*^$|+?(){}]/\\&/g')
 	pids=$(echo $(pgrep -f "$pat" | grep -vx "$$"))
 	[ -n "$pids" ] || return 0
+	case $pids in *" "*) p="PIDs $pids" ;; *) p="PID $pids" ;; esac
+	# What is said is what was done: a signal sent, not waited for; a task
+	# started again only if it is on.
 	if kill $pids 2>/dev/null; then
-		echo "Stopped the API that ran the old code (PID $pids): xymonlaunch starts the new one."
+		echo "Sent $1's $prog ($p) the signal to stop, so that it runs the code just installed: if its task is on, xymonlaunch starts it again."
 	else
-		echo "Could not stop the API that runs the old code (PID $pids): stop it with kill $pids, and xymonlaunch starts the new one." >&2
+		echo "Could not send $1's $prog ($p) the signal to stop: it may still run the code it started with; stop it by hand (kill $pids), and if its task is on, xymonlaunch starts it again." >&2
 	fi
 }
 
