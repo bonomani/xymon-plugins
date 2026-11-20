@@ -42,13 +42,15 @@ with its status's `text`. `/states` and `/status` are gone.
   flap or a modifier.
 - `acknowledged`: `since` when xymond keeps it (the critical-systems
   view), `ackedBy` and `from` when the web page made it.
+- `labels: {category}` groups it, as Alertmanager's labels do: `filesystem`,
+  `network`, `web`..., or a test's own name. It was `domain`.
 - `id` is opaque, the same while host, test and instance are: it was
   `host:test`, which every inode alarm of a host shared. `link` is
   `alarms/{id}`. `since` was `time` in `/states`.
 - A time xymond gives as 0, a test such as `trends` that never changed,
   is left out, not `1970-01-01T00:00:00Z`.
 
-**Filters**, on `/alarms`: `host`, `test`, `severity`, `state`, `domain`,
+**Filters**, on `/alarms`: `host`, `test`, `severity`, `state`, `category`,
 and `stale`, `unreachable`, `suppressed`, `overridden`, `acknowledged` as
 `true` or `false` -- `state=firing&acknowledged=false` is what nobody has
 in hand. **A query

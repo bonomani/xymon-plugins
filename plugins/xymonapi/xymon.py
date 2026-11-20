@@ -107,11 +107,12 @@ STATES = ("firing", "pending", "suppressed", "inactive")
 # of /alarms, and the field it reads.
 FLAGS = {"stale": "stale", "unreachable": "unreachable", "suppressed": "suppressedBy",
          "overridden": "overriddenBy", "acknowledged": "acknowledged"}
-# The domain a test lies in, the label that groups alarms (RFC #113): read
-# from this table, and the test itself where the table says nothing -- so a
-# network service (ssh, smtp, dns) or a script's own test is its own domain.
+# The category a test lies in, a label that groups alarms and identifies
+# nothing, given as labels.category as Alertmanager gives labels: read from
+# this table, and the test itself where the table says nothing -- so a
+# network service (ssh, smtp, dns) or a script's own test is its own.
 # ponytail: a fixed table; one an admin can extend when a site asks for it.
-DOMAIN = {"cpu": "cpu", "memory": "memory",
+CATEGORY = {"cpu": "cpu", "memory": "memory",
           "disk": "filesystem", "inode": "filesystem", "files": "filesystem",
           "msgs": "log", "procs": "process", "svcs": "os-service",
           "ports": "network", "conn": "network",
@@ -168,7 +169,7 @@ def _iso(epoch: str) -> str | None:
 
 def alarms(host: str | None = None, test: str | None = None,
            severity: str | None = None, state: str | None = None,
-           domain: str | None = None, **flags: str | None) -> list[dict]:
+           category: str | None = None, **flags: str | None) -> list[dict]:
     """One Alarm per host and test on the board, green ones too, as TMF642
     keeps a cleared alarm -- one per object, where its status names them --
     with the severity it last measured, its state, and, beside it,
@@ -183,7 +184,7 @@ def alarms(host: str | None = None, test: str | None = None,
     # would read as "nothing is red" (#92). An empty one is refused too: it
     # would read as no filter, the whole board.
     for name, value in (("host", host), ("test", test), ("severity", severity),
-                        ("state", state), ("domain", domain)):
+                        ("state", state), ("category", category)):
         if value == "":
             raise BadRequest(f"{name} is empty")
     if severity and severity not in SEVERITIES:
@@ -197,7 +198,7 @@ def alarms(host: str | None = None, test: str | None = None,
            if (not host or st["host"] == host) and (not test or st["test"] == test)
            and (not severity or st["severity"] == severity)
            and (not state or st["state"] == state)
-           and (not domain or st["domain"] == domain)]
+           and (not category or st["labels"]["category"] == category)]
     for flag, value in flags.items():
         if value is not None:
             out = [st for st in out if (FLAGS[flag] in st) == (value == "true")]
@@ -229,6 +230,7 @@ def _states() -> list[dict]:
     # nothing failed: not unreachable.
     conn = {d.get("hostname"): d.get("color") for d in rows if d.get("testname") == "conn"}
     ends: dict[tuple[str, str], int | None] = {}
+    texts: dict[tuple[str, str], str] | None = None
     for d in rows:
         colour = d.get("color", "clear")
         host, tst = d.get("hostname", "?"), d.get("testname", "?")
@@ -238,7 +240,7 @@ def _states() -> list[dict]:
         gap = d.get("prevgapcolor", "none") not in ("", "none")
         own = d["prevgapcolor"] if gap else colour
         a = {"host": host, "test": tst,
-             "domain": DOMAIN.get(tst, tst),
+             "labels": {"category": CATEGORY.get(tst, tst)},
              "severity": COLOUR_SEVERITY.get(own, "indeterminate"),
              "state": {"blue": "suppressed", "green": "inactive"}.get(colour, "firing")}
         if colour == "green" and own in ("red", "yellow"):
@@ -273,7 +275,12 @@ def _states() -> list[dict]:
             # Xymon acknowledges a test, all it holds: say so, for the day
             # one instance is acknowledged on its own (RFC #113).
             a["acknowledged"] = {**ack, "of": "test"}
-        res += _instances(a) if tst in _INSTANCE_TESTS and a["severity"] != "cleared" else [a]
+        if tst in _INSTANCE_TESTS and a["severity"] != "cleared":
+            if texts is None:
+                texts = _texts(_INSTANCE_TESTS)
+            res += _instances(a, texts.get((host, tst), ""))
+        else:
+            res.append(a)
     out = []
     for a in res:
         i = _state_id(a)
@@ -422,14 +429,25 @@ _ID_LINE = re.compile(r"^&(red|yellow) <!-- ID=(.+?) -->\s*(.*)$", re.M)
 _PCT = re.compile(r"\((\d+)% used\) has reached the (PANIC|WARNING) level \((\d+)%\)")
 
 
-def _instances(alarm: dict) -> list[dict]:
-    """ALARM, one per object its status names in alarm, each with its
-    instance, the severity of its own line and, where the line gives them,
-    its pct and the threshold it crossed. ALARM itself when none is named."""
-    board = query(f"xymondboard host=^{re.escape(alarm['host'])}$ "
-                  f"test=^{re.escape(alarm['test'])}$ fields=msg")
+def _texts(tests: set[str]) -> dict[tuple[str, str], str]:
+    """The status text of every test in TESTS, by host and test, encoded as
+    the board gives it: one query for them all, not one per alarm."""
+    names = "|".join(re.escape(t) for t in sorted(tests))
+    out = {}
+    for line in query(f"xymondboard test=^({names})$ fields=hostname,testname,msg").splitlines():
+        f = line.split("|", 2)
+        if len(f) == 3:
+            out[(f[0], f[1])] = f[2]
+    return out
+
+
+def _instances(alarm: dict, msg: str) -> list[dict]:
+    """ALARM, one per object its status text MSG names in alarm, each with
+    its instance, the severity of its own line and, where the line gives
+    them, its pct and the threshold it crossed. ALARM itself when none is
+    named."""
     out = []
-    for colour, name, words in _ID_LINE.findall(_nldecode(board)):
+    for colour, name, words in _ID_LINE.findall(_nldecode(msg)):
         # The line's colour is what the test measured of that object when it
         # last reported, whatever xymond shows over it since.
         a = {**alarm, "instance": name, "severity": COLOUR_SEVERITY[colour],

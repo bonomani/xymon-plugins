@@ -64,7 +64,7 @@ or a client token, when XYMONAPI_PASSWD is set.
 Its "search" field describes the index /search reads -- how many passages
 of manual pages and of history, when it was built -- and is null when there
 is none.
-.IP "\fB/alarms\fR [\fBhost\fR=HOST] [\fBtest\fR=TEST] [\fBseverity\fR=SEVERITY] [\fBstate\fR=STATE] [\fBdomain\fR=DOMAIN] [\fBstale\fR|\fBunreachable\fR|\fBsuppressed\fR|\fBoverridden\fR|\fBacknowledged\fR=true|false]"
+.IP "\fB/alarms\fR [\fBhost\fR=HOST] [\fBtest\fR=TEST] [\fBseverity\fR=SEVERITY] [\fBstate\fR=STATE] [\fBcategory\fR=CATEGORY] [\fBstale\fR|\fBunreachable\fR|\fBsuppressed\fR|\fBoverridden\fR|\fBacknowledged\fR=true|false]"
 Every alarm on the board, one per host and test, and per object where
 Xymon names it -- green ones too, cleared and inactive, as TMF642 keeps a
 cleared alarm; what needs acting on is \fBstate\fR=firing. An alarm gives
@@ -98,11 +98,12 @@ are, to be compared, not read. It also gives when it last changed
 (\fBsince\fR) and was last reported (\fBupdated\fR), who sent it
 (\fBsource\fR), its first line without the date it opens with
 (\fBmessage\fR), its \fBacknowledged\fR, saying it is the test's, and a
-\fBlink\fR to itself, \fBalarms/\fRID. Its \fBdomain\fR groups it:
+\fBlink\fR to itself, \fBalarms/\fRID. Its \fBlabels\fR group it, as
+Alertmanager's do, and identify nothing: \fBcategory\fR is
 \fBfilesystem\fR for disk, inode and files, \fBnetwork\fR for conn and
 ports, \fBweb\fR for http, content and sslcert, \fBlog\fR for msgs,
 \fBprocess\fR for procs, \fBos-service\fR for svcs, cpu and memory their
-own; any other test is its own domain. An inode test not green is given
+own; any other test is its own. An inode test not green is given
 once for each file system its status names (xymond's \fBID=\fR), with that
 \fBinstance\fR, the severity of its own line, and, where the line says so,
 the \fBmetric\fR pct and a \fBmeasure\fR with its value and the threshold

@@ -31,7 +31,7 @@ command -v "$py" >/dev/null 2>&1 || skip "no Python to run the API's code with (
 # alarms LINES [all] [HOSTS] -- /alarms for the board lines LINES and
 # hostinfo's lines HOSTS (host|dialup|DOWNTIME), those not inactive (or
 # all), one per line: host, severity, status, the flags present, then
-# [domain]. unreachable reads "unreachable<conn" when reported by the conn
+# [category]. unreachable reads "unreachable<conn" when reported by the conn
 # state of the same host.
 alarms() {
 	"$py" - "$ROOT/plugins/xymonapi" "$1" "${2:-alarms}" "${3:-}" <<'EOF'
@@ -44,7 +44,7 @@ conn = {a["host"]: a["id"] for a in every if a["test"] == "conn"}
 for a in (every if sys.argv[3] == "all" else [x for x in every if x["state"] != "inactive"]):
     flags = [k for k in ("stale",) if k in a] + (["unreachable<conn" if a["unreachable"].get("reportedBy") == [conn.get(a["host"])] else "unreachable"] if "unreachable" in a else []) + [f'by:{b["kind"]}' + (f'@{b["until"]}' if "until" in b else "") + (f'/{b["text"]}' if "text" in b else "") for b in a.get("suppressedBy", [])]
     flags += [f'over:{o["kind"]}' + (f'/{o["text"]}' if "text" in o else "") for o in a.get("overriddenBy", [])]
-    print(a["host"], a["severity"], a["state"], *flags, f'[{a["domain"]}]')
+    print(a["host"], a["severity"], a["state"], *flags, f'[{a["labels"]["category"]}]')
 EOF
 }
 
@@ -97,10 +97,10 @@ assert_contains 'maint indeterminate firing unreachable<conn' "$reach" "and behi
 assert_not_contains 'dial cleared firing unreachable' "$reach" "a dialup host's clear is not unreachable: nothing failed"
 assert_not_contains 'near indeterminate firing unreachable' "$reach" "a clear procs on a host that answers: not unreachable"
 
-# The domain: from the table, or the test itself where it says nothing.
-assert_contains 'red critical firing [network]' "$out" "conn lies in the network domain"
+# The category: from the table, or the test itself where it says nothing.
+assert_contains 'red critical firing [network]' "$out" "conn lies in the network category"
 mine=$(alarms "$(printf 'web1|ssh|red|1700000000|0|||none\nweb1|mycheck|yellow|1700000000|0|||none\n')")
-assert_contains 'web1 critical firing [ssh]' "$mine" "a network service is its own domain"
+assert_contains 'web1 critical firing [ssh]' "$mine" "a network service is its own category"
 assert_contains 'web1 warning firing [mycheck]' "$mine" "and so is a script's own test"
 
 # A DOWNTIME's end, as xymond reads the window (check_downtime,
@@ -130,4 +130,4 @@ assert_contains 'W:0800:1700 cpu 2026-11-20 17:01' "$ends" "W is Monday to Frida
 assert_contains '6:0000:2359,0:0000:2359 cpu 2026-11-23 00:00' "$ends" "a weekend, two windows, ends on Monday"
 assert_contains 'conn,ssh:*:0100:0200:a,*:0300:0330 ssh 2026-11-20 02:01' "$ends" "a list of tests, then the next window"
 
-pass "an alarm keeps the severity its test last measured, with stale, unreachable or suppressed beside it, and says its domain"
+pass "an alarm keeps the severity its test last measured, with stale, unreachable or suppressed beside it, and says its category"

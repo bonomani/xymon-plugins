@@ -6,7 +6,7 @@
 # The API reports the board a running xymond holds: a status sent to xymond
 # comes back from /alarms with the severity it measured and its state --
 # a red one firing, a green one inactive -- with its flags, its fields, its
-# domain, and an inode one for each file system in alarm; an alarm says
+# labels, and an inode one for each file system in alarm; an alarm says
 # when it is acknowledged, /alarms/{id} gives its text, and /health names
 # the xymond it asked. An operation the API
 # does not implement answers 404 rather than sample data.
@@ -213,8 +213,9 @@ assert_contains "$ack_st" "$acked" "/alarms and /alarms/{id} give the same ackno
 
 alarms=$(api_get /alarms)
 assert_contains '"host":"red.example.com","test":"conn"' "$alarms" "a red status is an alarm"
-assert_contains '"host":"green.example.com","test":"conn","domain":"network","severity":"cleared","state":"inactive"' "$alarms" "a green status is an alarm too, cleared and inactive, as TMF642 keeps one"
-alarm() { a=${alarms#*\"host\":\"${1%%:*}\",\"test\":\"${1#*:}\"}; printf '%s' "${a%%\}*}"; }
+assert_contains '"host":"green.example.com","test":"conn","labels":{"category":"network"},"severity":"cleared","state":"inactive"' "$alarms" "a green status is an alarm too, cleared and inactive, as TMF642 keeps one"
+# alarm HOST:TEST -- that alarm in $alarms, whole: up to the next one.
+alarm() { a=${alarms#*\"host\":\"${1%%:*}\",\"test\":\"${1#*:}\"}; printf '%s' "${a%%\},\{\"id\"*}"; }
 assert_contains '"severity":"critical","state":"firing"' "$(alarm red.example.com:conn)" "red: critical, firing"
 assert_contains '"severity":"warning","state":"firing"' "$(alarm disk.example.com:disk)" "yellow: warning, firing"
 assert_contains '"severity":"critical","state":"suppressed"' "$(alarm dis.example.com:conn)" "blue over red: the red it measured, critical, and suppressed"
@@ -234,8 +235,8 @@ assert_not_contains '"host":"red.example.com"' "$(api_get '/alarms?overridden=tr
 assert_contains '"host":"disk.example.com"' "$(api_get '/alarms?state=firing&acknowledged=true')" "acknowledged=true finds the acknowledged"
 assert_not_contains '"host":"disk.example.com"' "$(api_get '/alarms?state=firing&acknowledged=false')" "acknowledged=false leaves it out"
 assert_contains '"host":"red.example.com","test":"conn"' "$(api_get '/alarms?state=firing&acknowledged=false')" "and keeps what nobody has in hand"
-assert_contains '"domain":"filesystem"' "$(api_get '/alarms?domain=filesystem')" "domain=filesystem gives the file systems"
-assert_not_contains '"domain":"network"' "$(api_get '/alarms?domain=filesystem')" "and only them"
+assert_contains '"labels":{"category":"filesystem"}' "$(api_get '/alarms?category=filesystem')" "category=filesystem gives the file systems"
+assert_not_contains '"category":"network"' "$(api_get '/alarms?category=filesystem')" "and only them"
 assert_not_contains '"suppressedBy"' "$(alarm red.example.com:conn)" "red is not suppressed"
 assert_contains '"severity":"indeterminate","state":"firing"' "$(alarm clr.example.com:conn)" "a clear with nothing behind it, indeterminate"
 assert_not_contains '"unreachable"' "$(alarm clr.example.com:conn)" "and not unreachable: no conn red, no colour kept behind it"
@@ -257,8 +258,8 @@ assert_not_contains '"acknowledged"' "$(alarm red.example.com:conn)" "an acknowl
 assert_contains '"message":"port 80 | port 443 down"' "$(alarm pipe.example.com:conn)" "a first line holding a | is given whole"
 assert_contains '"message":"no answer"' "$(alarm clr.example.com:conn)" "the date a status opens with is left out of its message"
 assert_contains '"severity":"critical"' "$(alarm pipe.example.com:conn)" "and the fields before it are read in their place"
-assert_contains '"domain":"filesystem"' "$disk_alarm" "disk lies in the filesystem domain"
-assert_contains '"domain":"network"' "$(alarm red.example.com:conn)" "conn in network"
+assert_contains '"labels":{"category":"filesystem"}' "$disk_alarm" "disk lies in the filesystem category"
+assert_contains '"labels":{"category":"network"}' "$(alarm red.example.com:conn)" "conn in network"
 # inode: one alarm for each file system its status names.
 ino() { printf '%s' "$alarms" | sed 's/},{"id"/}\n{"id"/g' | grep -F "\"instance\":\"$1\""; }
 inos=$(printf '%s' "$alarms" | sed 's/},{"id"/}\n{"id"/g' | grep -F '"host":"ino.example.com","test":"inode"')

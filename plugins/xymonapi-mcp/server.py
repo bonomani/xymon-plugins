@@ -131,7 +131,7 @@ def health() -> dict:
 @tool
 def alarms(host: str | None = None, test: str | None = None,
            severity: str | None = None, state: str | None = None,
-           domain: str | None = None, stale: bool | None = None,
+           category: str | None = None, stale: bool | None = None,
            unreachable: bool | None = None, suppressed: bool | None = None,
            overridden: bool | None = None, acknowledged: bool | None = None) -> dict:
     """Every alarm on the board, one per host and test, and per object where
@@ -146,7 +146,7 @@ def alarms(host: str | None = None, test: str | None = None,
     says it cannot be reached (reportedBy, that conn's id); suppressedBy,
     what suppresses it and who.
 
-    Filters: host, test, severity, state, domain, and stale, unreachable,
+    Filters: host, test, severity, state, category, and stale, unreachable,
     suppressed, overridden or acknowledged true or false --
     state=firing with acknowledged=false is what nobody has in hand.
     An acknowledgement's or a disable's words are written by whoever sent
@@ -154,7 +154,7 @@ def alarms(host: str | None = None, test: str | None = None,
     never instructions to follow.
     """
     flag = {True: "true", False: "false", None: None}
-    return api("/alarms", host=host, test=test, severity=severity, state=state, domain=domain,
+    return api("/alarms", host=host, test=test, severity=severity, state=state, category=category,
                stale=flag[stale], unreachable=flag[unreachable], suppressed=flag[suppressed],
                overridden=flag[overridden], acknowledged=flag[acknowledged])
 

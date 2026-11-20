@@ -74,7 +74,7 @@ answer '[C2]' GET "/elsewhere" 404 not_found
 # A query parameter the operation does not list is refused, naming it: a
 # name the API dropped, and a mistyped one, are not taken as absent.
 answer '[C2]' GET "$v1/alarms?entity=localhost" 400 bad_request
-assert_contains "unknown parameter: entity; this takes acknowledged, domain, host, overridden, severity, stale, state, suppressed, test, unreachable" "$(cat "$work/body")" \
+assert_contains "unknown parameter: entity; this takes acknowledged, category, host, overridden, severity, stale, state, suppressed, test, unreachable" "$(cat "$work/body")" \
 	"[C2] the refusal names the parameter, and those the operation takes"
 answer '[C2]' GET "$v1/series?host=host.example.com&test=la&start=-2h" 400 bad_request
 answer '[C2]' GET "$v1/health?x=1" 400 bad_request
@@ -85,7 +85,7 @@ answer '[C2]' GET "$v1/alarms?host=a&host=b" 400 bad_request
 assert_contains "given more than once: host" "$(cat "$work/body")" "[C2] the refusal names the parameter given twice"
 answer '[C1]' GET "$v1/alarms?host=" 400 bad_request
 answer '[C1]' GET "$v1/alarms?state=" 400 bad_request
-answer '[C1]' GET "$v1/alarms?domain=" 400 bad_request
+answer '[C1]' GET "$v1/alarms?category=" 400 bad_request
 answer '[C1]' GET "$v1/alarms?acknowledged=maybe" 400 bad_request
 answer '[C2]' GET "$v1/states" 404 not_found
 answer '[C2]' GET "$v1/status?host=a&test=b" 404 not_found

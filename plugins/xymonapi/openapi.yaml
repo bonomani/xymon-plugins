@@ -85,7 +85,7 @@ paths:
         - { name: suppressed,  in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms suppressed, disabled or in a DOWNTIME window (true), or those not (false)." }
         - { name: overridden,  in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms xymond shows in another colour for a flap or a modifier (true), or those not (false)." }
         - { name: acknowledged, in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms acknowledged (true), or those not (false): state=firing&acknowledged=false is what nobody has in hand." }
-        - { name: domain,   in: query, schema: { type: string }, description: "Only this domain: filesystem, network, web, ..., or a test's own name." }
+        - { name: category, in: query, schema: { type: string }, description: "Only this labels.category: filesystem, network, web, ..., or a test's own name." }
       responses:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -462,12 +462,17 @@ components:
 
     Alarm:
       type: object
-      required: [id, host, test, domain, severity, state, link]
+      required: [id, host, test, labels, severity, state, link]
       properties:
         id:       { type: string, description: "Opaque, the same while host, test and instance are: compare it, never read it (RFC #113)." }
         host:     { type: string }
         test:     { type: string }
-        domain:   { type: string, description: "The domain the test lies in, a label that groups and identifies nothing: disk, inode and files are filesystem; conn and ports network; http, content and sslcert web; cpu, memory, msgs (log), procs (process), svcs (os-service). Any other test is its own domain." }
+        labels:
+          type: object
+          description: "What groups the alarm and identifies nothing, as Alertmanager gives labels. One today, category."
+          required: [category]
+          properties:
+            category: { type: string, description: "The category the test lies in: disk, inode and files are filesystem; conn and ports network; http, content and sslcert web; cpu, memory, msgs (log), procs (process), svcs (os-service). Any other test is its own. An open list." }
         severity: { $ref: "#/components/schemas/Severity" }
         state:    { type: string, enum: [firing, pending, suppressed, inactive], description: "inactive: the test is green, Prometheus's word for a rule not firing. pending: red or yellow reported while xymond still shows green, a change delay (delayyellow, or delayred with it; delayred alone shows yellow, firing), Prometheus's word for a condition not held long enough yet. suppressed: the test is blue, disabled or in a DOWNTIME window, listed all the same, as Alertmanager lists a silenced alert." }
         suppressedBy:
