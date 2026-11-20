@@ -75,10 +75,21 @@ def tool(fn):
     return fn
 
 
+def _type(p: inspect.Parameter) -> str:
+    """A parameter's JSON Schema type, from its annotation: int, bool, else
+    a string (annotations are strings here, from __future__)."""
+    a = str(p.annotation)
+    return "integer" if a == "int" else "boolean" if a.startswith("bool") else "string"
+
+
+_PYTYPE = {"integer": int, "boolean": bool, "string": str}
+_ARTICLE = {"integer": "an integer", "boolean": "true or false", "string": "a string"}
+
+
 def schema(fn) -> dict:
     props, required = {}, []
     for name, p in inspect.signature(fn).parameters.items():
-        prop = {"type": "integer" if p.annotation == "int" else "string"}
+        prop = {"type": _type(p)}
         if p.default is inspect.Parameter.empty:
             required.append(name)
         elif p.default is not None:
@@ -209,9 +220,11 @@ def call(params: dict) -> dict:
         sig = inspect.signature(fn)
         for name, p in sig.parameters.items():
             if name in args:
-                want = int if p.annotation == "int" else str
-                if not isinstance(args[name], want) or isinstance(args[name], bool):
-                    raise ToolError(f"{name} must be {'an integer' if want is int else 'a string'}")
+                kind = _type(p)
+                value = args[name]
+                # bool is an int to Python: only a boolean parameter takes one.
+                if not isinstance(value, _PYTYPE[kind]) or (isinstance(value, bool) != (kind == "boolean")):
+                    raise ToolError(f"{name} must be {_ARTICLE[kind]}")
             elif p.default is inspect.Parameter.empty:
                 raise ToolError(f"missing argument: {name}")
         unknown = set(args) - set(sig.parameters)

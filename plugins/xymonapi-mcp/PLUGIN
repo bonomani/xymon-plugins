@@ -8,7 +8,7 @@ server-short: the MCP server, beside the API for /ask
 tools-short: the MCP server for your AI tools
 writes: ~/.claude.json (xymonapi-mcp register)
 writes: ~/.codex/config.toml (xymonapi-mcp register)
-requires: xymonapi >= 8.0.0 (its client beside it; the API over the network, XYMONAPI_URL), python >= 3.9
+requires: xymonapi >= 9.0.0 (its client beside it; the API over the network, XYMONAPI_URL), python >= 3.9
 manual: xymonapi-mcp.1
 
 # How ./xymon-plugin installs it: see xymonapi's PLUGIN file.

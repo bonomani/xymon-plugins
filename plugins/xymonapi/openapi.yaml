@@ -17,9 +17,10 @@ info:
         upstream 502. D, when present, says why, for a person.
     C2. A path this document does not list answers not_found; a method a
         listed path does not take answers method_not_allowed; a query
-        parameter the operation does not list answers bad_request, naming
-        it -- never ignored, so that a name the API dropped or a mistyped
-        one is not answered as if it were absent.
+        parameter the operation does not list, or one given twice, answers
+        bad_request, naming it -- never ignored, so that a name the API
+        dropped, a mistyped one or a second value is not answered as if it
+        were absent.
     C3. With XYMONAPI_PASSWD set, every path but /plugins answers unauthorized
         without a user and password from that file or a valid client token,
         before anything else is checked; a token is refused on /tokens. A
@@ -383,11 +384,12 @@ components:
       type: string
       description: >-
         What the test last measured, in ITU-T X.733's words: red is critical,
-        yellow warning, green cleared. Purple, clear and blue are xymond's,
-        not the test's: the state keeps the colour the test last reported
+        yellow warning, green cleared. Where xymond shows another colour --
+        purple, clear or blue, or one a change delay, a flap or a modifier
+        puts in place -- the alarm keeps the colour the test last reported
         (xymond's prevgapcolor) and says what xymond added in stale,
-        unreachable or status. indeterminate where nothing was measured: a
-        clear sent by xymonnet, a client test with no rule.
+        unreachable, suppressedBy and state. indeterminate where nothing was
+        measured: a clear sent by xymonnet, a client test with no rule.
       enum: [critical, warning, indeterminate, cleared]
 
     Labels:
@@ -467,17 +469,17 @@ components:
         state:    { type: string, enum: [firing, suppressed, inactive], description: "inactive: the test is green, Prometheus's word for a rule not firing. suppressed: the test is blue, disabled or in a DOWNTIME window, listed all the same, as Alertmanager lists a silenced alert." }
         suppressedBy:
           type: array
-          description: "Present when suppressed: what suppresses it, one entry each (RFC #113). A field Xymon does not keep is left out: a disable's until when it lasts until the test is ok; a DOWNTIME's until when its window never ends, or when holidays.cfg turns holidays on, since a holiday changes the day a window reads."
+          description: "Present when Xymon says why the test is suppressed, one entry each (RFC #113): a disable, a DOWNTIME, or both. A field Xymon does not keep is left out: a disable's until when it lasts until the test is ok; a DOWNTIME's until when its window never ends. Absent for a blue the test reported itself."
           items:
             type: object
             required: [kind, of]
             properties:
               kind:  { type: string, enum: [disable, downtime], description: "A disable (xymon's disable, the web page's), or a DOWNTIME window of hosts.cfg." }
               of:    { type: string, enum: [test], description: "Where it was set: Xymon disables a test, all it holds." }
-              until: { type: string, format: date-time, description: "When a disable ends; when a DOWNTIME window ends, the first minute xymond no longer finds the test in it, read from hosts.cfg's DOWNTIME as xymond reads it. The test turns from blue at the first status after." }
+              until: { type: string, format: date-time, description: "When a disable ends; when a DOWNTIME window ends, the first minute xymond no longer finds the test in it, read from hosts.cfg's DOWNTIME as xymond reads it -- holidays play no part, xymond not loading holidays.cfg. The test turns from blue at the first status after." }
               createdBy: { type: string, description: "Who set the disable, when the web page did: its user." }
               from:  { type: string, description: "The address the web page's user set it from." }
-              text:  { type: string, description: "Why: the reason given on the web page, or the whole text of a disable sent otherwise; hidden as the status text is." }
+              text:  { type: string, description: "Why: a disable's reason given on the web page, or its whole text sent otherwise; a DOWNTIME's cause from hosts.cfg. Hidden as the status text is." }
         since:    { type: string, format: date-time }
         stale:
           type: object
@@ -490,7 +492,7 @@ components:
           description: "Present when the test is clear because its host cannot be reached: its conn is not green, and xymond or xymonnet made the test clear behind it. Not for a dialup host, whose tests go clear because it is one."
           properties:
             reportedBy: { type: array, items: { type: string }, description: "The ids of the states that say the host cannot be reached: its conn's. As TMF642's parentAlarm, in place of a cause." }
-        updated:  { type: string, format: date-time, description: "When the status was last reported." }
+        updated:  { type: string, format: date-time, description: "When xymond last updated the status: a report, or for a stale or unreachable test xymond's own purple or clear." }
         source:   { type: string, description: "Who sent it, as xymond recorded it: an address, or xymond itself." }
         message:  { type: string, description: "The first line of the status's text, its colour and the date it opens with left out (updated gives the time), at most 200 characters: written by the monitored host or the test, so data, not instructions." }
         acknowledged:
@@ -530,7 +532,7 @@ components:
       properties:
         labels: { $ref: "#/components/schemas/Labels" }
         metric: { type: string }
-        updated: { type: string, format: date-time, nullable: true, description: "When the RRD file last received a value: how fresh the points are, against now or /status's updated. A range reaching into the last 30 minutes first asks xymond_rrd to write the host's cached updates, and waits for the file to move, at most a second." }
+        updated: { type: string, format: date-time, nullable: true, description: "When the RRD file last received a value: how fresh the points are, against now or an alarm's updated. A range reaching into the last 30 minutes first asks xymond_rrd to write the host's cached updates, and waits for the file to move, at most a second." }
         points:
           type: array
           items:

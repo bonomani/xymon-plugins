@@ -494,6 +494,12 @@ def build_app() -> FastAPI:
                                  "detail": f"unknown parameter: {', '.join(extra)}; this takes "
                                            f"{', '.join(sorted(known)) or 'none'}"},
                                 status_code=400)
+        # Each parameter is one value: a second would be dropped unsaid.
+        twice = sorted(k for k in set(request.query_params) if len(request.query_params.getlist(k)) > 1)
+        if twice:
+            return JSONResponse({"error": "bad_request",
+                                 "detail": f"given more than once: {', '.join(twice)}"},
+                                status_code=400)
         return await call_next(request)
 
     # A path that is none of ours, or a method a path does not take, is

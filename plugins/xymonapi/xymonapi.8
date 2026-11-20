@@ -81,10 +81,14 @@ its \fBreportedBy\fR that conn's id (not for a dialup host, nor the conn
 itself); \fBsuppressedBy\fR for one blue, one entry each: its \fBkind\fR,
 \fBdisable\fR or \fBdowntime\fR, \fBof\fR \fBtest\fR, and for a disable its
 \fBuntil\fR, \fBcreatedBy\fR and \fBfrom\fR, and \fBtext\fR where Xymon
-keeps them. A DOWNTIME's \fBuntil\fR is read from hosts.cfg's DOWNTIME as
-xymond reads it, in the server's local time: left out when the window never
-ends, or when holidays.cfg turns holidays on (HOLIDAYLIKEWEEKDAY 0 to 6, as
-Xymon's own holidays.cfg does), a holiday changing the day a window reads. Needs xymond's \fBprevgapcolor\fR, Xymon 4.3.31.
+keeps them; for a DOWNTIME its \fBuntil\fR, read from hosts.cfg's DOWNTIME
+as xymond reads it, in the server's local time (left out when the window
+never ends; holidays play no part, xymond not loading holidays.cfg), and its
+cause as \fBtext\fR. A blue the test reported itself has no
+\fBsuppressedBy\fR. Where xymond shows another colour than the one reported
+-- a silence, a host down, a disable, a DOWNTIME, a change delay, a flap, a
+modifier -- the severity is the one reported. Needs xymond's
+\fBprevgapcolor\fR, Xymon 4.3.31.
 An alarm's \fBid\fR is opaque: the same while its host, test and instance
 are, to be compared, not read. It also gives when it last changed
 (\fBsince\fR) and was last reported (\fBupdated\fR), who sent it

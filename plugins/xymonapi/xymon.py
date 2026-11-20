@@ -24,7 +24,6 @@ import subprocess
 import time
 import urllib.request
 from datetime import datetime, timezone
-from pathlib import Path
 from urllib.parse import urlencode
 
 XYMON = os.environ.get("XYMON", "xymon")
@@ -38,17 +37,22 @@ XYMONHISTLOGS = os.environ.get("XYMONHISTLOGS", "")
 # encodes a "|" inside ackmsg and acklist, so a line still splits on it.
 # prevgapcolor (Xymon 4.3.31) is the test's own colour while xymond shows
 # another -- purple for a silence, clear for a host down, blue for a
-# disable -- and "none" at every other time. disabletime is when a disable
-# ends, -1 until the test is ok again, and 0 when none runs: a blue status
-# with 0 is a DOWNTIME's (xymond.c, the rewrite in handle_status), a blue
-# one with any other a disable's, dismsg its text. XMH_FLAG_DIALUP is
-# hosts.cfg's dialup tag, empty without it; XMH_DOWNTIME its DOWNTIME. logtime is when the status was last
-# reported, sender who sent it. line1, the status's first line, is not
-# encoded and may hold a "|": it comes last, and a line splits on the
-# fields before it only.
+# disable or a DOWNTIME, and any colour a change delay, a flap or a
+# modifier puts in place of the one reported (xymond.c: the gap opens
+# whenever the colour shown is not the one reported) -- and "none" at every
+# other time. disabletime is when a disable ends, -1 until the test is ok
+# again, and 0 when none runs; dismsg is a disable's text, or a DOWNTIME's
+# cause when no disable runs. logtime is when the status was last updated,
+# sender who sent it. line1, the status's first line, is not encoded and
+# may hold a "|": it comes last, and a line splits on the fields before it
+# only.
 BOARD_FIELDS = ["hostname", "testname", "color", "lastchange",
                 "acktime", "ackmsg", "acklist", "prevgapcolor", "disabletime",
-                "dismsg", "logtime", "sender", "XMH_FLAG_DIALUP", "XMH_DOWNTIME", "line1"]
+                "dismsg", "logtime", "sender", "line1"]
+# What hosts.cfg says of each host, from xymond's hostinfo, which encodes
+# them (xymondboard does not, and a DOWNTIME's cause may hold a "|"):
+# dialup, empty without it, and the DOWNTIME tag.
+HOST_FIELDS = ["XMH_HOSTNAME", "XMH_FLAG_DIALUP", "XMH_DOWNTIME"]
 
 # A name from the request becomes part of a file path, so it may not hold
 # "/" or "..": a path outside XYMONRRDS. A host name never holds ":" either;
@@ -135,6 +139,16 @@ def _rows() -> list[dict]:
             for line in board.splitlines() if line.strip()]
 
 
+def _hosts_cfg() -> dict[str, dict]:
+    """HOST_FIELDS for each host, by name."""
+    out = {}
+    for line in query(f"hostinfo fields={','.join(HOST_FIELDS)}").splitlines():
+        f = [_nldecode(v) for v in line.split("|")]
+        if len(f) == len(HOST_FIELDS):
+            out[f[0]] = dict(zip(HOST_FIELDS, f))
+    return out
+
+
 def _iso(epoch: str) -> str | None:
     """EPOCH as an ISO time; None for none, xymond's 0 among them -- a test
     such as trends that never changed, not a change in 1970."""
@@ -159,7 +173,11 @@ def alarms(host: str | None = None, test: str | None = None,
     is true or false."""
     # A value outside the contract's list matches nothing: refused, not an
     # empty board -- "severity=red", a colour where a severity is asked,
-    # would read as "nothing is red" (#92).
+    # would read as "nothing is red" (#92). An empty one is refused too: it
+    # would read as no filter, the whole board.
+    for name, value in (("host", host), ("test", test), ("severity", severity), ("state", state)):
+        if value == "":
+            raise BadRequest(f"{name} is empty")
     if severity and severity not in SEVERITIES:
         raise BadRequest(f"severity must be one of {', '.join(SEVERITIES)}, not a colour")
     if state and state not in STATES:
@@ -195,16 +213,22 @@ def _states() -> list[dict]:
     res: list[dict] = []
     now = int(time.time())
     rows = _rows()
+    hosts = _hosts_cfg()
     # xymond makes a silent test clear, not purple, when its host's conn is
     # not green (xymond.c, "go CLEAR, instead of PURPLE"), and xymonnet its
     # network tests when the conn fails: that conn is what says the host
     # cannot be reached. A dialup host's tests go clear because it is one,
     # nothing failed: not unreachable.
     conn = {d.get("hostname"): d.get("color") for d in rows if d.get("testname") == "conn"}
+    ends: dict[tuple[str, str], int | None] = {}
     for d in rows:
         colour = d.get("color", "clear")
         host, tst = d.get("hostname", "?"), d.get("testname", "?")
-        own = colour if colour in COLOUR_SEVERITY else d.get("prevgapcolor", "none")
+        cfg = hosts.get(host, {})
+        # The colour the test reported, where xymond shows another: a gap is
+        # open, its colour in prevgapcolor. Otherwise the one shown is it.
+        gap = d.get("prevgapcolor", "none") not in ("", "none")
+        own = d["prevgapcolor"] if gap else colour
         a = {"host": host, "test": tst,
              "domain": DOMAIN.get(tst, tst),
              "severity": COLOUR_SEVERITY.get(own, "indeterminate"),
@@ -212,26 +236,17 @@ def _states() -> list[dict]:
         t = _iso(d.get("lastchange", ""))
         if t:
             a["since"] = t
-        if colour == "purple":
+        if colour == "purple" and gap:
+            # xymond's purple, the test gone silent; a purple a client sent
+            # itself is a report, not a silence.
             a["stale"] = {"since": t}
-        elif (colour == "clear" and tst != "conn" and not d.get("XMH_FLAG_DIALUP")
+        elif (colour == "clear" and tst != "conn" and not cfg.get("XMH_FLAG_DIALUP")
               and conn.get(host, "green") in ("red", "yellow", "blue", "clear")):
             a["unreachable"] = {"reportedBy": [_state_id({"host": host, "test": "conn"})]}
         elif colour == "blue":
-            # A list, one entry per what suppresses, a field Xymon does not
-            # keep left out -- a DOWNTIME's end and cause are not on the
-            # board, nor a disable's end when it lasts until ok (-1).
-            until = d.get("disabletime", "0")
-            by = {"kind": "downtime" if until in ("", "0") else "disable", "of": "test"}
-            if by["kind"] == "downtime":
-                end = _downtime_until(d.get("XMH_DOWNTIME", ""), tst, now) if _holidays_off() else None
-                if end:
-                    by["until"] = _iso(str(end))
-            else:
-                if until != "-1" and _iso(until):
-                    by["until"] = _iso(until)
-                by.update(_disable_words(d.get("dismsg", "")))
-            a["suppressedBy"] = [by]
+            by = _suppressed_by(d, cfg.get("XMH_DOWNTIME", ""), tst, own, now, ends)
+            if by:
+                a["suppressedBy"] = by
         updated = _iso(d.get("logtime", ""))
         if updated:
             a["updated"] = updated
@@ -245,7 +260,7 @@ def _states() -> list[dict]:
             # Xymon acknowledges a test, all it holds: say so, for the day
             # one instance is acknowledged on its own (RFC #113).
             a["acknowledged"] = {**ack, "of": "test"}
-        res += _instances(a) if tst in _INSTANCE_TESTS and colour != "green" else [a]
+        res += _instances(a) if tst in _INSTANCE_TESTS and a["severity"] != "cleared" else [a]
     out = []
     for a in res:
         i = _state_id(a)
@@ -253,12 +268,48 @@ def _states() -> list[dict]:
     return out
 
 
+def _suppressed_by(d: dict, downtime: str, tst: str, own: str, now: int,
+                   ends: dict[tuple[str, str], int | None]) -> list[dict]:
+    """What suppresses a blue test, one entry each, a field Xymon does not
+    keep left out: a disable (disabletime set), with its end and words; a
+    DOWNTIME, with its end and its cause. xymond keeps that cause in dismsg
+    when no disable runs, and only then: a dismsg with no disable is a
+    DOWNTIME's. Under a disable, a DOWNTIME window of hosts.cfg holding the
+    test now over a red, yellow or purple report -- the only ones xymond
+    applies it to -- is one too. A blue the test reported itself has
+    neither: nothing is said of why."""
+    by = []
+    until = d.get("disabletime", "0")
+    disabled = until not in ("", "0")
+    if disabled:
+        entry = {"kind": "disable", "of": "test"}
+        if until != "-1" and _iso(until):
+            entry["until"] = _iso(until)
+        entry.update(_disable_words(d.get("dismsg", "")))
+        by.append(entry)
+    cause = "" if disabled else hide(_nldecode(d.get("dismsg", ""))).strip()
+    if cause or (downtime and own in ("red", "yellow", "purple") and
+                 _downtime_holds(downtime, tst, time.localtime(now - now % 60))):
+        entry = {"kind": "downtime", "of": "test"}
+        key = (downtime, tst)
+        if key not in ends:
+            ends[key] = _downtime_until(downtime, tst, now)
+        if ends[key]:
+            entry["until"] = _iso(str(ends[key]))
+        if cause:
+            entry["text"] = cause
+        by.append(entry)
+    return by
+
+
 def _downtime_until(spec: str, test: str, now: int) -> int | None:
     """When the DOWNTIME window SPEC holding TEST at NOW ends: the first
     minute xymond no longer finds TEST in it, as check_downtime and
     within_sla read it (xymond.c, timefunc.c), in this machine's local
     time, which is xymond's. None when it does not hold TEST now, or holds
-    it for the week ahead and more -- a window that never ends.
+    it for the week ahead and more -- a window that never ends. Holidays
+    play no part: xymond never loads holidays.cfg (only xymond_alert and
+    the info page do), whatever hosts.cfg(5) says.
     ponytail: a minute at a time over 8 days, 11520 steps; fine per blue test."""
     start = now - now % 60
     if not _downtime_holds(spec, test, time.localtime(start)):
@@ -293,7 +344,8 @@ def _downtime_holds(spec: str, test: str, t: time.struct_time) -> bool:
 
 
 def _within_sla(timespec: str, t: time.struct_time) -> bool:
-    """xymond's within_sla, holidays off: "DAYS:HHMM:HHMM[,...]", DAYS of
+    """xymond's within_sla as xymond runs it, holidays never loaded:
+    "DAYS:HHMM:HHMM[,...]", DAYS of
     * (every day), W (Monday to Friday), 0 to 6 (Sunday to Saturday); start
     and end both inside, an end before the start crossing midnight."""
     def minutes(p: str) -> int:
@@ -314,29 +366,6 @@ def _within_sla(timespec: str, t: time.struct_time) -> bool:
             if (b <= now <= e) if e > b else (now >= b or now <= e):
                 return True
     return False
-
-
-def _holidays_off() -> bool:
-    """Whether holidays leave the weekday alone, so a DOWNTIME's end can be
-    told: holidays.cfg sets HOLIDAYLIKEWEEKDAY to -1 or not at all, as
-    xymond reads it (holidays.c: the last one, an atoi, outside -1 to 6
-    taken as -1). Not when the file cannot be read, or includes another.
-    ponytail: holidays on means no until; reading the holidays themselves
-    is an open point (docs/PLAN.md)."""
-    try:
-        text = Path(os.environ.get("XYMONHOME", ""), "etc", "holidays.cfg").read_text()
-    except OSError:
-        return False
-    like = -1
-    for line in text.splitlines():
-        line = line.split("#", 1)[0].strip()
-        if line.lower().startswith(("include", "directory")):
-            return False
-        if line.upper().startswith("HOLIDAYLIKEWEEKDAY="):
-            m = re.match(r"\s*([+-]?\d+)", line[19:])
-            like = int(m.group(1)) if m else 0
-            like = like if -1 <= like <= 6 else -1
-    return like == -1
 
 
 def _state_id(a: dict) -> str:

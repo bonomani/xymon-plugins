@@ -28,16 +28,17 @@ ROOT=$(find_root)
 py=${XYMONAPI_PYTHON:-python3}
 command -v "$py" >/dev/null 2>&1 || skip "no Python to run the API's code with ($py)"
 
-# alarms LINES [all] -- /alarms for the board lines LINES, those not
-# inactive (or all), one per line: host, severity, status, the flags present, then
+# alarms LINES [all] [HOSTS] -- /alarms for the board lines LINES and
+# hostinfo's lines HOSTS (host|dialup|DOWNTIME), those not inactive (or
+# all), one per line: host, severity, status, the flags present, then
 # [domain]. unreachable reads "unreachable<conn" when reported by the conn
 # state of the same host.
 alarms() {
-	"$py" - "$ROOT/plugins/xymonapi" "$1" "${2:-alarms}" <<'EOF'
+	"$py" - "$ROOT/plugins/xymonapi" "$1" "${2:-alarms}" "${3:-}" <<'EOF'
 import sys
 sys.path.insert(0, sys.argv[1])
 import xymon
-xymon.query = lambda req: sys.argv[2]
+xymon.query = lambda req: sys.argv[4] if req.startswith("hostinfo") else sys.argv[2]
 every = xymon.alarms()
 conn = {a["host"]: a["id"] for a in every if a["test"] == "conn"}
 for a in (every if sys.argv[3] == "all" else [x for x in every if x["state"] != "inactive"]):
@@ -50,7 +51,7 @@ EOF
 # BOARD_FIELDS' order, no disable unless DISABLETIME is given.
 line() { printf '%s|conn|%s|1700000000|0|||%s|%s|%s\n' "$1" "$2" "$3" "${4:-0}" "${5:-}"; }
 
-out=$(alarms "$(line silent purple red; line silentyel purple yellow; line silentgreen purple green; line down clear red; line nonet clear none; line off blue red 1700007200 maint; line offgreen blue green -1; line dt blue red; line red red none; line ok green none)")
+out=$(alarms "$(line silent purple red; line silentyel purple yellow; line silentgreen purple green; line rawpurple purple none; line down clear red; line nonet clear none; line off blue red 1700007200 maint; line offgreen blue green -1; line dt blue red 0 Maint; line selfblue blue none; line delayed green red; line pinned red green; line red red none; line ok green none)" alarms 'dt||*:*:0000:2359:Maint')
 
 assert_contains 'silent critical firing stale' "$out" "purple over red: the red it measured, critical, and stale"
 assert_contains 'silentyel warning firing stale' "$out" "purple over yellow: warning, and stale"
@@ -61,27 +62,30 @@ assert_contains 'nonet indeterminate firing' "$out" "a clear with nothing behind
 assert_not_contains 'nonet indeterminate firing unreachable' "$out" "and not unreachable"
 assert_contains 'off critical suppressed by:disable@2023-11-15T00:13:20Z/maint' "$out" "blue over red, disabled until a time: critical, suppressed by a disable, its end and text"
 assert_contains 'offgreen cleared suppressed by:disable [' "$out" "blue over green, disabled until ok (-1): cleared, suppressed by a disable"
-assert_contains 'dt critical suppressed by:downtime' "$out" "blue with no disable set: a DOWNTIME window"
+assert_contains 'dt critical suppressed by:downtime/Maint [' "$out" "blue in a DOWNTIME window holding it: its cause, which xymond keeps in dismsg; all day, no end"
+assert_contains 'selfblue indeterminate suppressed [' "$out" "a blue the test reported itself: suppressed, and nothing said of why"
+assert_not_contains 'rawpurple indeterminate firing stale' "$out" "a purple a client sent itself is a report, not a silence: not stale"
+assert_contains 'pinned cleared firing [' "$out" "red shown over green reported, a modifier: the green measured, firing as shown"
 assert_contains 'red critical firing' "$out" "red: critical, firing, nothing beside it"
 assert_not_contains 'red critical firing stale' "$out" "red is not stale"
 assert_not_contains 'ok ' "$out" "green is no alarm"
-all=$(alarms "$(line red red none; line ok green none)" all)
+all=$(alarms "$(line red red none; line ok green none; line delayed green red)" all)
 assert_contains 'ok cleared inactive [' "$all" "/alarms gives green too: cleared, inactive"
+assert_contains 'delayed critical inactive [' "$all" "green shown over red reported, a change delay: the red measured, critical"
 assert_contains 'red critical firing' "$all" "and red, firing"
 
 # A clear behind a conn that is not green -- red, yellow, blue -- whether
 # xymond made it (a colour of its own kept) or xymonnet: unreachable,
 # reported by that conn's state. A client test with no rule on a host that
-# answers, and a dialup host's (hosts.cfg's dialup, XMH_FLAG_DIALUP), are
-# not. Fields: host|test|color|lastchange|acktime|ackmsg|acklist|
-# prevgapcolor|disabletime|dismsg|logtime|sender|XMH_FLAG_DIALUP|line1.
+# answers, and a dialup host's (hosts.cfg's dialup, from hostinfo), are
+# not.
 reach=$(alarms "$(printf '%s\n' \
 	'far|conn|red|1700000000|0|||none|0' 'far|ssh|clear|1700000000|0|||none|0' \
 	'gone|conn|red|1700000000|0|||none|0' 'gone|cpu|clear|1700000000|0|||red|0' \
 	'slow|conn|yellow|1700000000|0|||none|0' 'slow|ssh|clear|1700000000|0|||none|0' \
 	'maint|conn|blue|1700000000|0|||red|0' 'maint|ssh|clear|1700000000|0|||none|0' \
-	'dial|conn|red|1700000000|0|||none|0' 'dial|cpu|clear|1700000000|0|||green|0||||dialup' \
-	'near|conn|green|1700000000|0|||none|0' 'near|procs|clear|1700000000|0|||none|0')")
+	'dial|conn|red|1700000000|0|||none|0' 'dial|cpu|clear|1700000000|0|||green|0' \
+	'near|conn|green|1700000000|0|||none|0' 'near|procs|clear|1700000000|0|||none|0')" alarms 'dial|dialup|')
 assert_contains 'far indeterminate firing unreachable<conn' "$reach" "xymonnet's clear ssh behind a red conn: unreachable, reported by the conn"
 assert_contains 'gone critical firing unreachable<conn' "$reach" "xymond's clear over red: critical, as measured, and unreachable"
 assert_contains 'slow indeterminate firing unreachable<conn' "$reach" "behind a yellow conn too, as xymond reads it"
@@ -121,20 +125,5 @@ assert_contains '*:2330:0400 cpu 2026-11-17 04:01' "$ends" "one across midnight 
 assert_contains 'W:0800:1700 cpu 2026-11-20 17:01' "$ends" "W is Monday to Friday"
 assert_contains '6:0000:2359,0:0000:2359 cpu 2026-11-23 00:00' "$ends" "a weekend, two windows, ends on Monday"
 assert_contains 'conn,ssh:*:0100:0200:a,*:0300:0330 ssh 2026-11-20 02:01' "$ends" "a list of tests, then the next window"
-
-# Holidays change the weekday a window reads (HOLIDAYLIKEWEEKDAY, 0 in the
-# holidays.cfg Xymon ships): its end is told only when they are off.
-work=$(mktempdir)
-hol() {
-	mkdir -p "$work/hol/etc"
-	if [ -n "$1" ]; then printf '%b' "$1" > "$work/hol/etc/holidays.cfg"; else rm -f "$work/hol/etc/holidays.cfg"; fi
-	XYMONHOME="$work/hol" "$py" -c 'import sys; sys.path.insert(0, sys.argv[1]); import xymon; print(xymon._holidays_off())' "$ROOT/plugins/xymonapi"
-}
-assert_equal False "$(hol 'HOLIDAYLIKEWEEKDAY=0 \t# -1= no holiday calculation\n[us]\n')" "holidays as Sundays: no end told"
-assert_equal True "$(hol 'HOLIDAYLIKEWEEKDAY=-1\n[us]\n')" "-1: the weekday as it is, the end told"
-assert_equal True "$(hol '# HOLIDAYLIKEWEEKDAY=0\n[us]\n')" "a setting commented out is none"
-assert_equal True "$(hol 'HOLIDAYLIKEWEEKDAY=0\nHOLIDAYLIKEWEEKDAY=9\n')" "the last one counts, and out of -1 to 6 is -1"
-assert_equal False "$(hol 'include /etc/more-holidays.cfg\n')" "a file including another: not known"
-assert_equal False "$(hol '')" "no file: not known"
 
 pass "an alarm keeps the severity its test last measured, with stale, unreachable or suppressed beside it, and says its domain"

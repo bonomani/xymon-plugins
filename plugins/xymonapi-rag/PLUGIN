@@ -2,12 +2,12 @@
 # it alone. One key per line, a key repeated for each line of a message;
 # ./xymon-plugin at the repository's top installs it from the lines below.
 name: xymonapi-rag
-version: 0.2.0
+version: 0.2.1
 summary: a search of Xymon's manual pages and history by meaning; the index task on the server, search and ask anywhere
 server-short: the search index, kept up to date
 tools-short: search by meaning, from here
 data: $XDG_CACHE_HOME/xymonapi-rag/
-requires: xymonapi >= 8.0.0 (its client beside it; the API beside it on the server, over the network elsewhere), python >= 3.9
+requires: xymonapi >= 9.0.0 (its client beside it; the API beside it on the server, over the network elsewhere), python >= 3.9
 manual: xymonapi-rag.1
 
 # How ./xymon-plugin installs it: see xymonapi's PLUGIN file.

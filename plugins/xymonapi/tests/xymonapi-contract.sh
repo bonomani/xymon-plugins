@@ -79,6 +79,12 @@ assert_contains "unknown parameter: entity; this takes host, severity, stale, st
 answer '[C2]' GET "$v1/series?host=host.example.com&test=la&start=-2h" 400 bad_request
 answer '[C2]' GET "$v1/health?x=1" 400 bad_request
 answer '[C2]' GET "$v1/alarms/0123456789abcdef?x=1" 400 bad_request
+# A parameter given twice, or empty, is refused: the second value or the
+# empty one would be answered as no filter, the whole board.
+answer '[C2]' GET "$v1/alarms?host=a&host=b" 400 bad_request
+assert_contains "given more than once: host" "$(cat "$work/body")" "[C2] the refusal names the parameter given twice"
+answer '[C1]' GET "$v1/alarms?host=" 400 bad_request
+answer '[C1]' GET "$v1/alarms?state=" 400 bad_request
 answer '[C2]' GET "$v1/states" 404 not_found
 answer '[C2]' GET "$v1/status?host=a&test=b" 404 not_found
 answer '[C2]' DELETE "$v1/alarms" 405 method_not_allowed

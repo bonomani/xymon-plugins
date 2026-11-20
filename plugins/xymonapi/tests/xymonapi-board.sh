@@ -44,9 +44,9 @@ dtw_window="conn:*:$1:$2:Window" dtw_until=$3
 printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 wdis.example.com # conn\n127.0.0.1 dtw.example.com # conn DOWNTIME='"$dtw_window"'\n127.0.0.1 wack.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n127.0.0.1 ino.example.com # inode\n' > "$work/hosts.cfg"
 
 mkdir -p "$work/home/etc" "$work/home/tmp" "$work/home/www"
-# Holidays off, so that a DOWNTIME's end can be told; xymond and the API
-# read the same file.
-printf 'HOLIDAYLIKEWEEKDAY=-1\n' > "$work/home/etc/holidays.cfg"
+# Xymon's own holidays.cfg, holidays as Sundays: xymond does not load it
+# for a DOWNTIME, and neither does the API.
+printf 'HOLIDAYLIKEWEEKDAY=0\n' > "$work/home/etc/holidays.cfg"
 require_cfg XYMONSERVER_CFG "$XYMON_SRC/xymond/etcfiles/xymonserver.cfg"
 sed -e 's|^XYMONHOME=.*|XYMONHOME="'"$work"'/home"|' \
     -e 's|^XYMONTMP=.*|XYMONTMP="'"$work"'/home/tmp"|' \
@@ -216,9 +216,10 @@ assert_contains '"text":"maintenance window"' "$(alarm dis.example.com:conn)" "a
 assert_not_contains '"createdBy":' "$(alarm dis.example.com:conn)" "a disable sent with xymon(1) says no one"
 assert_contains '"createdBy":"bruno","from":"10.0.0.9","text":"disk being replaced"' "$(alarm wdis.example.com:conn)" "the web page's: who, from where, and the reason alone"
 assert_contains '"state":"suppressed"' "$(alarm dt.example.com:conn)" "red in a DOWNTIME window: suppressed"
-assert_contains '"suppressedBy":[{"kind":"downtime","of":"test"' "$(alarm dt.example.com:conn)" "by the DOWNTIME, no disable set"
+assert_contains '"suppressedBy":[{"kind":"downtime","of":"test","text":"Maint"' "$(alarm dt.example.com:conn)" "by the DOWNTIME, its cause as xymond keeps it"
 assert_not_contains '"until"' "$(alarm dt.example.com:conn)" "all day every day, it never ends"
-assert_contains "\"suppressedBy\":[{\"kind\":\"downtime\",\"of\":\"test\",\"until\":\"$dtw_until\"" "$(alarm dtw.example.com:conn)" "a window read from the board ends the minute after its end"
+assert_contains "\"suppressedBy\":[{\"kind\":\"downtime\",\"of\":\"test\",\"until\":\"$dtw_until\"" "$(alarm dtw.example.com:conn)" "a window read from hosts.cfg ends the minute after its end, holidays on or not"
+assert_contains '"text":"Window"' "$(alarm dtw.example.com:conn)" "with its cause"
 assert_not_contains '"suppressedBy"' "$(alarm red.example.com:conn)" "red is not suppressed"
 assert_contains '"severity":"indeterminate","state":"firing"' "$(alarm clr.example.com:conn)" "a clear with nothing behind it, indeterminate"
 assert_not_contains '"unreachable"' "$(alarm clr.example.com:conn)" "and not unreachable: no conn red, no colour kept behind it"

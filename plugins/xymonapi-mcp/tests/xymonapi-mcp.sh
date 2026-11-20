@@ -100,6 +100,10 @@ call() {
 assert_contains 'alive' "$(call health '{}')" "the health tool reaches /health"
 assert_contains 'xymond' "$(call health '{}')" "and names the xymond"
 assert_contains '\"host\": \"red.example.com\"' "$(call alarms '{}')" "the alarms tool lists the red status"
+assert_contains '\"host\": \"red.example.com\"' "$(call alarms '{"stale":false}')" "a flag filter takes a boolean: false"
+assert_not_contains '\"host\": \"red.example.com\"' "$(call alarms '{"stale":true}')" "and true"
+assert_contains 'stale must be true or false' "$(call alarms '{"stale":"yes"}')" "and nothing else"
+assert_contains '"type":"boolean"' "$(printf '%s' "$list")" "tools/list says so"
 assert_contains '\"host\": \"red.example.com\"' "$(call hosts '{}')" "the hosts tool lists the host"
 mcp_id_re='\\"id\\": \\"([0-9a-f]+)\\"'
 [[ $answer =~ $mcp_id_re ]] || fail "the alarms tool gave no id: $answer"
