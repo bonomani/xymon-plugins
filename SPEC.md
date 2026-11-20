@@ -327,18 +327,18 @@ Off a terminal, S17.
 
 **S24. One command: a verb, and the part it acts on.**
 `xymon-plugin` takes a verb -- `install`, `update`, `enable`, `disable`,
-`remove`, `status`, `verify`, `clean` -- and the part it acts on, `--server` or
+`remove`, `status`, `verify`, `outdated`, `clean` -- and the part it acts on, `--server` or
 `--tools`, the latter alone. An action of the `install.sh` it replaces, as
 `install-server`, is refused, naming the new form; so is `--client`, until
 a plugin has a client part. Without a part named, on a terminal, the
 server part is said and acted on; off one, a verb that changes something
-is refused; `status` and `verify` cover both. `install`, `remove` and `clean` need a
+is refused; `status`, `verify` and `outdated` cover both. `install`, `remove` and `clean` need a
 plugin named, or `--all`. `install` refuses a plugin installed already, and
 `update` one that is not; `--all`, and a plugin one needs, pass over those
 installed, saying so. `enable` and `disable` refuse the tools, and a plugin
 named with no task. Run as root, a verb that changes the tools is refused
-unless `DESTDIR` or `PREFIX` is given; `verify`, which changes nothing, is
-not. `--server` with `--tools` is refused, `status` and `verify` saying
+unless `DESTDIR` or `PREFIX` is given; `verify` and `outdated`, which change
+nothing, are not. `--server` with `--tools` is refused, `status`, `verify` and `outdated` saying
 that they cover both with neither, another verb giving the
 two commands to run. `update` says what it updated, without the help a
 first install gives.
@@ -489,6 +489,22 @@ plugin's it leaves, and says. Its exit says the state after it, as
 `verify`'s does: 0 when nothing is left, 4 when something is -- nothing
 removed off a terminal without `--yes`, an answer N, or a thing left
 unproved.
+
+**S32. `outdated` says what a newer release would update.**
+`outdated` reads, as `status` does (S15), the Xymon servers' and the
+tools' parts installed -- both when neither is named, `--tools` alone; no
+plugin has a client part -- and says of each plugin installed the version
+installed against its latest published release on GitHub: up to date; a
+newer one released, with the update that takes it; installed newer than any
+released; none released; or, its `VERSION` holding no version, that
+`verify` says more. It changes nothing. It reads the releases from GitHub:
+with `gh` when it answers, drafts left out as an anonymous reader does not
+see them; otherwise GitHub's API, anonymously, through `curl` or `wget`, at
+most 60 pages of a hundred, as many as GitHub answers, from one address, in
+an hour. It ends with 1, saying why, when none reaches GitHub, when there are
+more releases than that, or when a `VERSION` cannot be read. Otherwise it
+ends with 6 when it said of a plugin that a newer release exists, and with
+0 when it said of none -- for a script or a Xymon task to read.
 
 ### Getting the code
 

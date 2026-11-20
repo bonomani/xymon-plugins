@@ -127,6 +127,16 @@ install wrote, a link pointing elsewhere, a Python module older than the
 plugin asks, and what no plugin installed owns. It changes nothing, and
 exits 0 when all is as installed, 3 when something is broken, 4 when
 something is only untidy -- what a nightly check can test.
+`./xymon-plugin outdated` says, for what is installed, whether a newer
+release is published on GitHub, with the update that takes it. It changes
+nothing, reads the releases with `gh` or, when `gh` is missing or fails,
+`curl` or `wget`, and exits 6 when it said of a plugin that a newer release
+exists, 0 when it said of none, and 1, saying why, when GitHub cannot be
+reached, when it has more releases than the 60 pages read without `gh`, or
+when a `VERSION` cannot be read. Behind a proxy, each of `gh`, `curl` and
+`wget` uses the proxy settings it sees -- its environment, `~/.curlrc` for
+`curl`; under `sudo`, which those are depends on sudo's policy, so run it as
+yourself or with `sudo -E`.
 `clean --server NAME`, or `--tools`, or `--all`, takes away what a plugin
 gone left -- a directory deleted by hand leaves its task link, its manual
 page's link, its staged copy or its command -- once listed and confirmed,
