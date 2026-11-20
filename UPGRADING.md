@@ -23,7 +23,8 @@ with its status's `text`. `/states` and `/status` are gone.
 - `severity`, what the test last measured, in ITU-T X.733's words: red
   `critical`, yellow `warning`, green `cleared`, `indeterminate` where
   nothing was. `verdict` is gone, and so are `major` and `minor`.
-- `state`: `firing`, `suppressed` (blue: disabled, or a DOWNTIME window),
+- `state`: `firing`, `pending` (red or yellow reported, still shown green:
+  a change delay), `suppressed` (blue: disabled, or a DOWNTIME window),
   `inactive` (green). It was the field `status`.
 - Purple, clear and blue no longer replace what was measured: they are
   said beside it. `stale: {since}` for a test gone silent;
@@ -36,7 +37,9 @@ with its status's `text`. `/states` and `/status` are gone.
   DOWNTIME's `until` and its cause as `text`. A blue the test reported
   itself has no `suppressedBy`. Where xymond shows another colour than
   the one reported -- a change delay, a flap, a modifier too --
-  `severity` is the reported one; `stale` only for xymond's own purple.
+  `severity` is the reported one; `stale` only for xymond's own purple;
+  `overriddenBy: [{kind: flap, since} | {kind: modifier, text}]` says a
+  flap or a modifier.
 - `acknowledged`: `since` when xymond keeps it (the critical-systems
   view), `ackedBy` and `from` when the web page made it.
 - `id` is opaque, the same while host, test and instance are: it was
@@ -45,8 +48,10 @@ with its status's `text`. `/states` and `/status` are gone.
 - A time xymond gives as 0, a test such as `trends` that never changed,
   is left out, not `1970-01-01T00:00:00Z`.
 
-**Filters**, on `/alarms`: `host`, `test`, `severity`, `state`, and
-`stale`, `unreachable`, `suppressed` as `true` or `false`. **A query
+**Filters**, on `/alarms`: `host`, `test`, `severity`, `state`, `domain`,
+and `stale`, `unreachable`, `suppressed`, `overridden`, `acknowledged` as
+`true` or `false` -- `state=firing&acknowledged=false` is what nobody has
+in hand. **A query
 parameter an operation does not list is refused**, `400 bad_request`,
 naming it and those the operation takes (openapi.yaml, C2): it was
 ignored, so `/states?entity=web1` answered the whole board and

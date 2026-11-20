@@ -43,12 +43,14 @@ XYMONHISTLOGS = os.environ.get("XYMONHISTLOGS", "")
 # other time. disabletime is when a disable ends, -1 until the test is ok
 # again, and 0 when none runs; dismsg is a disable's text, or a DOWNTIME's
 # cause when no disable runs. logtime is when the status was last updated,
-# sender who sent it. line1, the status's first line, is not encoded and
-# may hold a "|": it comes last, and a line splits on the fields before it
-# only.
+# sender who sent it. flapinfo is "FLAPPING/LATEST/FIRST/OLD/CURRENT",
+# FLAPPING 1 while xymond holds a colour over a test that flaps; modifiers
+# the causes of the modifiers in force, "&COLOUR CAUSE" each, encoded. line1, the status's first
+# line, is not encoded and may hold a "|": it comes last, and a line splits
+# on the fields before it only.
 BOARD_FIELDS = ["hostname", "testname", "color", "lastchange",
                 "acktime", "ackmsg", "acklist", "prevgapcolor", "disabletime",
-                "dismsg", "logtime", "sender", "line1"]
+                "dismsg", "logtime", "sender", "flapinfo", "modifiers", "line1"]
 # What hosts.cfg says of each host, from xymond's hostinfo, which encodes
 # them (xymondboard does not, and a DOWNTIME's cause may hold a "|"):
 # dialup, empty without it, and the DOWNTIME tag.
@@ -96,10 +98,15 @@ COLOUR_SEVERITY = {"red": "critical", "yellow": "warning", "green": "cleared"}
 SEVERITIES = ("critical", "warning", "indeterminate", "cleared")
 # An alarm's state, as Prometheus and TMF642 name the field: firing and
 # suppressed as Alertmanager has them; inactive, Prometheus's word for a rule
-# that is not firing, for a green test.
-STATES = ("firing", "suppressed", "inactive")
-# The flags an alarm may carry, each a filter of /alarms.
-FLAGS = ("stale", "unreachable", "suppressed")
+# that is not firing, for a green test; pending, its word for a condition
+# not held long enough yet, for a red or yellow reported while xymond still
+# shows green -- a change delay: delayyellow, or delayred with it (delayred
+# alone shows yellow meanwhile, and that is firing, as Xymon alerts on it).
+STATES = ("firing", "pending", "suppressed", "inactive")
+# What an alarm may carry beside its severity, each a true or false filter
+# of /alarms, and the field it reads.
+FLAGS = {"stale": "stale", "unreachable": "unreachable", "suppressed": "suppressedBy",
+         "overridden": "overriddenBy", "acknowledged": "acknowledged"}
 # The domain a test lies in, the label that groups alarms (RFC #113): read
 # from this table, and the test itself where the table says nothing -- so a
 # network service (ssh, smtp, dns) or a script's own test is its own domain.
@@ -161,7 +168,7 @@ def _iso(epoch: str) -> str | None:
 
 def alarms(host: str | None = None, test: str | None = None,
            severity: str | None = None, state: str | None = None,
-           **flags: str | None) -> list[dict]:
+           domain: str | None = None, **flags: str | None) -> list[dict]:
     """One Alarm per host and test on the board, green ones too, as TMF642
     keeps a cleared alarm -- one per object, where its status names them --
     with the severity it last measured, its state, and, beside it,
@@ -175,7 +182,8 @@ def alarms(host: str | None = None, test: str | None = None,
     # empty board -- "severity=red", a colour where a severity is asked,
     # would read as "nothing is red" (#92). An empty one is refused too: it
     # would read as no filter, the whole board.
-    for name, value in (("host", host), ("test", test), ("severity", severity), ("state", state)):
+    for name, value in (("host", host), ("test", test), ("severity", severity),
+                        ("state", state), ("domain", domain)):
         if value == "":
             raise BadRequest(f"{name} is empty")
     if severity and severity not in SEVERITIES:
@@ -188,11 +196,11 @@ def alarms(host: str | None = None, test: str | None = None,
     out = [st for st in _states()
            if (not host or st["host"] == host) and (not test or st["test"] == test)
            and (not severity or st["severity"] == severity)
-           and (not state or st["state"] == state)]
+           and (not state or st["state"] == state)
+           and (not domain or st["domain"] == domain)]
     for flag, value in flags.items():
         if value is not None:
-            key = "suppressedBy" if flag == "suppressed" else flag
-            out = [st for st in out if (key in st) == (value == "true")]
+            out = [st for st in out if (FLAGS[flag] in st) == (value == "true")]
     return out
 
 
@@ -233,6 +241,8 @@ def _states() -> list[dict]:
              "domain": DOMAIN.get(tst, tst),
              "severity": COLOUR_SEVERITY.get(own, "indeterminate"),
              "state": {"blue": "suppressed", "green": "inactive"}.get(colour, "firing")}
+        if colour == "green" and own in ("red", "yellow"):
+            a["state"] = "pending"
         t = _iso(d.get("lastchange", ""))
         if t:
             a["since"] = t
@@ -247,6 +257,9 @@ def _states() -> list[dict]:
             by = _suppressed_by(d, cfg.get("XMH_DOWNTIME", ""), tst, own, now, ends)
             if by:
                 a["suppressedBy"] = by
+        over = _overridden_by(d)
+        if over:
+            a["overriddenBy"] = over
         updated = _iso(d.get("logtime", ""))
         if updated:
             a["updated"] = updated
@@ -266,6 +279,28 @@ def _states() -> list[dict]:
         i = _state_id(a)
         out.append({"id": i, **a, "link": f"alarms/{i}"})
     return out
+
+
+def _overridden_by(d: dict) -> list[dict]:
+    """What makes xymond show another colour than the test reported, but a
+    silence, a host down, a suppression or a delay -- which stale,
+    unreachable, suppressedBy and pending say: a flap xymond holds a colour
+    over, since its first change, and the modifiers in force, with their
+    cause (xymon(1), modify)."""
+    over = []
+    flap = d.get("flapinfo", "").split("/")
+    if len(flap) == 5 and flap[0] == "1":
+        entry = {"kind": "flap"}
+        since = _iso(flap[2])
+        if since:
+            entry["since"] = since
+        over.append(entry)
+    # xymond keeps each modifier's cause as "&COLOUR CAUSE", a line each.
+    for line in _nldecode(d.get("modifiers", "")).splitlines():
+        cause = hide(re.sub(r"\A&[a-z]+\s*", "", line.strip())).strip()
+        if cause:
+            over.append({"kind": "modifier", "text": cause})
+    return over
 
 
 def _suppressed_by(d: dict, downtime: str, tst: str, own: str, now: int,

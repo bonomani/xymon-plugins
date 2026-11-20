@@ -79,10 +79,13 @@ paths:
         - { name: host,     in: query, schema: { type: string }, description: "Only this host." }
         - { name: test,     in: query, schema: { type: string }, description: "Only this test." }
         - { name: severity, in: query, schema: { $ref: "#/components/schemas/Severity" }, description: "Only this severity. Any other value, a colour among them, is refused (400)." }
-        - { name: state,    in: query, schema: { type: string, enum: [firing, suppressed, inactive] }, description: "Only this state." }
+        - { name: state,    in: query, schema: { type: string, enum: [firing, pending, suppressed, inactive] }, description: "Only this state." }
         - { name: stale,       in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms gone silent (true), or those not (false)." }
         - { name: unreachable, in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms whose host cannot be reached (true), or those not (false)." }
         - { name: suppressed,  in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms suppressed, disabled or in a DOWNTIME window (true), or those not (false)." }
+        - { name: overridden,  in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms xymond shows in another colour for a flap or a modifier (true), or those not (false)." }
+        - { name: acknowledged, in: query, schema: { type: string, enum: ["true", "false"] }, description: "Only the alarms acknowledged (true), or those not (false): state=firing&acknowledged=false is what nobody has in hand." }
+        - { name: domain,   in: query, schema: { type: string }, description: "Only this domain: filesystem, network, web, ..., or a test's own name." }
       responses:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -466,7 +469,7 @@ components:
         test:     { type: string }
         domain:   { type: string, description: "The domain the test lies in, a label that groups and identifies nothing: disk, inode and files are filesystem; conn and ports network; http, content and sslcert web; cpu, memory, msgs (log), procs (process), svcs (os-service). Any other test is its own domain." }
         severity: { $ref: "#/components/schemas/Severity" }
-        state:    { type: string, enum: [firing, suppressed, inactive], description: "inactive: the test is green, Prometheus's word for a rule not firing. suppressed: the test is blue, disabled or in a DOWNTIME window, listed all the same, as Alertmanager lists a silenced alert." }
+        state:    { type: string, enum: [firing, pending, suppressed, inactive], description: "inactive: the test is green, Prometheus's word for a rule not firing. pending: red or yellow reported while xymond still shows green, a change delay (delayyellow, or delayred with it; delayred alone shows yellow, firing), Prometheus's word for a condition not held long enough yet. suppressed: the test is blue, disabled or in a DOWNTIME window, listed all the same, as Alertmanager lists a silenced alert." }
         suppressedBy:
           type: array
           description: "Present when Xymon says why the test is suppressed, one entry each (RFC #113): a disable, a DOWNTIME, or both. A field Xymon does not keep is left out: a disable's until when it lasts until the test is ok; a DOWNTIME's until when its window never ends. Absent for a blue the test reported itself."
@@ -481,6 +484,16 @@ components:
               from:  { type: string, description: "The address the web page's user set it from." }
               text:  { type: string, description: "Why: a disable's reason given on the web page, or its whole text sent otherwise; a DOWNTIME's cause from hosts.cfg. Hidden as the status text is." }
         since:    { type: string, format: date-time }
+        overriddenBy:
+          type: array
+          description: "Present when xymond shows another colour than the test reported for a flap or a modifier, one entry each; severity is still the reported one. A silence, a host down, a suppression and a change delay are said by stale, unreachable, suppressedBy and state pending."
+          items:
+            type: object
+            required: [kind]
+            properties:
+              kind:  { type: string, enum: [flap, modifier], description: "flap: xymond holds a colour over a test that keeps changing. modifier: a modify message (xymon(1)), e.g. from a DS rule in analysis.cfg." }
+              since: { type: string, format: date-time, description: "A flap's first change." }
+              text:  { type: string, description: "A modifier's cause, as sent; hidden as the status text is." }
         stale:
           type: object
           description: Present when the test went silent (purple); the severity is the one it last reported.

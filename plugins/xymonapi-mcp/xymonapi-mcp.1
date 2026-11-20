@@ -47,10 +47,10 @@ call.
 .SH TOOLS
 .IP "\fBhealth\fR"
 Whether xymond answers, and its version.
-.IP "\fBalarms\fR [host] [test] [severity] [state] [stale] [unreachable] [suppressed]"
+.IP "\fBalarms\fR [host] [test] [severity] [state] [domain] [stale] [unreachable] [suppressed] [overridden] [acknowledged]"
 Every alarm on the board, green ones too: the severity its test last
 measured (critical, warning, cleared, indeterminate), its state (firing,
-suppressed, inactive), and what xymond added beside it.
+pending, suppressed, inactive), and what xymond added beside it.
 .IP "\fBhosts\fR"
 Each host on the board, once.
 .IP "\fBalarm\fR id"

@@ -43,6 +43,7 @@ every = xymon.alarms()
 conn = {a["host"]: a["id"] for a in every if a["test"] == "conn"}
 for a in (every if sys.argv[3] == "all" else [x for x in every if x["state"] != "inactive"]):
     flags = [k for k in ("stale",) if k in a] + (["unreachable<conn" if a["unreachable"].get("reportedBy") == [conn.get(a["host"])] else "unreachable"] if "unreachable" in a else []) + [f'by:{b["kind"]}' + (f'@{b["until"]}' if "until" in b else "") + (f'/{b["text"]}' if "text" in b else "") for b in a.get("suppressedBy", [])]
+    flags += [f'over:{o["kind"]}' + (f'/{o["text"]}' if "text" in o else "") for o in a.get("overriddenBy", [])]
     print(a["host"], a["severity"], a["state"], *flags, f'[{a["domain"]}]')
 EOF
 }
@@ -66,12 +67,15 @@ assert_contains 'dt critical suppressed by:downtime/Maint [' "$out" "blue in a D
 assert_contains 'selfblue indeterminate suppressed [' "$out" "a blue the test reported itself: suppressed, and nothing said of why"
 assert_not_contains 'rawpurple indeterminate firing stale' "$out" "a purple a client sent itself is a report, not a silence: not stale"
 assert_contains 'pinned cleared firing [' "$out" "red shown over green reported, a modifier: the green measured, firing as shown"
+over=$(alarms "$(printf '%s\n' 'flappy|conn|yellow|1700000000|0|||red|0||1700000000|127.0.0.1|1/1700000600/1700000000/red/yellow|' 'moded|conn|red|1700000000|0|||green|0||1700000000|127.0.0.1|0/0/0/green/green|&red slow\n&red loss')")
+assert_contains 'flappy critical firing over:flap [' "$over" "a flap xymond holds a colour over: said, the red reported kept"
+assert_contains 'moded cleared firing over:modifier/slow over:modifier/loss' "$over" "the modifiers in force: one each, its cause without its colour"
 assert_contains 'red critical firing' "$out" "red: critical, firing, nothing beside it"
 assert_not_contains 'red critical firing stale' "$out" "red is not stale"
 assert_not_contains 'ok ' "$out" "green is no alarm"
 all=$(alarms "$(line red red none; line ok green none; line delayed green red)" all)
 assert_contains 'ok cleared inactive [' "$all" "/alarms gives green too: cleared, inactive"
-assert_contains 'delayed critical inactive [' "$all" "green shown over red reported, a change delay: the red measured, critical"
+assert_contains 'delayed critical pending [' "$all" "green shown over red reported, a change delay: the red measured, critical, pending"
 assert_contains 'red critical firing' "$all" "and red, firing"
 
 # A clear behind a conn that is not green -- red, yellow, blue -- whether

@@ -166,7 +166,7 @@ def _search(request):
     return JSONResponse({"items": items})
 
 
-_ALARM_FILTERS = ("host", "test", "severity", "state") + xymon.FLAGS
+_ALARM_FILTERS = ("host", "test", "severity", "state", "domain", *xymon.FLAGS)
 
 
 def _alarms(request):

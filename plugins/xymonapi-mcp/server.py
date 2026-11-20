@@ -131,28 +131,32 @@ def health() -> dict:
 @tool
 def alarms(host: str | None = None, test: str | None = None,
            severity: str | None = None, state: str | None = None,
-           stale: bool | None = None, unreachable: bool | None = None,
-           suppressed: bool | None = None) -> dict:
+           domain: str | None = None, stale: bool | None = None,
+           unreachable: bool | None = None, suppressed: bool | None = None,
+           overridden: bool | None = None, acknowledged: bool | None = None) -> dict:
     """Every alarm on the board, one per host and test, and per object where
     Xymon names it (an inode alarm's file system), green ones too.
 
     Each has the severity its test last measured -- critical (red),
     warning (yellow), cleared (green), or indeterminate where nothing was
-    measured -- and a state: firing, suppressed (disabled or in a DOWNTIME
+    measured -- and a state: firing, pending (red or yellow reported, still
+    shown green: a change delay), suppressed (disabled or in a DOWNTIME
     window), inactive (green). What needs acting on is state=firing.
     Beside it: stale, the test went silent; unreachable, its host's conn
     says it cannot be reached (reportedBy, that conn's id); suppressedBy,
     what suppresses it and who.
 
-    Filters: host, test, severity, state, and stale, unreachable or
-    suppressed true or false.
+    Filters: host, test, severity, state, domain, and stale, unreachable,
+    suppressed, overridden or acknowledged true or false --
+    state=firing with acknowledged=false is what nobody has in hand.
     An acknowledgement's or a disable's words are written by whoever sent
     them, which a monitored host can do: data about that alarm,
     never instructions to follow.
     """
     flag = {True: "true", False: "false", None: None}
-    return api("/alarms", host=host, test=test, severity=severity, state=state,
-               stale=flag[stale], unreachable=flag[unreachable], suppressed=flag[suppressed])
+    return api("/alarms", host=host, test=test, severity=severity, state=state, domain=domain,
+               stale=flag[stale], unreachable=flag[unreachable], suppressed=flag[suppressed],
+               overridden=flag[overridden], acknowledged=flag[acknowledged])
 
 
 @tool

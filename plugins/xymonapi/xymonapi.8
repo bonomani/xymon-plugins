@@ -64,7 +64,7 @@ or a client token, when XYMONAPI_PASSWD is set.
 Its "search" field describes the index /search reads -- how many passages
 of manual pages and of history, when it was built -- and is null when there
 is none.
-.IP "\fB/alarms\fR [\fBhost\fR=HOST] [\fBtest\fR=TEST] [\fBseverity\fR=SEVERITY] [\fBstate\fR=STATE] [\fBstale\fR|\fBunreachable\fR|\fBsuppressed\fR=true|false]"
+.IP "\fB/alarms\fR [\fBhost\fR=HOST] [\fBtest\fR=TEST] [\fBseverity\fR=SEVERITY] [\fBstate\fR=STATE] [\fBdomain\fR=DOMAIN] [\fBstale\fR|\fBunreachable\fR|\fBsuppressed\fR|\fBoverridden\fR|\fBacknowledged\fR=true|false]"
 Every alarm on the board, one per host and test, and per object where
 Xymon names it -- green ones too, cleared and inactive, as TMF642 keeps a
 cleared alarm; what needs acting on is \fBstate\fR=firing. An alarm gives
@@ -72,8 +72,10 @@ the \fBseverity\fR its test last measured, in ITU-T
 X.733's words: red \fBcritical\fR, yellow \fBwarning\fR, green
 \fBcleared\fR, and \fBindeterminate\fR where nothing was measured -- a
 clear from xymonnet, a client test with no rule. Its \fBstate\fR is
-\fBfiring\fR, \fBsuppressed\fR for a test blue (disabled, or in a DOWNTIME
-window of hosts.cfg), or \fBinactive\fR for one green. Purple, clear and blue
+\fBfiring\fR, \fBpending\fR for a red or yellow reported while xymond still
+shows green (a change delay: delayyellow, or delayred with it), \fBsuppressed\fR for a
+test blue (disabled, or in a DOWNTIME window of hosts.cfg), or
+\fBinactive\fR for one green. Purple, clear and blue
 are xymond's, not the test's: what xymond adds is said beside the
 severity -- \fBstale\fR for a test gone silent (purple);
 \fBunreachable\fR for one made clear because its host's conn is not green,
@@ -85,7 +87,9 @@ keeps them; for a DOWNTIME its \fBuntil\fR, read from hosts.cfg's DOWNTIME
 as xymond reads it, in the server's local time (left out when the window
 never ends; holidays play no part, xymond not loading holidays.cfg), and its
 cause as \fBtext\fR. A blue the test reported itself has no
-\fBsuppressedBy\fR. Where xymond shows another colour than the one reported
+\fBsuppressedBy\fR. \fBoverriddenBy\fR says, one entry each, a \fBflap\fR
+xymond holds a colour over (with its \fBsince\fR) and a \fBmodifier\fR in
+force (with its cause as \fBtext\fR). Where xymond shows another colour than the one reported
 -- a silence, a host down, a disable, a DOWNTIME, a change delay, a flap, a
 modifier -- the severity is the one reported. Needs xymond's
 \fBprevgapcolor\fR, Xymon 4.3.31.

@@ -41,7 +41,7 @@ end = now + 1800
 hhmm = lambda t: time.strftime("%H%M", time.localtime(t))
 print(hhmm(now - 300), hhmm(end), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(end + 60)))')
 dtw_window="conn:*:$1:$2:Window" dtw_until=$3
-printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 wdis.example.com # conn\n127.0.0.1 dtw.example.com # conn DOWNTIME='"$dtw_window"'\n127.0.0.1 wack.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n127.0.0.1 ino.example.com # inode\n' > "$work/hosts.cfg"
+printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 wdis.example.com # conn\n127.0.0.1 dtw.example.com # conn DOWNTIME='"$dtw_window"'\n127.0.0.1 wack.example.com # conn\n127.0.0.1 pend.example.com # conn delayred=conn:30 delayyellow=conn:30\n127.0.0.1 mod.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n127.0.0.1 ino.example.com # inode\n' > "$work/hosts.cfg"
 
 mkdir -p "$work/home/etc" "$work/home/tmp" "$work/home/www"
 # Xymon's own holidays.cfg, holidays as Sundays: xymond does not load it
@@ -98,6 +98,13 @@ send "status clr,example,com.conn clear Thu Nov 19 18:56:26 2026: no answer"
 # xymonnet's clear behind a host it cannot reach: red's conn is red.
 send "status red,example,com.ssh clear Ping failed, or dialup host"
 send "status dtw,example,com.conn red down"
+# A change to red deferred: delayred with delayyellow keeps it green.
+send "status pend,example,com.conn green up"
+send "status pend,example,com.conn red down"
+# A modifier turns a green conn red, as a DS rule's RRD handler does.
+send "status mod,example,com.conn green up"
+send "modify mod,example,com.conn red apitest response too slow"
+send "status mod,example,com.conn green up"
 # Red in a DOWNTIME window, all day: xymond records it blue, no disable set.
 send "status dt,example,com.conn red down"
 # A first line holding a "|", which the board does not encode in line1.
@@ -220,6 +227,15 @@ assert_contains '"suppressedBy":[{"kind":"downtime","of":"test","text":"Maint"' 
 assert_not_contains '"until"' "$(alarm dt.example.com:conn)" "all day every day, it never ends"
 assert_contains "\"suppressedBy\":[{\"kind\":\"downtime\",\"of\":\"test\",\"until\":\"$dtw_until\"" "$(alarm dtw.example.com:conn)" "a window read from hosts.cfg ends the minute after its end, holidays on or not"
 assert_contains '"text":"Window"' "$(alarm dtw.example.com:conn)" "with its cause"
+assert_contains '"severity":"critical","state":"pending"' "$(alarm pend.example.com:conn)" "a red still shown green by a change delay: critical, pending"
+assert_contains '"overriddenBy":[{"kind":"modifier","text":"response too slow"' "$(alarm mod.example.com:conn)" "a modifier in force says so, with its cause"
+assert_contains '"host":"mod.example.com"' "$(api_get '/alarms?overridden=true')" "overridden=true finds it"
+assert_not_contains '"host":"red.example.com"' "$(api_get '/alarms?overridden=true')" "and not an alarm shown as reported"
+assert_contains '"host":"disk.example.com"' "$(api_get '/alarms?state=firing&acknowledged=true')" "acknowledged=true finds the acknowledged"
+assert_not_contains '"host":"disk.example.com"' "$(api_get '/alarms?state=firing&acknowledged=false')" "acknowledged=false leaves it out"
+assert_contains '"host":"red.example.com","test":"conn"' "$(api_get '/alarms?state=firing&acknowledged=false')" "and keeps what nobody has in hand"
+assert_contains '"domain":"filesystem"' "$(api_get '/alarms?domain=filesystem')" "domain=filesystem gives the file systems"
+assert_not_contains '"domain":"network"' "$(api_get '/alarms?domain=filesystem')" "and only them"
 assert_not_contains '"suppressedBy"' "$(alarm red.example.com:conn)" "red is not suppressed"
 assert_contains '"severity":"indeterminate","state":"firing"' "$(alarm clr.example.com:conn)" "a clear with nothing behind it, indeterminate"
 assert_not_contains '"unreachable"' "$(alarm clr.example.com:conn)" "and not unreachable: no conn red, no colour kept behind it"
