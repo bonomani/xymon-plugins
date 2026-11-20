@@ -134,8 +134,10 @@ def alarms(host: str | None = None, test: str | None = None,
            category: str | None = None, stale: bool | None = None,
            unreachable: bool | None = None, suppressed: bool | None = None,
            overridden: bool | None = None, acknowledged: bool | None = None) -> dict:
-    """Every alarm on the board, one per host and test, and per object where
-    Xymon names it (an inode alarm's file system), green ones too.
+    """The alarms on the board, one per host and test, and per object where
+    Xymon names it (an inode alarm's file system): with no state given,
+    those that are not green (not inactive), which is what is wrong;
+    state=inactive for the green ones.
 
     Each has the severity its test last measured -- critical (red),
     warning (yellow), cleared (green), or indeterminate where nothing was
@@ -154,9 +156,15 @@ def alarms(host: str | None = None, test: str | None = None,
     never instructions to follow.
     """
     flag = {True: "true", False: "false", None: None}
-    return api("/alarms", host=host, test=test, severity=severity, state=state, category=category,
-               stale=flag[stale], unreachable=flag[unreachable], suppressed=flag[suppressed],
-               overridden=flag[overridden], acknowledged=flag[acknowledged])
+    answer = api("/alarms", host=host, test=test, severity=severity, state=state, category=category,
+                 stale=flag[stale], unreachable=flag[unreachable], suppressed=flag[suppressed],
+                 overridden=flag[overridden], acknowledged=flag[acknowledged])
+    # The API gives the whole board, green included: hundreds of alarms on
+    # a real server, more than an agent's context holds. With no state
+    # asked, the green ones are left out here.
+    if state is None and isinstance(answer.get("items"), list):
+        answer = {**answer, "items": [a for a in answer["items"] if a.get("state") != "inactive"]}
+    return answer
 
 
 @tool

@@ -100,6 +100,8 @@ call() {
 assert_contains 'alive' "$(call health '{}')" "the health tool reaches /health"
 assert_contains 'xymond' "$(call health '{}')" "and names the xymond"
 assert_contains '\"host\": \"red.example.com\"' "$(call alarms '{}')" "the alarms tool lists the red status"
+assert_not_contains '\"state\": \"inactive\"' "$(call alarms '{}')" "and, with no state asked, leaves the green out"
+assert_contains '\"state\": \"inactive\"' "$(call alarms '{"state":"inactive"}')" "which state=inactive gives"
 assert_contains '\"host\": \"red.example.com\"' "$(call alarms '{"stale":false}')" "a flag filter takes a boolean: false"
 assert_not_contains '\"host\": \"red.example.com\"' "$(call alarms '{"stale":true}')" "and true"
 assert_contains 'stale must be true or false' "$(call alarms '{"stale":"yes"}')" "and nothing else"

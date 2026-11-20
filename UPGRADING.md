@@ -59,9 +59,11 @@ naming it and those the operation takes (openapi.yaml, C2): it was
 ignored, so `/states?entity=web1` answered the whole board and
 `/series?start=-2h` the last 24 hours.
 
-**The MCP server** (xymonapi-mcp 0.3.0) follows: its tools `alarms` (with
+**The MCP server** (xymonapi-mcp 0.3.1) follows: its tools `alarms` (with
 the same filters) and `alarm` by id; `states`, `status` and `entities` are
-gone, `hosts` in their place for the last.
+gone, `hosts` in their place for the last. With no `state` asked, its
+`alarms` leaves the green ones out -- the whole board is more than an
+agent's context holds -- and `state=inactive` gives them.
 
 What to do: read `/alarms?state=firing` where you read `/alarms`, and
 `/alarms` where you read `/states`; `severity` and `state` in place of
