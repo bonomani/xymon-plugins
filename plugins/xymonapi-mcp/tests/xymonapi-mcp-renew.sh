@@ -69,6 +69,7 @@ health() { send "{\"jsonrpc\":\"2.0\",\"id\":$1,\"method\":\"tools/call\",\"para
 
 send '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}'
 assert_contains '"serverInfo"' "$(reply 1)" "the server starts"
+assert_contains '"listChanged":true' "$(reply 1)" "and says its tools may change under the connection"
 send '{"jsonrpc":"2.0","method":"notifications/initialized"}'
 
 # The URL kept, read at each call.
@@ -80,11 +81,16 @@ r=$(health 3)
 assert_contains '\"api\"' "$r" "the URL kept right: the next call reaches the API, no reconnecting"
 assert_not_contains '"isError":true' "$r" "and is no error"
 
+assert_not_contains 'notifications/tools/list_changed' "$(cat "$work/out")" "no update yet: no list_changed"
+
 # An update of its code, between two requests: run in its place.
 "$work/v2/xymon-plugin" update --tools xymonapi-mcp </dev/null >"$work/x.log" 2>&1 \
 	|| fail "update to v2 failed: $(tail -n 3 "$work/x.log")"
 send '{"jsonrpc":"2.0","id":4,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}'
 assert_contains '"version":"9.9.9"' "$(reply 4)" "the request read after an update is answered by the new code"
+after4=$(sed -n '/"id":4[,}]/,$p' "$work/out")
+assert_contains '{"jsonrpc":"2.0","method":"notifications/tools/list_changed"}' "$after4" \
+	"then the client is told its tools may have changed, to list them again with no reconnecting"
 kill -0 "$SPID" 2>/dev/null || fail "the server's process is gone"
 assert_not_contains '"isError":true' "$(health 5)" "and the same connection goes on"
 
@@ -96,5 +102,6 @@ assert_contains 'the code installed since does not start' "$r" "new code that do
 assert_contains '/mcp in Claude Code reconnects it' "$r" "naming /mcp"
 send '{"jsonrpc":"2.0","id":7,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}'
 assert_contains '"version":"9.9.9"' "$(reply 7)" "and the code it runs is the one that started"
+assert_equal 1 "$(grep -c 'notifications/tools/list_changed' "$work/out")" "with no second list_changed: its tools did not change"
 
-pass "an MCP server already running reads the URL kept at each call, runs an update's code in its place on the same connection, and stays, saying so, on code that does not start"
+pass "an MCP server already running reads the URL kept at each call, runs an update's code in its place on the same connection and tells the client to list its tools again, and stays, saying so, on code that does not start"

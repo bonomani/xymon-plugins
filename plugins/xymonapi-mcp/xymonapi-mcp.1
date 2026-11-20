@@ -24,7 +24,10 @@ yours, as the command xymonapi-mcp, with its version in VERSION beside it.
 It is written for the xymonapi version its PLUGIN file names; when the
 API's /health gives an older one, every answer carries a "warning" field
 saying so, and stderr says it once. A newer API is taken as it is. Nothing
-is updated on its own, on either side.
+is updated on its own, on either side. A server already running takes an
+update of its code in its place, on the same connection, and tells its
+client to list its tools again (MCP's notifications/tools/list_changed); a
+client that does not act on it sees the new tools once it reconnects.
 
 .SH REGISTERING
 \fBxymonapi-mcp register URL [NAME]\fR connects this machine to the API at

@@ -260,7 +260,9 @@ def answer(msg: dict) -> dict | None:
     if method == "initialize":
         asked = params.get("protocolVersion")
         return {"protocolVersion": asked if asked in VERSIONS else VERSIONS[0],
-                "capabilities": {"tools": {"listChanged": False}},
+                # The tools may change under a running connection: renew()
+                # below runs an update's code in place, which says so.
+                "capabilities": {"tools": {"listChanged": True}},
                 "serverInfo": {"name": "xymon", "version": VERSION},
                 "instructions": INSTRUCTIONS}
     if method == "tools/list":
@@ -360,6 +362,10 @@ def main() -> None:
     pending = os.environ.pop("XYMONAPI_MCP_PENDING", None)
     if pending is not None:
         handle(pending)
+        # Started by renew(), as an update's code: its tools may not be the
+        # ones the client listed. Told so, the client lists them again
+        # (MCP, notifications/tools/list_changed), with no reconnecting.
+        send({"method": "notifications/tools/list_changed"})
     raw = sys.stdin.buffer.raw
     while True:
         line = raw.readline()
