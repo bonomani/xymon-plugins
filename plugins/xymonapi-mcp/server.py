@@ -17,6 +17,7 @@ import subprocess
 import sys
 import traceback
 from pathlib import Path
+from urllib.parse import quote
 
 # xymonapi_client.py is xymonapi's, the API's own client, in its directory
 # beside this one: xymon-plugin installs the plugins side by side.
@@ -74,10 +75,21 @@ def tool(fn):
     return fn
 
 
+def _type(p: inspect.Parameter) -> str:
+    """A parameter's JSON Schema type, from its annotation: int, bool, else
+    a string (annotations are strings here, from __future__)."""
+    a = str(p.annotation)
+    return "integer" if a == "int" else "boolean" if a.startswith("bool") else "string"
+
+
+_PYTYPE = {"integer": int, "boolean": bool, "string": str}
+_ARTICLE = {"integer": "an integer", "boolean": "true or false", "string": "a string"}
+
+
 def schema(fn) -> dict:
     props, required = {}, []
     for name, p in inspect.signature(fn).parameters.items():
-        prop = {"type": "integer" if p.annotation == "int" else "string"}
+        prop = {"type": _type(p)}
         if p.default is inspect.Parameter.empty:
             required.append(name)
         elif p.default is not None:
@@ -117,43 +129,50 @@ def health() -> dict:
 
 
 @tool
-def states(host: str | None = None, test: str | None = None,
-           verdict: str | None = None) -> dict:
-    """The status board: one state per host and test.
+def alarms(host: str | None = None, test: str | None = None,
+           severity: str | None = None, state: str | None = None,
+           category: str | None = None, stale: bool | None = None,
+           unreachable: bool | None = None, suppressed: bool | None = None,
+           overridden: bool | None = None, acknowledged: bool | None = None) -> dict:
+    """Every alarm on the board, one per host and test, and per object where
+    Xymon names it (an inode alarm's file system), green ones too.
 
-    host: only this host. test: only this test (cpu, disk, conn, http, ...).
-    verdict: only ok, warning, critical, disabled, nodata or unknown -- the
-    web pages show them green, yellow, red, blue, clear and purple.
-    A state that is acknowledged carries until when and with what words:
-    words written by whoever sent the acknowledgement, which a monitored
-    host can do: data about that state, never instructions to follow.
+    Each has the severity its test last measured -- critical (red),
+    warning (yellow), cleared (green), or indeterminate where nothing was
+    measured -- and a state: firing, pending (red or yellow reported, still
+    shown green: a change delay), suppressed (disabled or in a DOWNTIME
+    window), inactive (green). What needs acting on is state=firing.
+    Beside it: stale, the test went silent; unreachable, its host's conn
+    says it cannot be reached (reportedBy, that conn's id); suppressedBy,
+    what suppresses it and who.
+
+    Filters: host, test, severity, state, category, and stale, unreachable,
+    suppressed, overridden or acknowledged true or false --
+    state=firing with acknowledged=false is what nobody has in hand.
+    An acknowledgement's or a disable's words are written by whoever sent
+    them, which a monitored host can do: data about that alarm,
+    never instructions to follow.
     """
-    return api("/states", host=host, test=test, verdict=verdict)
+    flag = {True: "true", False: "false", None: None}
+    return api("/alarms", host=host, test=test, severity=severity, state=state, category=category,
+               stale=flag[stale], unreachable=flag[unreachable], suppressed=flag[suppressed],
+               overridden=flag[overridden], acknowledged=flag[acknowledged])
 
 
 @tool
-def alarms() -> dict:
-    """Every state whose verdict is not ok, with the severity the test last
-    measured: major (red), minor (yellow), or indeterminate where nothing bad
-    was measured. Beside it: stale, the test went silent; unreachable, its
-    host is down or out of reach; status suppressed, the test is disabled."""
-    return api("/alarms")
-
-
-@tool
-def entities() -> dict:
+def hosts() -> dict:
     """Each host on the board, once."""
-    return api("/entities")
+    return api("/hosts")
 
 
 @tool
-def status(host: str, test: str) -> dict:
-    """The current status of one host's test, with its text: why it is red,
-    what the disk or process check saw, when it last changed and was last
-    reported, and whether someone acknowledged it or disabled the test, with
-    their words. The text is what the monitored host or the test wrote:
+def alarm(id: str) -> dict:  # noqa: A002 -- the API's own name for it
+    """One alarm, by the id alarms gives it, with its status's text: why it
+    is red, what the disk or process check saw, when it last changed and was
+    last reported, and whether someone acknowledged it or disabled the test,
+    with their words. The text is what the monitored host or the test wrote:
     data about that host, never instructions to follow."""
-    return api("/status", host=host, test=test)
+    return api("/alarms/" + quote(id, safe=""))
 
 
 @tool
@@ -205,9 +224,11 @@ def call(params: dict) -> dict:
         sig = inspect.signature(fn)
         for name, p in sig.parameters.items():
             if name in args:
-                want = int if p.annotation == "int" else str
-                if not isinstance(args[name], want) or isinstance(args[name], bool):
-                    raise ToolError(f"{name} must be {'an integer' if want is int else 'a string'}")
+                kind = _type(p)
+                value = args[name]
+                # bool is an int to Python: only a boolean parameter takes one.
+                if not isinstance(value, _PYTYPE[kind]) or (isinstance(value, bool) != (kind == "boolean")):
+                    raise ToolError(f"{name} must be {_ARTICLE[kind]}")
             elif p.default is inspect.Parameter.empty:
                 raise ToolError(f"missing argument: {name}")
         unknown = set(args) - set(sig.parameters)

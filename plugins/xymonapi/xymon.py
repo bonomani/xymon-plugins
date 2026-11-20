@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import json
 import os
 import re
@@ -36,16 +37,24 @@ XYMONHISTLOGS = os.environ.get("XYMONHISTLOGS", "")
 # encodes a "|" inside ackmsg and acklist, so a line still splits on it.
 # prevgapcolor (Xymon 4.3.31) is the test's own colour while xymond shows
 # another -- purple for a silence, clear for a host down, blue for a
-# disable -- and "none" at every other time. disabletime is when a disable
-# ends, -1 until the test is ok again, and 0 when none runs: a blue status
-# with 0 is a DOWNTIME's (xymond.c, the rewrite in handle_status), a blue
-# one with any other a disable's. logtime is when the status was last
-# reported, sender who sent it. line1, the status's first line, is not
-# encoded and may hold a "|": it comes last, and a line splits on the
-# fields before it only.
+# disable or a DOWNTIME, and any colour a change delay, a flap or a
+# modifier puts in place of the one reported (xymond.c: the gap opens
+# whenever the colour shown is not the one reported) -- and "none" at every
+# other time. disabletime is when a disable ends, -1 until the test is ok
+# again, and 0 when none runs; dismsg is a disable's text, or a DOWNTIME's
+# cause when no disable runs. logtime is when the status was last updated,
+# sender who sent it. flapinfo is "FLAPPING/LATEST/FIRST/OLD/CURRENT",
+# FLAPPING 1 while xymond holds a colour over a test that flaps; modifiers
+# the causes of the modifiers in force, "&COLOUR CAUSE" each, encoded. line1, the status's first
+# line, is not encoded and may hold a "|": it comes last, and a line splits
+# on the fields before it only.
 BOARD_FIELDS = ["hostname", "testname", "color", "lastchange",
                 "acktime", "ackmsg", "acklist", "prevgapcolor", "disabletime",
-                "logtime", "sender", "line1"]
+                "dismsg", "logtime", "sender", "flapinfo", "modifiers", "line1"]
+# What hosts.cfg says of each host, from xymond's hostinfo, which encodes
+# them (xymondboard does not, and a DOWNTIME's cause may hold a "|"):
+# dialup, empty without it, and the DOWNTIME tag.
+HOST_FIELDS = ["XMH_HOSTNAME", "XMH_FLAG_DIALUP", "XMH_DOWNTIME"]
 
 # A name from the request becomes part of a file path, so it may not hold
 # "/" or "..": a path outside XYMONRRDS. A host name never holds ":" either;
@@ -79,16 +88,31 @@ class Upstream(RuntimeError):
 # A verdict, never a colour: the colour is how the web pages show it.
 COLOUR_STATUS = {"green": "ok", "yellow": "warning", "red": "critical",
                  "blue": "disabled", "clear": "nodata", "purple": "unknown"}
-# What a test measured, as a severity in ITU-T X.733's words. Purple, clear
-# and blue are xymond's, not the test's: an alarm keeps the severity last
-# measured and says beside it what xymond added (RFC #113, version 2).
-COLOUR_SEVERITY = {"red": "major", "yellow": "minor"}
 VERDICTS = tuple(dict.fromkeys(COLOUR_STATUS.values()))
-# The domain a test lies in, the label that groups alarms (RFC #113): read
-# from this table, and the test itself where the table says nothing -- so a
-# network service (ssh, smtp, dns) or a script's own test is its own domain.
+# What a test measured, as a severity in ITU-T X.733's words: red critical
+# ("immediate corrective action"), yellow warning, green cleared, and
+# indeterminate where nothing was measured. Purple, clear and blue are
+# xymond's, not the test's: a state keeps the severity last measured, and
+# says beside it what xymond added (RFC #113).
+COLOUR_SEVERITY = {"red": "critical", "yellow": "warning", "green": "cleared"}
+SEVERITIES = ("critical", "warning", "indeterminate", "cleared")
+# An alarm's state, as Prometheus and TMF642 name the field: firing and
+# suppressed as Alertmanager has them; inactive, Prometheus's word for a rule
+# that is not firing, for a green test; pending, its word for a condition
+# not held long enough yet, for a red or yellow reported while xymond still
+# shows green -- a change delay: delayyellow, or delayred with it (delayred
+# alone shows yellow meanwhile, and that is firing, as Xymon alerts on it).
+STATES = ("firing", "pending", "suppressed", "inactive")
+# What an alarm may carry beside its severity, each a true or false filter
+# of /alarms, and the field it reads.
+FLAGS = {"stale": "stale", "unreachable": "unreachable", "suppressed": "suppressedBy",
+         "overridden": "overriddenBy", "acknowledged": "acknowledged"}
+# The category a test lies in, a label that groups alarms and identifies
+# nothing, given as labels.category as Alertmanager gives labels: read from
+# this table, and the test itself where the table says nothing -- so a
+# network service (ssh, smtp, dns) or a script's own test is its own.
 # ponytail: a fixed table; one an admin can extend when a site asks for it.
-DOMAIN = {"cpu": "cpu", "memory": "memory",
+CATEGORY = {"cpu": "cpu", "memory": "memory",
           "disk": "filesystem", "inode": "filesystem", "files": "filesystem",
           "msgs": "log", "procs": "process", "svcs": "os-service",
           "ports": "network", "conn": "network",
@@ -123,79 +147,121 @@ def _rows() -> list[dict]:
             for line in board.splitlines() if line.strip()]
 
 
+def _hosts_cfg() -> dict[str, dict]:
+    """HOST_FIELDS for each host, by name."""
+    out = {}
+    for line in query(f"hostinfo fields={','.join(HOST_FIELDS)}").splitlines():
+        f = [_nldecode(v) for v in line.split("|")]
+        if len(f) == len(HOST_FIELDS):
+            out[f[0]] = dict(zip(HOST_FIELDS, f))
+    return out
+
+
 def _iso(epoch: str) -> str | None:
+    """EPOCH as an ISO time; None for none, xymond's 0 among them -- a test
+    such as trends that never changed, not a change in 1970."""
     try:
-        return datetime.fromtimestamp(int(epoch), timezone.utc) \
-            .isoformat().replace("+00:00", "Z")
+        n = int(epoch)
+        return datetime.fromtimestamp(n, timezone.utc).isoformat().replace("+00:00", "Z") if n > 0 else None
     except (ValueError, TypeError, OSError, OverflowError):
         return None
 
 
-def states(host: str | None = None, test: str | None = None,
-           verdict: str | None = None) -> list[dict]:
-    """One State per host and test on the board."""
-    # A verdict outside the contract's list matches no state: refused, not
-    # an empty board -- "verdict=red", a colour where a verdict is asked,
-    # would read as "nothing is red" (#92).
-    if verdict and verdict not in VERDICTS:
-        raise BadRequest(f"verdict must be one of {', '.join(VERDICTS)}, not a colour")
-    out: list[dict] = []
-    now = int(time.time())
-    for d in _rows():
-        h, tst = d.get("hostname", "?"), d.get("testname", "?")
-        st = {"id": f"{h}:{tst}", "host": h, "test": tst,
-              "verdict": COLOUR_STATUS.get(d.get("color", "clear"), "unknown")}
-        t = _iso(d.get("lastchange", ""))
-        if t:
-            st["time"] = t
-        ack = _acknowledgement(d, now)
-        if ack:
-            st["acknowledged"] = ack
-        out.append(st)
-    if host:
-        out = [s for s in out if s["host"] == host]
-    if test:
-        out = [s for s in out if s["test"] == test]
-    if verdict:
-        out = [s for s in out if s["verdict"] == verdict]
+def alarms(host: str | None = None, test: str | None = None,
+           severity: str | None = None, state: str | None = None,
+           category: str | None = None, **flags: str | None) -> list[dict]:
+    """One Alarm per host and test on the board, green ones too, as TMF642
+    keeps a cleared alarm -- one per object, where its status names them --
+    with the severity it last measured, its state, and, beside it,
+    what xymond added: stale for a test gone silent (purple), unreachable
+    for one made clear because its host's conn is not green (reportedBy that
+    conn's state), suppressed for one disabled or in a DOWNTIME window
+    (blue), with suppressedBy saying which, until when, by whom and why,
+    where Xymon keeps it. Filtered on each argument given; a flag's filter
+    is true or false."""
+    # A value outside the contract's list matches nothing: refused, not an
+    # empty board -- "severity=red", a colour where a severity is asked,
+    # would read as "nothing is red" (#92). An empty one is refused too: it
+    # would read as no filter, the whole board.
+    for name, value in (("host", host), ("test", test), ("severity", severity),
+                        ("state", state), ("category", category)):
+        if value == "":
+            raise BadRequest(f"{name} is empty")
+    if severity and severity not in SEVERITIES:
+        raise BadRequest(f"severity must be one of {', '.join(SEVERITIES)}, not a colour")
+    if state and state not in STATES:
+        raise BadRequest(f"state must be one of {', '.join(STATES)}")
+    for flag, value in flags.items():
+        if value is not None and value not in ("true", "false"):
+            raise BadRequest(f"{flag} must be true or false")
+    out = [st for st in _states()
+           if (not host or st["host"] == host) and (not test or st["test"] == test)
+           and (not severity or st["severity"] == severity)
+           and (not state or st["state"] == state)
+           and (not category or st["labels"]["category"] == category)]
+    for flag, value in flags.items():
+        if value is not None:
+            out = [st for st in out if (FLAGS[flag] in st) == (value == "true")]
     return out
 
 
-def alarms() -> list[dict]:
-    """Every state that is not ok, as an Alarm: the severity the test last
-    measured, and what xymond adds said beside it -- stale for a test gone
-    silent (purple), unreachable for one whose host is down or that
-    xymonnet could not reach (clear: a colour of its own kept behind it, or
-    its host's conn red), suppressed for one disabled or in a
-    DOWNTIME window (blue), with suppressedBy saying which.
-    Where nothing was measured that is not ok -- a clear from xymonnet, a
-    test that was green -- the severity is indeterminate."""
+_ID = re.compile(r"[0-9a-f]{16}")
+
+
+def alarm(alarm_id: str) -> dict:
+    """The Alarm ALARM_ID, with its status's text: what the web page shows."""
+    if not _ID.fullmatch(alarm_id):
+        raise NotFound(f"no alarm {alarm_id}")
+    for a in alarms():
+        if a["id"] == alarm_id:
+            return {**a, "text": _status_text(a["host"], a["test"])}
+    raise NotFound(f"no alarm {alarm_id}")
+
+
+def _states() -> list[dict]:
     res: list[dict] = []
     now = int(time.time())
     rows = _rows()
-    # A host xymonnet cannot reach: its conn is red, and its other network
-    # tests are made clear behind it. A clear on a host whose conn is not
-    # red -- a client test with no rule, no data -- says nothing of reach.
-    down = {d.get("hostname") for d in rows if d.get("testname") == "conn" and d.get("color") == "red"}
+    hosts = _hosts_cfg()
+    # xymond makes a silent test clear, not purple, when its host's conn is
+    # not green (xymond.c, "go CLEAR, instead of PURPLE"), and xymonnet its
+    # network tests when the conn fails: that conn is what says the host
+    # cannot be reached. A dialup host's tests go clear because it is one,
+    # nothing failed: not unreachable.
+    conn = {d.get("hostname"): d.get("color") for d in rows if d.get("testname") == "conn"}
+    ends: dict[tuple[str, str], int | None] = {}
+    texts: dict[tuple[str, str], str] | None = None
     for d in rows:
         colour = d.get("color", "clear")
-        if COLOUR_STATUS.get(colour, "unknown") == "ok":
-            continue
         host, tst = d.get("hostname", "?"), d.get("testname", "?")
-        own = colour if colour in COLOUR_SEVERITY else d.get("prevgapcolor", "none")
-        a = {"id": f"{host}:{tst}", "host": host, "test": tst,
-             "domain": DOMAIN.get(tst, tst),
+        cfg = hosts.get(host, {})
+        # The colour the test reported, where xymond shows another: a gap is
+        # open, its colour in prevgapcolor. Otherwise the one shown is it.
+        gap = d.get("prevgapcolor", "none") not in ("", "none")
+        own = d["prevgapcolor"] if gap else colour
+        a = {"host": host, "test": tst,
+             "labels": {"category": CATEGORY.get(tst, tst)},
              "severity": COLOUR_SEVERITY.get(own, "indeterminate"),
-             "status": "suppressed" if colour == "blue" else "firing"}
+             "state": {"blue": "suppressed", "green": "inactive"}.get(colour, "firing")}
+        if colour == "green" and own in ("red", "yellow"):
+            a["state"] = "pending"
         t = _iso(d.get("lastchange", ""))
         if t:
             a["since"] = t
-        if colour == "purple":
+        if colour == "purple" and gap:
+            # xymond's purple, the test gone silent; a purple a client sent
+            # itself is a report, not a silence.
             a["stale"] = {"since": t}
-        elif colour == "clear" and (d.get("prevgapcolor", "none") not in ("", "none") or host in down):
-            a["unreachable"] = True
+        elif (colour == "clear" and tst != "conn" and not cfg.get("XMH_FLAG_DIALUP")
+              and conn.get(host, "green") in ("red", "yellow", "blue", "clear")):
+            a["unreachable"] = {"reportedBy": [_state_id({"host": host, "test": "conn"})]}
         elif colour == "blue":
-            a["suppressedBy"] = "downtime" if d.get("disabletime", "0") in ("", "0") else "disable"
+            by = _suppressed_by(d, cfg.get("XMH_DOWNTIME", ""), tst, own, now, ends)
+            if by:
+                a["suppressedBy"] = by
+        over = _overridden_by(d)
+        if over:
+            a["overriddenBy"] = over
         updated = _iso(d.get("logtime", ""))
         if updated:
             a["updated"] = updated
@@ -209,9 +275,147 @@ def alarms() -> list[dict]:
             # Xymon acknowledges a test, all it holds: say so, for the day
             # one instance is acknowledged on its own (RFC #113).
             a["acknowledged"] = {**ack, "of": "test"}
-        a["link"] = "status?" + urlencode({"host": host, "test": tst})
-        res += _instances(a) if tst in _INSTANCE_TESTS else [a]
-    return res
+        if tst in _INSTANCE_TESTS and a["severity"] != "cleared":
+            if texts is None:
+                texts = _texts(_INSTANCE_TESTS)
+            res += _instances(a, texts.get((host, tst), ""))
+        else:
+            res.append(a)
+    out = []
+    for a in res:
+        i = _state_id(a)
+        out.append({"id": i, **a, "link": f"alarms/{i}"})
+    return out
+
+
+def _overridden_by(d: dict) -> list[dict]:
+    """What makes xymond show another colour than the test reported, but a
+    silence, a host down, a suppression or a delay -- which stale,
+    unreachable, suppressedBy and pending say: a flap xymond holds a colour
+    over, since its first change, and the modifiers in force, with their
+    cause (xymon(1), modify)."""
+    over = []
+    flap = d.get("flapinfo", "").split("/")
+    if len(flap) == 5 and flap[0] == "1":
+        entry = {"kind": "flap"}
+        since = _iso(flap[2])
+        if since:
+            entry["since"] = since
+        over.append(entry)
+    # xymond keeps each modifier's cause as "&COLOUR CAUSE", a line each.
+    for line in _nldecode(d.get("modifiers", "")).splitlines():
+        cause = hide(re.sub(r"\A&[a-z]+\s*", "", line.strip())).strip()
+        if cause:
+            over.append({"kind": "modifier", "text": cause})
+    return over
+
+
+def _suppressed_by(d: dict, downtime: str, tst: str, own: str, now: int,
+                   ends: dict[tuple[str, str], int | None]) -> list[dict]:
+    """What suppresses a blue test, one entry each, a field Xymon does not
+    keep left out: a disable (disabletime set), with its end and words; a
+    DOWNTIME, with its end and its cause. xymond keeps that cause in dismsg
+    when no disable runs, and only then: a dismsg with no disable is a
+    DOWNTIME's. Under a disable, a DOWNTIME window of hosts.cfg holding the
+    test now over a red, yellow or purple report -- the only ones xymond
+    applies it to -- is one too. A blue the test reported itself has
+    neither: nothing is said of why."""
+    by = []
+    until = d.get("disabletime", "0")
+    disabled = until not in ("", "0")
+    if disabled:
+        entry = {"kind": "disable", "of": "test"}
+        if until != "-1" and _iso(until):
+            entry["until"] = _iso(until)
+        entry.update(_disable_words(d.get("dismsg", "")))
+        by.append(entry)
+    cause = "" if disabled else hide(_nldecode(d.get("dismsg", ""))).strip()
+    if cause or (downtime and own in ("red", "yellow", "purple") and
+                 _downtime_holds(downtime, tst, time.localtime(now - now % 60))):
+        entry = {"kind": "downtime", "of": "test"}
+        key = (downtime, tst)
+        if key not in ends:
+            ends[key] = _downtime_until(downtime, tst, now)
+        if ends[key]:
+            entry["until"] = _iso(str(ends[key]))
+        if cause:
+            entry["text"] = cause
+        by.append(entry)
+    return by
+
+
+def _downtime_until(spec: str, test: str, now: int) -> int | None:
+    """When the DOWNTIME window SPEC holding TEST at NOW ends: the first
+    minute xymond no longer finds TEST in it, as check_downtime and
+    within_sla read it (xymond.c, timefunc.c), in this machine's local
+    time, which is xymond's. None when it does not hold TEST now, or holds
+    it for the week ahead and more -- a window that never ends. Holidays
+    play no part: xymond never loads holidays.cfg (only xymond_alert and
+    the info page do), whatever hosts.cfg(5) says.
+    ponytail: a minute at a time over 8 days, 11520 steps; fine per blue test."""
+    start = now - now % 60
+    if not _downtime_holds(spec, test, time.localtime(start)):
+        return None
+    for t in range(start + 60, start + 8 * 86400, 60):
+        if not _downtime_holds(spec, test, time.localtime(t)):
+            return t
+    return None
+
+
+def _downtime_holds(spec: str, test: str, t: time.struct_time) -> bool:
+    """Whether xymond's check_downtime finds TEST in the DOWNTIME SPEC at T:
+    entries "DAYS:START:END" (every test) or "TESTS:DAYS:START:END:CAUSE",
+    split as xymond splits them."""
+    def cut(p: str, stops: str) -> tuple[str, str, str]:
+        i = next((n for n, c in enumerate(p) if c in stops), len(p))
+        return p[:i], p[i:i + 1], p[i + 1:]
+    p = spec
+    while p:
+        s1, _, p = cut(p, ":")
+        s2, _, p = cut(p, ":")
+        s3, stop, p = cut(p, ":;,")
+        if stop == ":":
+            s4, _, p = cut(p, ":")
+            _, _, p = cut(p, ",;")
+            timetxt, tests = f"{s2}:{s3}:{s4}", s1
+        else:
+            timetxt, tests = f"{s1}:{s2}:{s3}", "*"
+        if _within_sla(timetxt, t) and (tests == "*" or test in tests.split(",")):
+            return True
+    return False
+
+
+def _within_sla(timespec: str, t: time.struct_time) -> bool:
+    """xymond's within_sla as xymond runs it, holidays never loaded:
+    "DAYS:HHMM:HHMM[,...]", DAYS of
+    * (every day), W (Monday to Friday), 0 to 6 (Sunday to Saturday); start
+    and end both inside, an end before the start crossing midnight."""
+    def minutes(p: str) -> int:
+        return int(p[:2]) * 60 + int(p[2:4]) if len(p) >= 4 and p[:4].isdigit() else 0
+    wday, now = (t.tm_wday + 1) % 7, t.tm_hour * 60 + t.tm_min
+    for one in timespec.split(","):
+        days, _, times = one.partition(":")
+        match = False
+        for c in days:
+            if c == "*" or (c in "Ww" and 1 <= wday <= 5) or c == str(wday):
+                match = True
+                break
+            if c not in "0123456Ww":
+                break
+        begin, sep, end = times.partition(":")
+        if match and sep:
+            b, e = minutes(begin), minutes(end)
+            if (b <= now <= e) if e > b else (now >= b or now <= e):
+                return True
+    return False
+
+
+def _state_id(a: dict) -> str:
+    """A state's id: opaque, the same while its host, test and instance are
+    (RFC #113: not composed from the levels, which an instance's ":" would
+    make ambiguous)."""
+    key = "\0".join((a["host"], a["test"], a.get("instance", "")))
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
 # The tests whose status names each object it judged: xymond writes inode's
@@ -225,14 +429,25 @@ _ID_LINE = re.compile(r"^&(red|yellow) <!-- ID=(.+?) -->\s*(.*)$", re.M)
 _PCT = re.compile(r"\((\d+)% used\) has reached the (PANIC|WARNING) level \((\d+)%\)")
 
 
-def _instances(alarm: dict) -> list[dict]:
-    """ALARM, one per object its status names in alarm, each with its
-    instance, the severity of its own line and, where the line gives them,
-    its pct and the threshold it crossed. ALARM itself when none is named."""
-    board = query(f"xymondboard host=^{re.escape(alarm['host'])}$ "
-                  f"test=^{re.escape(alarm['test'])}$ fields=msg")
+def _texts(tests: set[str]) -> dict[tuple[str, str], str]:
+    """The status text of every test in TESTS, by host and test, encoded as
+    the board gives it: one query for them all, not one per alarm."""
+    names = "|".join(re.escape(t) for t in sorted(tests))
+    out = {}
+    for line in query(f"xymondboard test=^({names})$ fields=hostname,testname,msg").splitlines():
+        f = line.split("|", 2)
+        if len(f) == 3:
+            out[(f[0], f[1])] = f[2]
+    return out
+
+
+def _instances(alarm: dict, msg: str) -> list[dict]:
+    """ALARM, one per object its status text MSG names in alarm, each with
+    its instance, the severity of its own line and, where the line gives
+    them, its pct and the threshold it crossed. ALARM itself when none is
+    named."""
     out = []
-    for colour, name, words in _ID_LINE.findall(_nldecode(board)):
+    for colour, name, words in _ID_LINE.findall(_nldecode(msg)):
         # The line's colour is what the test measured of that object when it
         # last reported, whatever xymond shows over it since.
         a = {**alarm, "instance": name, "severity": COLOUR_SEVERITY[colour],
@@ -267,18 +482,12 @@ def _message(line1: str) -> str:
     return hide(_LINE1_DATE.sub("", words, count=1).strip()[:_MESSAGE_MAX])
 
 
-def entities() -> list[dict]:
+def hosts() -> list[dict]:
     """Each host on the board, once."""
-    seen: dict[str, dict] = {}
-    for d in _rows():
-        host = d.get("hostname", "?")
-        seen.setdefault(host, {"id": host, "composition": "measured",
-                               "labels": {"role": "host"}})
-    return list(seen.values())
+    return [{"host": h} for h in dict.fromkeys(d.get("hostname", "?") for d in _rows())]
 
 
-_STATUS_FIELDS = ["hostname", "testname", "color", "lastchange", "logtime",
-                  "acktime", "disabletime", "ackmsg", "dismsg", "acklist", "msg"]
+_STATUS_FIELDS = ["hostname", "testname", "msg"]
 _STATUS_MAX = 1024 * 1024
 
 # XYMONAPI_HIDE names a file of regular expressions, one per line; what they
@@ -330,8 +539,9 @@ def _nldecode(text: str) -> str:
 
 
 def _acknowledgement(d: dict, now: int) -> dict | None:
-    """The acknowledgement running on a board line, as /states and /status
-    both give it -- {"until", "text"} -- or None.
+    """The acknowledgement running on a board line, as /alarms
+    gives it -- {"until", "text"}, and "since" when xymond kept its
+    start -- or None.
 
     xymond clears an acknowledgement that ran out only when the next status
     arrives; until then the board still carries it, and its XML output too
@@ -339,7 +549,8 @@ def _acknowledgement(d: dict, now: int) -> dict | None:
     xymondack sets acktime and ackmsg; the critical-systems view's ackinfo
     adds to acklist, one "start:until:level:by:text" line each, acktime left
     at 0. Xymon's pages show either (xymongen/loaddata.c); the one running
-    longest is given.
+    longest is given. xymondack keeps no start (xymond.c: acktime is now
+    plus its duration); an acklist line does, its first field.
 
     An acklist line's text is given as "by:text", whole: neither field is
     escaped, so a "by" holding a ":" -- dom:alice -- cannot be told from the
@@ -347,56 +558,72 @@ def _acknowledgement(d: dict, now: int) -> dict | None:
     acks = []
     acktime = d.get("acktime", "")
     if _DIGITS.fullmatch(acktime) and int(acktime) > now:
-        acks.append((int(acktime), _nldecode(d.get("ackmsg", ""))))
+        acks.append((int(acktime), _nldecode(d.get("ackmsg", "")), ""))
     for line in _nldecode(d.get("acklist", "")).splitlines():
         a = line.split(":", 3)
         if len(a) == 4 and _DIGITS.fullmatch(a[1]) and int(a[1]) > now:
-            acks.append((int(a[1]), a[3]))
+            acks.append((int(a[1]), a[3], a[0]))
     if not acks:
         return None
-    until, words = max(acks)
-    return {"until": _iso(str(until)), "text": hide(words)}
+    until, words, start = max(acks)
+    ack = {"until": _iso(str(until))}
+    since = _iso(start)
+    if since:
+        ack["since"] = since
+    # The web page's acknowledgement ends its words with who made it, and
+    # from where (web/acknowledge.c), which Xymon's own feed reads back
+    # (web/appfeed.c, AckedBy): read here too. An acklist line's who is not split
+    # from its words, above.
+    m = _ACKED_BY.match(words) if not start else None
+    if m:
+        ack["ackedBy"] = hide(m[2].strip())
+        if m[3]:
+            ack["from"] = hide(m[3])
+        words = m[1]
+    ack["text"] = hide(words.strip())
+    return ack
 
 
-def status(host: str | None, test: str | None) -> dict:
-    """The current status of HOST's TEST: its verdict, when it last changed
-    and was last updated, whether it is acknowledged or disabled and with
-    what words, and the status text itself -- what the web page shows."""
-    host, tst = _name(host, "host"), _name(test, "test")
+# "WORDS \nAcked by: USER (ADDR)", the address there when the web server
+# gave one.
+_ACKED_BY = re.compile(r"\A(.*?)\s*\nAcked by: (.+?)(?: \((\S+)\))?[ \t]*\n?\Z", re.S)
+
+
+def _status_text(host: str, tst: str) -> str:
+    """The text of HOST's TEST status, as the web page shows it."""
     # xymondboard reads host= and test= as regular expressions, unanchored:
     # host=web1 also finds web10, and "." is any character. The names are
     # anchored and escaped, and the line is checked to be the one asked for.
     board = query(f"xymondboard host=^{re.escape(host)}$ test=^{re.escape(tst)}$"
                   f" fields={','.join(_STATUS_FIELDS)}")
-    d = None
     for line in board.splitlines():
         # msg is last; every "|" inside the texts is encoded, so the split
         # lands on the field boundaries.
         f = line.split("|", len(_STATUS_FIELDS) - 1)
         if len(f) == len(_STATUS_FIELDS) and f[0] == host and f[1] == tst:
-            d = dict(zip(_STATUS_FIELDS, f))
-            break
-    if d is None:
-        raise NotFound(f"no status for {host} {tst}")
-    # The text begins with the command that set it, "status+30
-    # host,example,com.conn red", and xymond's flags comment, which the web
-    # page does not show either.
-    text = hide(_STATUS_HEAD.sub("", _nldecode(d["msg"]), count=1)[:_STATUS_MAX])
-    now = int(time.time())
-    out = {"host": host, "test": tst, "verdict": _verdict(d["color"]),
-           "time": _iso(d["lastchange"]), "updated": _iso(d["logtime"]),
-           "text": text}
-    ack = _acknowledgement(d, now)
-    if ack:
-        out["acknowledged"] = ack
-    # Disabled by hand, with an end time or -1 for "until it is ok again"; or
-    # blue from a DOWNTIME tag in hosts.cfg, with no end time and the words
-    # "Planned downtime".
-    until = d["disabletime"]
-    if d["color"] == "blue" or (_DIGITS.fullmatch(until) and until != "0"):
-        out["disabled"] = {"until": _iso(until) if _DIGITS.fullmatch(until) and until != "0" else None,
-                           "text": hide(_nldecode(d["dismsg"]))}
-    return out
+            # The text begins with the command that set it, "status+30
+            # host,example,com.conn red", and xymond's flags comment, which
+            # the web page does not show either.
+            msg = dict(zip(_STATUS_FIELDS, f))["msg"]
+            return hide(_STATUS_HEAD.sub("", _nldecode(msg), count=1)[:_STATUS_MAX])
+    raise NotFound(f"no status for {host} {tst}")
+
+
+# The text the web page gives a disable (web/enadis.c): a fixed form of
+# Xymon's own, which a disable sent with xymon(1) does not have.
+_DISABLED_BY = re.compile(r"\A\s*Disabled by: (.*?) @ (\S+)[ \t]*\nReason: (.*)\Z", re.S)
+
+
+def _disable_words(dismsg: str) -> dict:
+    """A disable's text, encoded as the board gives it: its reason, and who
+    set it from which address when the web page did (createdBy, as
+    Alertmanager's silence has it, and from);
+    the text whole otherwise. Each hidden as the status text is; what is
+    empty is left out."""
+    text = _nldecode(dismsg)
+    m = _DISABLED_BY.match(text)
+    words = {"createdBy": m[1], "from": m[2], "text": m[3]} if m else {"text": text}
+    return {k: hide(v.strip()) for k, v in words.items() if v.strip()}
 
 
 def _name(value: str | None, what: str) -> str:
@@ -531,7 +758,7 @@ def series(host: str | None, test: str | None, metric: str | None,
     points = [{"t": _iso(str(first + i * step)), "v": row[0] if row else None}
               for i, row in enumerate(doc.get("data", []))]
     # When the file last received a value: the client judges how fresh the
-    # points are, against now or /status's updated.
+    # points are, against now or an alarm's updated.
     return {"labels": {"host": host, "test": tst}, "metric": ds,
             "updated": _iso(str(last)) if last is not None else None,
             "points": points}

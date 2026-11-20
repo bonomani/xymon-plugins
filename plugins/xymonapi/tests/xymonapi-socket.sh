@@ -51,7 +51,7 @@ assert_contains "listening on the socket $sock" "$(cat "$work/api.log")" "the lo
 assert_equal "401" "$(api_code /health)" "[C3] the port, without a user: refused as before"
 assert_equal "200" "$(over /xymon/api/v1/health)" "the socket, without a user: answered"
 assert_equal "200" "$(over /openapi.json)" "and FastAPI's own paths with it"
-assert_equal "502" "$(over /xymon/api/v1/states)" "a board asked through it reaches xymond (none here: 502, not 401)"
+assert_equal "502" "$(over /xymon/api/v1/alarms)" "a board asked through it reaches xymond (none here: 502, not 401)"
 assert_equal "401" "$(over /xymon/api/v1/tokens)" "the token operations take the password, not the socket"
 assert_contains "not through the socket" "$(curl -s --unix-socket "$sock" "http://localhost/xymon/api/v1/tokens")" "and say so"
 assert_equal "401" "$(curl -s --unix-socket "$sock" -o /dev/null -w '%{http_code}' -X POST -d '{"client":"here"}' -H 'Content-Type: application/json' "http://localhost/xymon/api/v1/tokens")" "a new token neither"

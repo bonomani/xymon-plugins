@@ -64,50 +64,58 @@ or a client token, when XYMONAPI_PASSWD is set.
 Its "search" field describes the index /search reads -- how many passages
 of manual pages and of history, when it was built -- and is null when there
 is none.
-.IP "\fB/states\fR [\fBentity\fR=HOST] [\fBtest\fR=TEST] [\fBverdict\fR=VERDICT]"
-The status board, one state per host and test. The colour is given as a
-verdict: green is ok, yellow warning, red critical, blue disabled, clear
-nodata and purple unknown. \fBverdict\fR takes one of those six; any
-other value, a colour among them, is refused (400). A state that is
-acknowledged carries \fBacknowledged\fR, as \fB/status\fR gives it: its
-words and until when. Acknowledged from the critical-systems view, its
-words are who acknowledged and the words, whole, \fIby\fR:\fIwords\fR:
-xymond escapes neither, so a name holding a colon cannot be told apart.
-.IP "\fB/alarms\fR"
-Every state whose verdict is not ok, with the severity the test last
-measured, in ITU-T X.733's words: red major, yellow minor. What xymond adds
-is said beside it: \fBstale\fR for a test gone silent (purple),
-\fBunreachable\fR for one that is clear because its host cannot be reached
-(xymond made it clear, or the host's conn is red), and the status \fBsuppressed\fR for one blue, which is
-listed all the same, with \fBsuppressedBy\fR saying why: \fBdisable\fR
-for a disable, \fBdowntime\fR for a DOWNTIME window of hosts.cfg. Where nothing that is not ok was measured --
-a clear from xymonnet, a test that was green -- the severity is
-\fBindeterminate\fR. Needs xymond's \fBprevgapcolor\fR, Xymon 4.3.31.
-An alarm also gives when the status was last reported (\fBupdated\fR), who
-sent it (\fBsource\fR), its first line without the date it opens with
-(\fBmessage\fR), its
-\fBacknowledged\fR, saying it is the test's, and a \fBlink\fR to its
-\fB/status\fR. Its \fBdomain\fR groups it: \fBfilesystem\fR for disk, inode
-and files, \fBnetwork\fR for conn and ports, \fBweb\fR for http, content and
-sslcert, \fBlog\fR for msgs, \fBprocess\fR for procs, \fBos-service\fR for
-svcs, cpu and memory their own; any other test is its own domain.
-An inode alarm is given once for each file system its status names
-(xymond's \fBID=\fR), with that \fBinstance\fR, the severity of its own
-line, and, where the line says so, the \fBmetric\fR pct and a
-\fBmeasure\fR with its value and the threshold crossed.
-.IP "\fB/entities\fR"
+.IP "\fB/alarms\fR [\fBhost\fR=HOST] [\fBtest\fR=TEST] [\fBseverity\fR=SEVERITY] [\fBstate\fR=STATE] [\fBcategory\fR=CATEGORY] [\fBstale\fR|\fBunreachable\fR|\fBsuppressed\fR|\fBoverridden\fR|\fBacknowledged\fR=true|false]"
+Every alarm on the board, one per host and test, and per object where
+Xymon names it -- green ones too, cleared and inactive, as TMF642 keeps a
+cleared alarm; what needs acting on is \fBstate\fR=firing. An alarm gives
+the \fBseverity\fR its test last measured, in ITU-T
+X.733's words: red \fBcritical\fR, yellow \fBwarning\fR, green
+\fBcleared\fR, and \fBindeterminate\fR where nothing was measured -- a
+clear from xymonnet, a client test with no rule. Its \fBstate\fR is
+\fBfiring\fR, \fBpending\fR for a red or yellow reported while xymond still
+shows green (a change delay: delayyellow, or delayred with it), \fBsuppressed\fR for a
+test blue (disabled, or in a DOWNTIME window of hosts.cfg), or
+\fBinactive\fR for one green. Purple, clear and blue
+are xymond's, not the test's: what xymond adds is said beside the
+severity -- \fBstale\fR for a test gone silent (purple);
+\fBunreachable\fR for one made clear because its host's conn is not green,
+its \fBreportedBy\fR that conn's id (not for a dialup host, nor the conn
+itself); \fBsuppressedBy\fR for one blue, one entry each: its \fBkind\fR,
+\fBdisable\fR or \fBdowntime\fR, \fBof\fR \fBtest\fR, and for a disable its
+\fBuntil\fR, \fBcreatedBy\fR and \fBfrom\fR, and \fBtext\fR where Xymon
+keeps them; for a DOWNTIME its \fBuntil\fR, read from hosts.cfg's DOWNTIME
+as xymond reads it, in the server's local time (left out when the window
+never ends; holidays play no part, xymond not loading holidays.cfg), and its
+cause as \fBtext\fR. A blue the test reported itself has no
+\fBsuppressedBy\fR. \fBoverriddenBy\fR says, one entry each, a \fBflap\fR
+xymond holds a colour over (with its \fBsince\fR) and a \fBmodifier\fR in
+force (with its cause as \fBtext\fR). Where xymond shows another colour than the one reported
+-- a silence, a host down, a disable, a DOWNTIME, a change delay, a flap, a
+modifier -- the severity is the one reported. Needs xymond's
+\fBprevgapcolor\fR, Xymon 4.3.31.
+An alarm's \fBid\fR is opaque: the same while its host, test and instance
+are, to be compared, not read. It also gives when it last changed
+(\fBsince\fR) and was last reported (\fBupdated\fR), who sent it
+(\fBsource\fR), its first line without the date it opens with
+(\fBmessage\fR), its \fBacknowledged\fR, saying it is the test's, and a
+\fBlink\fR to itself, \fBalarms/\fRID. Its \fBlabels\fR group it, as
+Alertmanager's do, and identify nothing: \fBcategory\fR is
+\fBfilesystem\fR for disk, inode and files, \fBnetwork\fR for conn and
+ports, \fBweb\fR for http, content and sslcert, \fBlog\fR for msgs,
+\fBprocess\fR for procs, \fBos-service\fR for svcs, cpu and memory their
+own; any other test is its own. An inode test not green is given
+once for each file system its status names (xymond's \fBID=\fR), with that
+\fBinstance\fR, the severity of its own line, and, where the line says so,
+the \fBmetric\fR pct and a \fBmeasure\fR with its value and the threshold
+crossed. Each filter takes one value; any other, a colour among them, is
+refused (400).
+.IP "\fB/hosts\fR"
 Each host on the board, once.
-.IP "\fB/status\fR \fBentity\fR=HOST \fBtest\fR=TEST"
-The current status of HOST's TEST, from xymondboard: its verdict, when it
-last changed (time) and was last reported (updated), and its text -- what
-the web page shows, written by the monitored host or the test. When it is
-acknowledged -- with xymondack or from the critical-systems view, until the
-acknowledgement's end time, the one running longest if both -- or the test disabled
--- by hand, or blue from a DOWNTIME tag in hosts.cfg -- that is said too,
-with the words given and until when. The command line that set the status
-is left out of the text, as the web page leaves it out. HOST and TEST are
-taken as given, not as patterns: 404 when the board has no such status. At
-most 1 MiB of text.
+.IP "\fB/alarms/\fRID"
+The alarm ID, as \fB/alarms\fR gives it, with its status's \fBtext\fR --
+what the web page shows, written by the monitored host or the test. The
+command line that set the status is left out of the text, as the web page
+leaves it out. 404 when no alarm has that id. At most 1 MiB of text.
 .IP "\fB/search\fR \fBq\fR=QUESTION [\fBkind\fR=docs|history] [\fBk\fR=N]"
 The N passages (5 by default, 20 at most) of Xymon's manual pages and of
 its history nearest QUESTION by meaning, best first, from the index that
@@ -136,7 +144,7 @@ though a stranger learns from it which plugins, at which versions, run
 here. It answers not_found when nothing is staged. Whoever controls this
 server, or the certificate a machine trusts for it, controls the code that
 machine installs from here.
-.IP "\fB/series\fR \fBentity\fR=HOST \fBtest\fR=TEST [\fBmetric\fR=DATASET] [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
+.IP "\fB/series\fR \fBhost\fR=HOST \fBtest\fR=TEST [\fBmetric\fR=DATASET] [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
 The values of one dataset of the RRD file TEST.rrd of HOST, under
 $XYMONRRDS, read with rrdtool. TEST is the file's name, not the column on
 the status board: xymond_rrd names the files after the data it keeps, so
@@ -157,13 +165,13 @@ says in \fBupdated\fR when the file last received a value, so how fresh
 its points are. The step in progress may still be null, which is not a test
 that stopped; without those sockets the file is read as it is. To see
 what a host has, list $XYMONRRDS/HOST/ there, or run rrdtool info on a file.
-.IP "\fB/graphs\fR \fBentity\fR=HOST \fBtest\fR=TEST [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
+.IP "\fB/graphs\fR \fBhost\fR=HOST \fBtest\fR=TEST [\fBfrom\fR=TIME] [\fBto\fR=TIME]"
 The graph
 .I showgraph.cgi(1)
 draws for HOST and TEST, fetched from showgraph.sh, its wrapper, at
 $XYMONSERVERCGIURL -- prefixed with $XYMONWEBHOST when that is a path, as
 xymonserver.cfg ships it.
-.IP "\fB/events\fR [\fBentity\fR=HOST] [\fBtest\fR=TEST] [\fBsince\fR=TIME] [\fBlimit\fR=N] [\fBbefore\fR=SECONDS]"
+.IP "\fB/events\fR [\fBhost\fR=HOST] [\fBtest\fR=TEST] [\fBsince\fR=TIME] [\fBlimit\fR=N] [\fBbefore\fR=SECONDS]"
 The colour changes xymond_history recorded in $XYMONHISTDIR/allevents, the
 newest first: when, the verdict before and after, and how long the one
 before had lasted. N is 1 to 1000, 100 by default. With before, only the
@@ -171,7 +179,7 @@ changes older than that time: the epoch of an answer's last item asks for
 the page after it. The file is read from its end, so the newest changes
 cost the same however long the history. A server where nothing has changed
 colour yet has none.
-.IP "\fB/histlog\fR \fBentity\fR=HOST \fBtest\fR=TEST \fBtime\fR=SECONDS"
+.IP "\fB/histlog\fR \fBhost\fR=HOST \fBtest\fR=TEST \fBtime\fR=SECONDS"
 The status text xymond_history saved under $XYMONHISTLOGS when HOST's TEST
 changed colour at that time, the epoch of an /events item; 404 when none was
 saved. At most 1 MiB of it.

@@ -166,38 +166,32 @@ def _search(request):
     return JSONResponse({"items": items})
 
 
-def _states(request):
-    q = request.query_params
-    try:
-        items = xymon.states(q.get("host"), q.get("test"), q.get("verdict"))
-    except Exception as exc:                        # noqa: BLE001
-        return _refused(exc)
-    return JSONResponse({"items": items})
+_ALARM_FILTERS = ("host", "test", "severity", "state", "category", *xymon.FLAGS)
 
 
 def _alarms(request):
-    try:
-        items = xymon.alarms()
-    except Exception as exc:                        # noqa: BLE001
-        return _upstream(exc)
-    return JSONResponse({"items": items})
-
-
-def _entities(request):
-    try:
-        items = xymon.entities()
-    except Exception as exc:                        # noqa: BLE001
-        return _upstream(exc)
-    return JSONResponse({"items": items})
-
-
-def _status(request):
     q = request.query_params
     try:
-        s = xymon.status(q.get("host"), q.get("test"))
+        items = xymon.alarms(**{k: q.get(k) for k in _ALARM_FILTERS})
     except Exception as exc:                        # noqa: BLE001
         return _refused(exc)
-    return JSONResponse(s)
+    return JSONResponse({"items": items})
+
+
+def _alarm(request):
+    try:
+        a = xymon.alarm(request.path_params["id"])
+    except Exception as exc:                        # noqa: BLE001
+        return _refused(exc)
+    return JSONResponse(a)
+
+
+def _hosts(request):
+    try:
+        items = xymon.hosts()
+    except Exception as exc:                        # noqa: BLE001
+        return _upstream(exc)
+    return JSONResponse({"items": items})
 
 
 def _series(request):
@@ -453,10 +447,9 @@ async def _ask(request):
 
 ROUTES = {
     "/health": _health,
-    "/states": _states,
     "/alarms": _alarms,
-    "/entities": _entities,
-    "/status": _status,
+    "/alarms/{id}": _alarm,
+    "/hosts": _hosts,
     "/series": _series,
     "/graphs": _graphs,
     "/events": _events,
@@ -481,6 +474,33 @@ def build_app() -> FastAPI:
     # and drops it without a word: said to the router too, which every
     # version reads.
     app.router.redirect_slashes = False
+
+    # A query parameter the operation does not list is refused, not ignored
+    # (C2): a client on a name the API dropped, entity from 8.0.0, or a
+    # mistyped one, start for from, would read an unfiltered answer. Added
+    # before the password check, so inside it: a stranger is told 401 first.
+    # A path's {name} matches one segment, as the router reads it.
+    takes = [(re.compile(re.sub(r"\\\{[^/]+?\\\}", "[^/]+", re.escape(base + path)) + "$"), method.upper(),
+              {p["name"] for p in op.get("parameters", []) if p.get("in") == "query"})
+             for path, ops in spec["paths"].items() for method, op in ops.items()]
+
+    @app.middleware("http")
+    async def _unknown_query(request, call_next):
+        known = next((k for rx, m, k in takes
+                      if m == request.method and rx.fullmatch(request.url.path)), None)
+        extra = sorted(set(request.query_params) - known) if known is not None else []
+        if extra:
+            return JSONResponse({"error": "bad_request",
+                                 "detail": f"unknown parameter: {', '.join(extra)}; this takes "
+                                           f"{', '.join(sorted(known)) or 'none'}"},
+                                status_code=400)
+        # Each parameter is one value: a second would be dropped unsaid.
+        twice = sorted(k for k in set(request.query_params) if len(request.query_params.getlist(k)) > 1)
+        if twice:
+            return JSONResponse({"error": "bad_request",
+                                 "detail": f"given more than once: {', '.join(twice)}"},
+                                status_code=400)
+        return await call_next(request)
 
     # A path that is none of ours, or a method a path does not take, is
     # answered by the framework with {"detail": ...}: put in the spec's form,
