@@ -153,7 +153,10 @@ as `NAME.old`. On N, off a terminal -- nothing is merged unattended --,
 under `DESTDIR`, on a conflict, or without `diff3` or a version to start
 from, the file stays as it is and this version's is written beside it as
 `NAME.new`, said with the `diff` to run. `verify` says a `.new` or `.old`
-left (S30).
+left (S30). A program of the plugin that runs from its directory (`restart:`
+in `PLUGIN`) keeps the code it loaded: an install stops it, said, and
+xymonlaunch starts the new -- unless the update rewrote the same code, this
+copy's version and its files by `MANIFEST`, when it is left running, said.
 
 **S8. Removing takes away the plugin and its links.**
 The removal takes away the plugin's directory, its task link and its manual

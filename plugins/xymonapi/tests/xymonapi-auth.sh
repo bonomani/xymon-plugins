@@ -109,6 +109,18 @@ assert_not_contains "${version##*/v}" "$(curl -s "$url")" "and not to a stranger
 printf 'xymonapi/v9.9.10\n' > "$work/inst/ext/xymonapi/VERSION"
 assert_contains "\"api\":{\"version\":\"${version##*/v}\"}" "$(curl -s -u alice:secret "$url")" "/health keeps the version the process started with"
 printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
+# An update that rewrites the same code -- this copy's version, the same
+# files by MANIFEST -- leaves the API that runs it running.
+here=$(sed -n 's/^version: *//p' "$ROOT/plugins/xymonapi/PLUGIN")
+printf 'xymonapi/v%s\n' "$here" > "$work/inst/ext/xymonapi/VERSION"
+rc=0
+"$ROOT/xymon-plugin" update --server xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/same.log" 2>&1 || rc=$?
+assert_equal "0" "$rc" "an update with the same code succeeds ($(tail -n 3 "$work/same.log"))"
+assert_contains "xymonapi's code is unchanged: what runs it is left running." "$(cat "$work/same.log")" "and says the API is left running"
+assert_not_contains "Stopped" "$(cat "$work/same.log")" "stopping nothing"
+sleep 1
+kill -0 "$API_PID" 2>/dev/null || fail "an update with the same code stopped the running API"
+printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"
 # Every field /health gives is one the spec lists for it: a field renamed in
 # the code and not in openapi.yaml is a contract the API does not keep.
 spec_fields=$(sed -n '/^    Health:/,/^    [A-Z]/p' "$ROOT/plugins/xymonapi/openapi.yaml" | sed -n 's/^        \([a-z_]*\):.*/\1/p')

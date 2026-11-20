@@ -51,7 +51,7 @@
 ROOT=$(cd "$(dirname "$0")" && pwd)
 # This installer's own version, released apart from the plugins under the
 # tag xymon-plugin/vX.Y.Z (build/release-archive.sh checks the two agree).
-INSTALLER_VERSION=0.1.2
+INSTALLER_VERSION=0.1.3
 
 die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
 usage() {
@@ -1435,6 +1435,12 @@ install_server() {
 	# A link in the plugin directory's place is not the plugin's: removed,
 	# as fresh would, before anything is read or moved through it.
 	if [ -L "$ext" ]; then rm -f "$ext" || exit 1; fi
+	# The same code installed already -- this copy's version, its files by
+	# MANIFEST: what an update rewrites is what was there, and a program of
+	# the plugin that runs is not stopped for it.
+	same_code=
+	if [ -n "${UPDATING:-}" ] && [ "$(installed "$EXTROOT" "$1")" = "$(field "$1" version)" ] \
+		&& ! other_code server "$EXTROOT" "$1"; then same_code=1; fi
 	# What the install in place put outside its directory, by its record,
 	# for what this one no longer does.
 	was_manual=$(held "$EXTROOT" "$1" server-manual)
@@ -1489,7 +1495,11 @@ install_server() {
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$ext/VERSION") in $XYMONHOME/ext/$1."
 	[ -n "${UPDATING:-}" ] || say "$1" installed
-	restart "$1"
+	if [ -n "$same_code" ]; then
+		[ -z "$(field "$1" restart)" ] || echo "$1's code is unchanged: what runs it is left running."
+	else
+		restart "$1"
+	fi
 	# A module the installed version loaded and this one has not goes.
 	if [ -n "$was_selinux" ] && [ -z "$(field "$1" selinux)" ] && [ -z "$DESTDIR" ] && command -v semodule >/dev/null 2>&1; then
 		semodule -r "$1" >/dev/null 2>&1 || :
