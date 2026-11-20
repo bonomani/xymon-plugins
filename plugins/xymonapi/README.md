@@ -112,8 +112,8 @@ the server itself and asks none: its permissions let the Xymon user and its
 group in, and nobody else. The plugins' commands take it by default
 there (`xymonapi.8`, `XYMONAPI_SOCKET`).
 
-Updating: `XYMONHOME=... ./xymon-plugin update --server xymonapi`. It stops the running API, which would go
-on with the code it loaded, and says so; xymonlaunch starts the new.
+Updating: `XYMONHOME=... ./xymon-plugin update --server xymonapi`. It sends the running API, which would go
+on with the code it loaded, the signal to stop, and says so; xymonlaunch starts it again on the new code if its task is on.
 `./xymon-plugin remove --server xymonapi` removes the snippets with the rest of
 `ext/xymonapi`, which the web server's optional include then skips, and keeps
 the tokens file, `$XYMONAPI_TOKENS`.
