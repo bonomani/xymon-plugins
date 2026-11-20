@@ -55,7 +55,7 @@ INSTALLER_VERSION=0.1.3
 
 die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
 usage() {
-	echo "usage: ./xymon-plugin install|update|enable|disable|remove|status|verify|clean [--server|--tools] [--all] [--venv] [--force] [--yes] [--xymon-home PATH] [PLUGIN...] [NAME=value...]" >&2
+	echo "usage: ./xymon-plugin install|update|enable|disable|remove|status|verify|outdated|clean [--server|--tools] [--all] [--venv] [--force] [--yes] [--xymon-home PATH] [PLUGIN...] [NAME=value...]" >&2
 	echo "       ./xymon-plugin --version" >&2
 	exit 2
 }
@@ -69,7 +69,7 @@ fi
 VERB=$1; shift
 case $VERB in
 	dialogue) ;;
-	install|update|enable|disable|remove|status|verify|clean) ;;
+	install|update|enable|disable|remove|status|verify|outdated|clean) ;;
 	venv) die "venv is now part of install and update: ./xymon-plugin update --server --venv, or --tools --venv" ;;
 	install-server|install-tools|uninstall-server|uninstall-tools|enable-server|disable-server|status-server|status-tools|venv-server|venv-tools)
 		v=${VERB%-*}; [ "$v" = uninstall ] && v=remove
@@ -108,7 +108,7 @@ done
 ROOTUSER=
 [ "$(id -u)" -ne 0 ] || ROOTUSER=1
 # status --tools under sudo reads the tools of the person who typed it.
-if [ -z "$PREFIX_GIVEN" ] && [ -n "$ROOTUSER" ] && { [ "$VERB" = status ] || [ "$VERB" = verify ]; } && [ -n "${SUDO_USER:-}" ]; then
+if [ -z "$PREFIX_GIVEN" ] && [ -n "$ROOTUSER" ] && { [ "$VERB" = status ] || [ "$VERB" = verify ] || [ "$VERB" = outdated ]; } && [ -n "${SUDO_USER:-}" ]; then
 	case $SUDO_USER in
 		*[!A-Za-z0-9._-]*|-*) ;;
 		*) eval "h=~$SUDO_USER"; [ -d "$h" ] && PREFIX=$h/.local ;;
@@ -469,6 +469,97 @@ client_home() {
 	printf '%s\n' "$c"
 }
 
+# The repository the plugins are released from.
+REPO="xymon-monitoring/xymon-plugins"
+
+# releases -- the plugins' published releases, "NAME X.Y.Z" a line, from
+# GitHub: with gh when it answers, drafts left out as an anonymous reader
+# does not see them; else the API, anonymously, through curl or wget. An
+# answer with no release is one, not a failure; when none reaches GitHub it
+# says why, and fails (S32).
+releases() {
+	GHFAILED=
+	if command -v gh >/dev/null 2>&1 \
+		&& tags=$(gh api --hostname github.com "repos/$REPO/releases?per_page=100" --paginate \
+			--jq '.[] | select(.draft == false) | .tag_name' 2>/dev/null); then
+		:
+	else
+		command -v gh >/dev/null 2>&1 && GHFAILED=1
+		tags=$(anon_releases) || exit 1
+	fi
+	# A tag is NAME/vX.Y.Z, its name as plain() allows a plugin's, each
+	# number of its version one digit or more; any other is no plugin's.
+	printf '%s\n' "$tags" | sed -n 's|^\([A-Za-z0-9._+-][A-Za-z0-9._+-]*\)/v\([0-9][0-9]*\(\.[0-9][0-9]*\)*\)$|\1 \2|p'
+}
+
+# anon_releases -- the tag names of every release, page after page of
+# GitHub's API read anonymously (drafts are not shown to an anonymous
+# reader), through curl, else wget. The answer is JSON; a tag name is read
+# where a key "tag_name" opens a field, so that the words of a release's
+# text, its quotes escaped, are not taken for one.
+anon_releases() {
+	page=1 all=
+	while :; do
+		u="https://api.github.com/repos/$REPO/releases?per_page=100&page=$page"
+		if command -v curl >/dev/null 2>&1; then
+			j=$(curl -fsSL -H 'Accept: application/vnd.github+json' "$u" 2>&1) || die "cannot read $u: $j"
+		elif command -v wget >/dev/null 2>&1; then
+			j=$(wget -q -O - "$u") || die "cannot read $u: wget failed (exit status $?)"
+		elif [ -n "${GHFAILED:-}" ]; then
+			die "gh could not read the releases from GitHub, and neither curl nor wget is here to read them"
+		else
+			die "outdated reads the releases from GitHub, with gh, curl or wget: none is here"
+		fi
+		t=$(printf '%s\n' "$j" | tr ',' '\n' \
+			| sed -n 's/^[][{[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*$/\1/p')
+		[ -n "$t" ] || break
+		all="$all$t
+"
+		# A page short of a hundred is the last.
+		[ "$(printf '%s\n' "$t" | wc -l)" -ge 100 ] || break
+		# ponytail: 60 pages, as many as GitHub answers, from one address,
+		# in an hour; past them, said rather than a partial list.
+		[ "$page" -lt 60 ] || die "github.com/$REPO has more than the 6000 releases outdated reads without gh: read them with gh, logged in"
+		page=$((page + 1))
+	done
+	printf '%s' "$all"
+}
+
+# latest PLUGIN -- the highest version $RELEASES has of PLUGIN, or nothing.
+latest() {
+	best=
+	for lv in $(printf '%s\n' "$RELEASES" | awk -v n="$1" '$1 == n { print $2 }'); do
+		if [ -z "$best" ] || older "$best" "$lv"; then best=$lv; fi
+	done
+	echo "$best"
+}
+
+# outdated_line PART ROOT PLUGIN -- the plugin installed there against its
+# latest release: up to date, a newer one released (with the update that
+# takes it), none released, or installed newer than any released.
+outdated_line() {
+	[ -f "$2/$3/VERSION" ] || return 0
+	# Its version, a bare X.Y.Z or this plugin's tag, checked to be one: a
+	# file changed by hand is said, never compared or echoed; one that
+	# cannot be read is an error.
+	ov=$(head -n 1 "$2/$3/VERSION") || die "cannot read $2/$3/VERSION"
+	case $ov in "$3"/v*) ov=${ov#"$3"/v} ;; esac
+	case $ov in ""|*[!0-9.]*|.*|*.|*..*)
+		echo "$3: its VERSION holds no version: ./xymon-plugin verify --$1 says more"
+		return 0 ;;
+	esac
+	or=$(latest "$3")
+	if [ -z "$or" ]; then
+		echo "$3: $ov installed; no release of it is published"
+	elif older "$ov" "$or"; then
+		echo "$3: $ov installed; $or released: ./xymon-plugin update --$1 $3, from its release's archive"
+	elif older "$or" "$ov"; then
+		echo "$3: $ov installed; newer than its latest release, $or"
+	else
+		echo "$3: $ov installed; up to date"
+	fi
+}
+
 # show_client SERVER -- its client tree's section: where it is, and each
 # plugin installed there, or that there is none.
 show_client() {
@@ -581,7 +672,7 @@ need_home() {
 		none) die "$XYMONHOME is no Xymon server's tree: none of $SERVER_MARKS is there; to stage one for a package, set DESTDIR" ;;
 	esac
 	# Before anything changes: the target, the part, and what chose them.
-	if [ "$VERB" != status ]; then
+	if [ "$VERB" != status ] && [ "$VERB" != outdated ]; then
 		echo "Target: $XYMONHOME ($CHOSEN), part: server"
 		remember_tree
 	fi
@@ -2064,7 +2155,7 @@ if [ "$VERB" = dialogue ]; then dialogue; exit 0; fi
 # The part acted on: named, or, on a terminal, the server part, said; off a
 # terminal a verb that changes something needs it named; status covers both.
 if [ -n "$SEL_TOOLS" ] && [ -n "$SEL_SERVER" ]; then
-	case $VERB in status|verify) die "--tools goes alone: ./xymon-plugin $VERB, with neither, covers both" ;; esac
+	case $VERB in status|verify|outdated) die "--tools goes alone: ./xymon-plugin $VERB, with neither, covers both" ;; esac
 	rest=$(echo $NAMES)${ALL:+ --all}
 	die "--tools goes alone, as the tools are the person's and the server part its tree's owner's: run
   ./xymon-plugin $VERB --server${rest:+ $rest}
@@ -2072,12 +2163,12 @@ if [ -n "$SEL_TOOLS" ] && [ -n "$SEL_SERVER" ]; then
 fi
 if [ -n "$SEL_TOOLS" ]; then PART=tools
 elif [ -n "$SEL_SERVER" ]; then PART=server
-elif [ "$VERB" = status ] || [ "$VERB" = verify ]; then PART=both
+elif [ "$VERB" = status ] || [ "$VERB" = verify ] || [ "$VERB" = outdated ]; then PART=both
 elif [ -t 0 ] && [ -t 1 ]; then PART=server; echo "Part: server, the one Xymon part a plugin has here."
 else die "$VERB names no part, and there is no terminal to say it: --server, or --tools"
 fi
 case $VERB in enable|disable) [ "$PART" != tools ] || die "the tools have no task to turn on or off" ;; esac
-if [ "$PART" = tools ] && [ -n "$ROOTUSER" ] && [ "$VERB" != status ] && [ "$VERB" != verify ] && [ -z "$DESTDIR" ] && [ -z "$PREFIX_GIVEN" ]; then
+if [ "$PART" = tools ] && [ -n "$ROOTUSER" ] && [ "$VERB" != status ] && [ "$VERB" != verify ] && [ "$VERB" != outdated ] && [ -z "$DESTDIR" ] && [ -z "$PREFIX_GIVEN" ]; then
 	die "the tools go in a person's own directory, not root's: run this without sudo, or give PREFIX= or DESTDIR="
 fi
 # What needs no installation is checked before one is asked for: the names,
@@ -2098,7 +2189,7 @@ case $VERB in
 esac
 # The installation, named or chosen, once, before anything is looked at in
 # it; status reads it apart.
-if [ "$PART" = server ] && [ "$VERB" != status ] && [ "$VERB" != verify ]; then need_home; fi
+if [ "$PART" = server ] && [ "$VERB" != status ] && [ "$VERB" != verify ] && [ "$VERB" != outdated ]; then need_home; fi
 if [ "$PART" = server ]; then PARTROOT=$EXTROOT; else PARTROOT=$TOOLSROOT; fi
 
 # The plugins named, each checked; or, for install and remove, --all, which
@@ -2190,6 +2281,44 @@ EOF
 				if [ -z "$l" ]; then :; elif [ "$PART" = tools ]; then echo "$l"; else echo "  $l"; fi
 			done
 		fi ;;
+	outdated)
+		# Read-only, as status: what is installed, against the latest
+		# release of each plugin. A newer one released ends with status 6.
+		NEWER=
+		RELEASES=$(releases) || exit 1
+		if [ "$PART" != tools ] && [ -z "$XYMONHOME" ] && [ -z "$DESTDIR" ]; then
+			while IFS= read -r t; do
+				[ -n "$t" ] || continue
+				echo "Xymon server $t:"
+				XYMONHOME=$t; server_paths
+				L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
+				for n in $L; do
+					l=$(outdated_line server "$EXTROOT" "$n") || exit 1; [ -n "$l" ] || continue
+					echo "  $l"; case $l in *" released: "*) NEWER=1 ;; esac
+				done
+			done <<EOF
+$(xymon_trees | sed -n 's/^server //p')
+EOF
+			XYMONHOME=
+		elif [ "$PART" != tools ]; then
+			need_home
+			echo "Xymon server $XYMONHOME:"
+			L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
+			for n in $L; do
+				l=$(outdated_line server "$EXTROOT" "$n") || exit 1; [ -n "$l" ] || continue
+				echo "  $l"; case $l in *" released: "*) NEWER=1 ;; esac
+			done
+		fi
+		if [ "$PART" != server ]; then
+			L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$TOOLSROOT")
+			[ "$PART" = tools ] || echo "Your tools, $PREFIX:"
+			for n in $L; do
+				l=$(outdated_line tools "$TOOLSROOT" "$n") || exit 1; [ -n "$l" ] || continue
+				case $l in *" released: "*) NEWER=1 ;; esac
+				if [ "$PART" = tools ]; then echo "$l"; else echo "  $l"; fi
+			done
+		fi
+		[ -z "${NEWER:-}" ] || exit 6 ;;
 	verify)
 		# None named: every installation found, as status lists them.
 		if [ "$PART" != tools ] && [ -z "$XYMONHOME" ] && [ -z "$DESTDIR" ]; then
