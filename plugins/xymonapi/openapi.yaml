@@ -467,14 +467,14 @@ components:
         state:    { type: string, enum: [firing, suppressed, inactive], description: "inactive: the test is green, Prometheus's word for a rule not firing. suppressed: the test is blue, disabled or in a DOWNTIME window, listed all the same, as Alertmanager lists a silenced alert." }
         suppressedBy:
           type: array
-          description: "Present when suppressed: what suppresses it, one entry each (RFC #113). A field Xymon does not keep is left out: a DOWNTIME's until and text, a disable's until when it lasts until the test is ok."
+          description: "Present when suppressed: what suppresses it, one entry each (RFC #113). A field Xymon does not keep is left out: a disable's until when it lasts until the test is ok; a DOWNTIME's until when its window never ends, or when holidays.cfg turns holidays on, since a holiday changes the day a window reads."
           items:
             type: object
             required: [kind, of]
             properties:
               kind:  { type: string, enum: [disable, downtime], description: "A disable (xymon's disable, the web page's), or a DOWNTIME window of hosts.cfg." }
               of:    { type: string, enum: [test], description: "Where it was set: Xymon disables a test, all it holds." }
-              until: { type: string, format: date-time, description: "When a disable ends." }
+              until: { type: string, format: date-time, description: "When a disable ends; when a DOWNTIME window ends, the first minute xymond no longer finds the test in it, read from hosts.cfg's DOWNTIME as xymond reads it. The test turns from blue at the first status after." }
               createdBy: { type: string, description: "Who set the disable, when the web page did: its user." }
               from:  { type: string, description: "The address the web page's user set it from." }
               text:  { type: string, description: "Why: the reason given on the web page, or the whole text of a disable sent otherwise; hidden as the status text is." }

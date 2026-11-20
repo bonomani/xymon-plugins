@@ -30,9 +30,23 @@ work=$(mktempdir)
 XYMOND_PID=""
 register_cleanup 'stop_process "$API_PID" "$XYMOND_PID"'
 
-printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 wdis.example.com # conn\n127.0.0.1 wack.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n127.0.0.1 ino.example.com # inode\n' > "$work/hosts.cfg"
+# A DOWNTIME window from five minutes ago to thirty from now, in local
+# time as xymond reads it: its end is told, the minute after.
+py=${XYMONAPI_PYTHON:-python3}
+# shellcheck disable=SC2046 # three words, split on purpose
+set -- $("$py" -c '
+import time
+now = int(time.time()) // 60 * 60
+end = now + 1800
+hhmm = lambda t: time.strftime("%H%M", time.localtime(t))
+print(hhmm(now - 300), hhmm(end), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(end + 60)))')
+dtw_window="conn:*:$1:$2:Window" dtw_until=$3
+printf 'page test Test\n127.0.0.1 red.example.com # conn\n127.0.0.1 green.example.com # conn\n127.0.0.1 disk.example.com # disk\n127.0.0.1 dis.example.com # conn\n127.0.0.1 wdis.example.com # conn\n127.0.0.1 dtw.example.com # conn DOWNTIME='"$dtw_window"'\n127.0.0.1 wack.example.com # conn\n127.0.0.1 disk2.example.com # disk\n127.0.0.1 enc.example.com # conn\n127.0.0.1 lt.example.com # conn\n127.0.0.1 enc2.example.com # procs\n127.0.0.1 crit.example.com # conn\n127.0.0.1 critold.example.com # conn\n127.0.0.1 critcolon.example.com # conn\n127.0.0.1 clr.example.com # conn\n127.0.0.1 dt.example.com # conn DOWNTIME=*:*:0000:2359:Maint\n127.0.0.1 pipe.example.com # conn\n127.0.0.1 ino.example.com # inode\n' > "$work/hosts.cfg"
 
 mkdir -p "$work/home/etc" "$work/home/tmp" "$work/home/www"
+# Holidays off, so that a DOWNTIME's end can be told; xymond and the API
+# read the same file.
+printf 'HOLIDAYLIKEWEEKDAY=-1\n' > "$work/home/etc/holidays.cfg"
 require_cfg XYMONSERVER_CFG "$XYMON_SRC/xymond/etcfiles/xymonserver.cfg"
 sed -e 's|^XYMONHOME=.*|XYMONHOME="'"$work"'/home"|' \
     -e 's|^XYMONTMP=.*|XYMONTMP="'"$work"'/home/tmp"|' \
@@ -83,6 +97,7 @@ Reason: disk being replaced
 send "status clr,example,com.conn clear Thu Nov 19 18:56:26 2026: no answer"
 # xymonnet's clear behind a host it cannot reach: red's conn is red.
 send "status red,example,com.ssh clear Ping failed, or dialup host"
+send "status dtw,example,com.conn red down"
 # Red in a DOWNTIME window, all day: xymond records it blue, no disable set.
 send "status dt,example,com.conn red down"
 # A first line holding a "|", which the board does not encode in line1.
@@ -139,7 +154,7 @@ sleep 0.4
 
 # XYMONAPI_HIDE: what its expressions match is [hidden] in every text.
 printf '# secrets on command lines\npassword=\\S+\n\nToken: \\w+\n' > "$work/hide"
-export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:$PORT" XYMONAPI_HIDE="$work/hide"
+export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:$PORT" XYMONAPI_HIDE="$work/hide" XYMONHOME="$work/home"
 start_api
 
 health=$(api_get /health)
@@ -202,6 +217,8 @@ assert_not_contains '"createdBy":' "$(alarm dis.example.com:conn)" "a disable se
 assert_contains '"createdBy":"bruno","from":"10.0.0.9","text":"disk being replaced"' "$(alarm wdis.example.com:conn)" "the web page's: who, from where, and the reason alone"
 assert_contains '"state":"suppressed"' "$(alarm dt.example.com:conn)" "red in a DOWNTIME window: suppressed"
 assert_contains '"suppressedBy":[{"kind":"downtime","of":"test"' "$(alarm dt.example.com:conn)" "by the DOWNTIME, no disable set"
+assert_not_contains '"until"' "$(alarm dt.example.com:conn)" "all day every day, it never ends"
+assert_contains "\"suppressedBy\":[{\"kind\":\"downtime\",\"of\":\"test\",\"until\":\"$dtw_until\"" "$(alarm dtw.example.com:conn)" "a window read from the board ends the minute after its end"
 assert_not_contains '"suppressedBy"' "$(alarm red.example.com:conn)" "red is not suppressed"
 assert_contains '"severity":"indeterminate","state":"firing"' "$(alarm clr.example.com:conn)" "a clear with nothing behind it, indeterminate"
 assert_not_contains '"unreachable"' "$(alarm clr.example.com:conn)" "and not unreachable: no conn red, no colour kept behind it"

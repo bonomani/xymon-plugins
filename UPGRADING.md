@@ -31,8 +31,9 @@ with its status's `text`. `/states` and `/status` are gone.
   conn is not green, the id that conn alarm's (it was `true`, and given
   for a red conn only); `suppressedBy`, a list (it was a word): `{kind:
   disable, of: test, until, createdBy, from, text}` or `{kind: downtime,
-  of: test}`, a field Xymon does not keep left out -- `createdBy` and
-  `from` only for a disable set from the web page.
+  of: test, until}`, a field Xymon does not keep left out -- `createdBy`
+  and `from` only for a disable set from the web page; a DOWNTIME's
+  `until` only when holidays are off in holidays.cfg.
 - `acknowledged`: `since` when xymond keeps it (the critical-systems
   view), `ackedBy` and `from` when the web page made it.
 - `id` is opaque, the same while host, test and instance are: it was

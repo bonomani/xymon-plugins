@@ -24,6 +24,7 @@ import subprocess
 import time
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlencode
 
 XYMON = os.environ.get("XYMON", "xymon")
@@ -41,13 +42,13 @@ XYMONHISTLOGS = os.environ.get("XYMONHISTLOGS", "")
 # ends, -1 until the test is ok again, and 0 when none runs: a blue status
 # with 0 is a DOWNTIME's (xymond.c, the rewrite in handle_status), a blue
 # one with any other a disable's, dismsg its text. XMH_FLAG_DIALUP is
-# hosts.cfg's dialup tag, empty without it. logtime is when the status was last
+# hosts.cfg's dialup tag, empty without it; XMH_DOWNTIME its DOWNTIME. logtime is when the status was last
 # reported, sender who sent it. line1, the status's first line, is not
 # encoded and may hold a "|": it comes last, and a line splits on the
 # fields before it only.
 BOARD_FIELDS = ["hostname", "testname", "color", "lastchange",
                 "acktime", "ackmsg", "acklist", "prevgapcolor", "disabletime",
-                "dismsg", "logtime", "sender", "XMH_FLAG_DIALUP", "line1"]
+                "dismsg", "logtime", "sender", "XMH_FLAG_DIALUP", "XMH_DOWNTIME", "line1"]
 
 # A name from the request becomes part of a file path, so it may not hold
 # "/" or "..": a path outside XYMONRRDS. A host name never holds ":" either;
@@ -222,7 +223,11 @@ def _states() -> list[dict]:
             # board, nor a disable's end when it lasts until ok (-1).
             until = d.get("disabletime", "0")
             by = {"kind": "downtime" if until in ("", "0") else "disable", "of": "test"}
-            if by["kind"] == "disable":
+            if by["kind"] == "downtime":
+                end = _downtime_until(d.get("XMH_DOWNTIME", ""), tst, now) if _holidays_off() else None
+                if end:
+                    by["until"] = _iso(str(end))
+            else:
                 if until != "-1" and _iso(until):
                     by["until"] = _iso(until)
                 by.update(_disable_words(d.get("dismsg", "")))
@@ -246,6 +251,92 @@ def _states() -> list[dict]:
         i = _state_id(a)
         out.append({"id": i, **a, "link": f"alarms/{i}"})
     return out
+
+
+def _downtime_until(spec: str, test: str, now: int) -> int | None:
+    """When the DOWNTIME window SPEC holding TEST at NOW ends: the first
+    minute xymond no longer finds TEST in it, as check_downtime and
+    within_sla read it (xymond.c, timefunc.c), in this machine's local
+    time, which is xymond's. None when it does not hold TEST now, or holds
+    it for the week ahead and more -- a window that never ends.
+    ponytail: a minute at a time over 8 days, 11520 steps; fine per blue test."""
+    start = now - now % 60
+    if not _downtime_holds(spec, test, time.localtime(start)):
+        return None
+    for t in range(start + 60, start + 8 * 86400, 60):
+        if not _downtime_holds(spec, test, time.localtime(t)):
+            return t
+    return None
+
+
+def _downtime_holds(spec: str, test: str, t: time.struct_time) -> bool:
+    """Whether xymond's check_downtime finds TEST in the DOWNTIME SPEC at T:
+    entries "DAYS:START:END" (every test) or "TESTS:DAYS:START:END:CAUSE",
+    split as xymond splits them."""
+    def cut(p: str, stops: str) -> tuple[str, str, str]:
+        i = next((n for n, c in enumerate(p) if c in stops), len(p))
+        return p[:i], p[i:i + 1], p[i + 1:]
+    p = spec
+    while p:
+        s1, _, p = cut(p, ":")
+        s2, _, p = cut(p, ":")
+        s3, stop, p = cut(p, ":;,")
+        if stop == ":":
+            s4, _, p = cut(p, ":")
+            _, _, p = cut(p, ",;")
+            timetxt, tests = f"{s2}:{s3}:{s4}", s1
+        else:
+            timetxt, tests = f"{s1}:{s2}:{s3}", "*"
+        if _within_sla(timetxt, t) and (tests == "*" or test in tests.split(",")):
+            return True
+    return False
+
+
+def _within_sla(timespec: str, t: time.struct_time) -> bool:
+    """xymond's within_sla, holidays off: "DAYS:HHMM:HHMM[,...]", DAYS of
+    * (every day), W (Monday to Friday), 0 to 6 (Sunday to Saturday); start
+    and end both inside, an end before the start crossing midnight."""
+    def minutes(p: str) -> int:
+        return int(p[:2]) * 60 + int(p[2:4]) if len(p) >= 4 and p[:4].isdigit() else 0
+    wday, now = (t.tm_wday + 1) % 7, t.tm_hour * 60 + t.tm_min
+    for one in timespec.split(","):
+        days, _, times = one.partition(":")
+        match = False
+        for c in days:
+            if c == "*" or (c in "Ww" and 1 <= wday <= 5) or c == str(wday):
+                match = True
+                break
+            if c not in "0123456Ww":
+                break
+        begin, sep, end = times.partition(":")
+        if match and sep:
+            b, e = minutes(begin), minutes(end)
+            if (b <= now <= e) if e > b else (now >= b or now <= e):
+                return True
+    return False
+
+
+def _holidays_off() -> bool:
+    """Whether holidays leave the weekday alone, so a DOWNTIME's end can be
+    told: holidays.cfg sets HOLIDAYLIKEWEEKDAY to -1 or not at all, as
+    xymond reads it (holidays.c: the last one, an atoi, outside -1 to 6
+    taken as -1). Not when the file cannot be read, or includes another.
+    ponytail: holidays on means no until; reading the holidays themselves
+    is an open point (docs/PLAN.md)."""
+    try:
+        text = Path(os.environ.get("XYMONHOME", ""), "etc", "holidays.cfg").read_text()
+    except OSError:
+        return False
+    like = -1
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line.lower().startswith(("include", "directory")):
+            return False
+        if line.upper().startswith("HOLIDAYLIKEWEEKDAY="):
+            m = re.match(r"\s*([+-]?\d+)", line[19:])
+            like = int(m.group(1)) if m else 0
+            like = like if -1 <= like <= 6 else -1
+    return like == -1
 
 
 def _state_id(a: dict) -> str:

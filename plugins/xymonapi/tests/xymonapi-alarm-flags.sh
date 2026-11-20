@@ -95,4 +95,46 @@ mine=$(alarms "$(printf 'web1|ssh|red|1700000000|0|||none\nweb1|mycheck|yellow|1
 assert_contains 'web1 critical firing [ssh]' "$mine" "a network service is its own domain"
 assert_contains 'web1 warning firing [mycheck]' "$mine" "and so is a script's own test"
 
+# A DOWNTIME's end, as xymond reads the window (check_downtime,
+# within_sla): the first minute it no longer holds the test, its end minute
+# inside; none for a window that never ends, or does not hold the test.
+ends=$(TZ=UTC "$py" - "$ROOT/plugins/xymonapi" <<'EOF'
+import calendar, sys, time
+sys.path.insert(0, sys.argv[1])
+import xymon
+at = lambda s: calendar.timegm(time.strptime(s, "%Y-%m-%d %H:%M"))
+for spec, test, now in [("*:*:0000:2359:Maint", "conn", "2026-11-20 03:00"),
+                        ("conn:*:0200:0400:x", "conn", "2026-11-20 03:00"),
+                        ("conn:*:0200:0400:x", "ssh", "2026-11-20 03:00"),
+                        ("*:2330:0400", "cpu", "2026-11-16 23:45"),
+                        ("W:0800:1700", "cpu", "2026-11-20 16:00"),
+                        ("6:0000:2359,0:0000:2359", "cpu", "2026-11-21 10:00"),
+                        ("conn,ssh:*:0100:0200:a,*:0300:0330", "ssh", "2026-11-20 01:30")]:
+    end = xymon._downtime_until(spec, test, at(now))
+    print(spec, test, time.strftime("%Y-%m-%d %H:%M", time.gmtime(end)) if end else "none")
+EOF
+)
+assert_contains '*:*:0000:2359:Maint conn none' "$ends" "a window all day every day never ends"
+assert_contains 'conn:*:0200:0400:x conn 2026-11-20 04:01' "$ends" "a window ends the minute after its end"
+assert_contains 'conn:*:0200:0400:x ssh none' "$ends" "a window naming other tests holds none of this one"
+assert_contains '*:2330:0400 cpu 2026-11-17 04:01' "$ends" "one across midnight ends the next morning"
+assert_contains 'W:0800:1700 cpu 2026-11-20 17:01' "$ends" "W is Monday to Friday"
+assert_contains '6:0000:2359,0:0000:2359 cpu 2026-11-23 00:00' "$ends" "a weekend, two windows, ends on Monday"
+assert_contains 'conn,ssh:*:0100:0200:a,*:0300:0330 ssh 2026-11-20 02:01' "$ends" "a list of tests, then the next window"
+
+# Holidays change the weekday a window reads (HOLIDAYLIKEWEEKDAY, 0 in the
+# holidays.cfg Xymon ships): its end is told only when they are off.
+work=$(mktempdir)
+hol() {
+	mkdir -p "$work/hol/etc"
+	if [ -n "$1" ]; then printf '%b' "$1" > "$work/hol/etc/holidays.cfg"; else rm -f "$work/hol/etc/holidays.cfg"; fi
+	XYMONHOME="$work/hol" "$py" -c 'import sys; sys.path.insert(0, sys.argv[1]); import xymon; print(xymon._holidays_off())' "$ROOT/plugins/xymonapi"
+}
+assert_equal False "$(hol 'HOLIDAYLIKEWEEKDAY=0 \t# -1= no holiday calculation\n[us]\n')" "holidays as Sundays: no end told"
+assert_equal True "$(hol 'HOLIDAYLIKEWEEKDAY=-1\n[us]\n')" "-1: the weekday as it is, the end told"
+assert_equal True "$(hol '# HOLIDAYLIKEWEEKDAY=0\n[us]\n')" "a setting commented out is none"
+assert_equal True "$(hol 'HOLIDAYLIKEWEEKDAY=0\nHOLIDAYLIKEWEEKDAY=9\n')" "the last one counts, and out of -1 to 6 is -1"
+assert_equal False "$(hol 'include /etc/more-holidays.cfg\n')" "a file including another: not known"
+assert_equal False "$(hol '')" "no file: not known"
+
 pass "an alarm keeps the severity its test last measured, with stale, unreachable or suppressed beside it, and says its domain"
