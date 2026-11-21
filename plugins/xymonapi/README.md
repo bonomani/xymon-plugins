@@ -79,7 +79,7 @@ says whose:
   refuses an older Xymon unless given `--force`.
 - Python 3.9 or later, with the modules in
   [`requirements.txt`](requirements.txt): how the install finds or makes a
-  Python with them is in the [top README](../README.md#installing-a-plugin).
+  Python with them is in [`xymon-plugin`'s README](../xymon-plugin/README.md#python).
 - `rrdtool`, for `/series`; a web server running Xymon's CGI programs at
   `XYMONSERVERCGIURL`, for `/graphs`; Apache's `htpasswd`, when a password
   file is used.
@@ -91,7 +91,7 @@ XYMONHOME=/usr/lib/xymon/server ./xymon-plugin install --server xymonapi
 ```
 
 Besides the code, the task and the manual page, which every plugin
-installs ([top README](../README.md#installing-a-plugin)), it installs the web
+installs ([plugins/README.md](../README.md#installing-a-plugin)), it installs the web
 server snippets `$XYMONHOME/ext/xymonapi/xymonapi-{apache,nginx,lighttpd}.conf`,
 for [other machines](#reaching-it-from-another-machine), and keeps your edits
 to them.
