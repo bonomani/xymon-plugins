@@ -92,7 +92,7 @@ cp "$work/enabled" "$link"
 install migrate
 [ -L "$link" ] || fail "[S6] the older install's enabled task file was not replaced by the link"
 cmp -s "$work/enabled" "$tf" || fail "[S6] the older install's task file was not moved as it was"
-assert_contains "moved to" "$(cat "$work/migrate.log")" "the install says it moved the task file"
+assert_contains "copied to" "$(cat "$work/migrate.log")" "the install says it took the task file into the plugin's directory"
 
 "$ROOT/xymon-plugin" remove --server xymonapi XYMONHOME="$home" MANDIR="$work/man" >/dev/null 2>&1
 awk '{ print } /^\[xymonapi\]$/ { print "\tDISABLED" }' "$work/enabled" > "$link"

@@ -35,6 +35,10 @@ export XYMON="$XYMONCLIENT" XYMSRV="127.0.0.1:1" \
 start_api
 [ -S "$work/run/api.sock" ] || fail "the API made no socket at $work/run/api.sock"
 
+# Unchanged, past a few polls: the API goes on.
+sleep 7
+kill -0 "$API_PID" 2>/dev/null || fail "[S7] the API stopped with its MANIFEST unchanged: $(tail -n 3 "$work/api.log")"
+
 # Gone, as fresh leaves it during an update: the API goes on.
 mv "$ext/MANIFEST" "$work/MANIFEST"
 sleep 7

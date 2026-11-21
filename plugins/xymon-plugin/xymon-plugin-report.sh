@@ -73,6 +73,7 @@ rc=$?
 # release, or with none published; yellow with a newer one released, or
 # with a VERSION that cannot be compared. The summary counts them.
 marked=$(printf '%s\n' "$out" | awk '
+	/^  cannot read / { print "  &yellow " substr($0, 3); next }
 	/^  [^ ]+: / {
 		c = "yellow"
 		if ($0 ~ /; up to date$/ || $0 ~ /; newer than its latest release, / || $0 ~ /; no release of it is published$/) c = "green"
@@ -87,11 +88,17 @@ joined() { printf '%s\n' "$1" | awk 'NF { printf "%s%s", (n++ ? ", " : ""), $0 }
 n=$(printf '%s\n' "$marked" | grep -c '^  &') || :
 newer=$(names '.* released: '); k=$(printf '%s' "$newer" | grep -c .) || :; newer=$(joined "$newer")
 bad=$(names ' [^0-9]'); m=$(printf '%s' "$bad" | grep -c .) || :; bad=$(joined "$bad")
+# A directory outdated cannot read -- ext/ itself, say -- hides the plugins
+# in it: said first, as it is, and then what could be read.
+closed=$(joined "$(printf '%s\n' "$out" | sed -n 's/^  \(cannot read .*\)/\1/p')")
 if [ "$n" = 1 ]; then of="1 plugin"; else of="$n plugins"; fi
 case $rc in
 	0) color=green summary="$of: no newer release is published" ;;
 	6) color=yellow summary="$k of $of with a newer release published: $newer" ;;
-	7) color=yellow summary="$m of $of whose VERSION cannot be compared: $bad${newer:+; $k with a newer release published: $newer}" ;;
+	7) color=yellow
+		if [ "$m" -gt 0 ]; then summary="$m of $of whose VERSION cannot be compared: $bad"; else summary=$closed; fi
+		[ -z "$closed" ] || [ "$m" = 0 ] || summary="$closed; $summary"
+		summary="$summary${newer:+; $k with a newer release published: $newer}" ;;
 	1)
 		log "waited ${wait_s}s; outdated ended with 1, nothing sent: $(printf '%s' "$out" | tr '\n' ' ')"
 		exit 0 ;;

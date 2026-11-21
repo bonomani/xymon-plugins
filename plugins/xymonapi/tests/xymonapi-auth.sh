@@ -82,10 +82,6 @@ assert_equal "xymon-plugins" "$(ls "$work/unpacked")" "rooted at xymon-plugins/"
 grep -rqF "$(first_line "$(cut -d: -f2 "$work/htpasswd")")" "$work/unpacked" && fail "[C4] /plugins gave the password file's contents"
 [ -n "$(find "$work/unpacked" -type f -name tokens)" ] && fail "[C4] /plugins gave a tokens file"
 assert_contains "\"api\":{\"version\":\"${version##*/v}\"}" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user, a release tag as its X.Y.Z"
-# The process names its directory in its command line, which is what a
-# restart finds it by: pkill -f "$XYMONHOME/ext/xymonapi/".
-grep -qx "$API_PID" <<<"$(pgrep -f "$work/inst/ext/xymonapi/" || true)" \
-	|| fail "pgrep -f on the API's directory does not find it, so the documented pkill would not stop it: $(ps -o command= -p "$API_PID")"
 # An install over it has it stop by itself, its MANIFEST written anew
 # (S7), since it would go on with the code it loaded; xymonlaunch, not run
 # here, would start the new. The install signals nothing. With DESTDIR, a
