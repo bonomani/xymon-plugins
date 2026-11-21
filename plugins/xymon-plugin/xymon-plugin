@@ -953,7 +953,7 @@ prune_dist() {
 	for p in "$DIST"/plugins/* "$DIST"/plugins/.[!.]* "$DIST"/plugins/..?*; do
 		[ -e "$p" ] || [ -L "$p" ] || continue
 		if [ -L "$p" ] || [ ! -d "$p" ] || [ ! -f "$p/PLUGIN" ] || [ -L "$p/PLUGIN" ] \
-			|| [ ! -f "$EXTROOT/${p##*/}/VERSION" ]; then
+			|| { [ ! -f "$EXTROOT/${p##*/}/VERSION" ] && [ ! -f "$EXTROOT/${p##*/}/PLUGIN" ]; }; then
 			rm -rf "$p" || die "could not remove $p, which /plugins would serve"
 			continue
 		fi
@@ -1667,15 +1667,17 @@ install_server() {
 	done
 	fresh "$ext" || exit 1
 	open_dir -1 "$EXTROOT"
-	copy "$1" server "$ext"
-	version "$1" "$ext"
+	# PLUGIN first, VERSION last: a plugin's directory with its PLUGIN file
+	# and no VERSION is an install that did not end, which outdated says.
 	record "$1" "$ext"
+	copy "$1" server "$ext"
 	dist "$1"
 	[ "$was_manual" = "$(field "$1" server-manual)" ] || drop_manual "$was_manual" "$MANDIR" "$XYMONHOME/ext/$1" ""
 	manual "$1" "$(field "$1" server-manual)" "$ext" "$MANDIR" "$XYMONHOME/ext/$1"
 	[ -z "$was_task" ] || [ -n "$(field "$1" task)" ] || drop_task "$1"
 	task "$1"
 	conf "$1"
+	version "$1" "$ext"
 	manifest_server "$1"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$ext/VERSION") in $XYMONHOME/ext/$1."
@@ -1710,9 +1712,9 @@ install_tools() {
 	was_command=$(held "$TOOLSROOT" "$1" command)
 	fresh "$dir" || exit 1
 	mkdir -p "$BIN" "$TOOLSMAN1"
-	copy "$1" tools "$dir"
-	version "$1" "$dir"
+	# PLUGIN first, VERSION last, as on the server.
 	record "$1" "$dir"
+	copy "$1" tools "$dir"
 	set -f
 	# shellcheck disable=SC2086
 	[ "$was_command" = "$(field "$1" command)" ] || drop_command "$1" $was_command
@@ -1726,6 +1728,7 @@ install_tools() {
 		chmod 755 "$BIN/$2"
 	fi
 	manual "$1" "$(field "$1" tools-manual)" "$dir" "$PREFIX/share/man" "$PREFIX/libexec/xymon-plugins/$1"
+	version "$1" "$dir"
 	manifest_tools "$1"
 	venv_auto "$1" "$TOOLSROOT" "$(echo $(field "$1" tools-modules) $(field "$1" tools-optional-modules))" --tools "$(field "$1" venv-note)"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
