@@ -75,7 +75,7 @@ assert_contains "--paginate" "$(cat "$work/gh.args")" "and every page"
 tags "xymonapi/v$api" "xymonapi/v$(up "$api")" "xymonapi-rag/v$rag"
 run
 assert_equal 6 "$RC" "[S32] a newer release: 6"
-assert_contains "xymonapi: $api installed; $(up "$api") released: ./xymon-plugin update --tools xymonapi, from its release's archive" \
+assert_contains "xymonapi: $api installed; $(up "$api") released: ./xymon-plugin update --tools xymonapi PREFIX=$prefix, from its release's archive" \
 	"$(out)" "[S32] the newer one, and the update that takes it"
 assert_contains "xymonapi-rag: $rag installed; up to date" "$(out)" "the others said as they are"
 tags "xymonapi/v$api" "xymonapi-rag/v$rag"
@@ -135,19 +135,106 @@ assert_contains "cannot read https://api.github.com/repos/xymon-monitoring/xymon
 assert_contains "Could not resolve host" "$(cat "$work/err")" "with curl's own words"
 assert_not_contains "installed" "$(out)" "listing nothing"
 
-# A VERSION changed by hand: said, not compared.
-v=$prefix/libexec/xymon-plugins/xymonapi-rag/VERSION
+# A VERSION that cannot be compared: said, with why and what fixes it,
+# never echoed, and 7 -- over 6, as not every plugin was compared; GitHub
+# not reached is 1 over both, read first.
+d=$prefix/libexec/xymon-plugins/xymonapi-rag
+v=$d/VERSION
 cp "$v" "$work/VERSION.kept"
-printf 'not a version\033[31m\n' > "$v"
 tags "xymonapi/v$api" "xymonapi-rag/v$rag"
+printf 'not a version\033[31m\n' > "$v"
 run
-assert_contains "xymonapi-rag: its VERSION holds no version: ./xymon-plugin verify --tools says more" "$(out)" "a VERSION holding no version is said"
+assert_contains "xymonapi-rag: $v holds no version. To fix: ./xymon-plugin update --tools xymonapi-rag PREFIX=$prefix" "$(out)" "[S32] a VERSION holding no version is said, with its fix"
 assert_not_contains "$(printf '\033')" "$(out)" "and what it holds is not echoed"
-assert_equal 0 "$RC" "a VERSION holding no version: 0"
+assert_equal 7 "$RC" "[S32] a VERSION that cannot be compared: 7"
 printf 'xymonapi/v%s\n' "$rag" > "$v"
 run
-assert_contains "xymonapi-rag: its VERSION holds no version" "$(out)" "another plugin's tag is no version of this one"
+assert_contains "xymonapi-rag: $v holds no version" "$(out)" "another plugin's tag is no version of this one"
+: > "$v"
+run
+assert_contains "xymonapi-rag: $v holds no version" "$(out)" "nor is an empty VERSION"
+rm "$v"
+run
+assert_contains "xymonapi-rag: $v is missing: an install that did not end. To fix: ./xymon-plugin install --tools xymonapi-rag PREFIX=$prefix" "$(out)" "[S32] a VERSION missing is said, with its fix: install, as update takes it for no install"
+assert_equal 7 "$RC" "a VERSION missing: 7"
+ln -s "$work/VERSION.kept" "$v"
+run
+assert_contains "xymonapi-rag: $v is a link, which no install makes. To fix: ./xymon-plugin update --tools xymonapi-rag PREFIX=$prefix" "$(out)" "[S32] a VERSION that is a link is said"
+rm "$v"; ln -s "$work/nowhere" "$v"
+run
+assert_contains "xymonapi-rag: $v is a link, which no install makes. To fix: ./xymon-plugin install --tools xymonapi-rag PREFIX=$prefix" "$(out)" "[S32] one leading nowhere: install"
+rm "$v"; cp "$work/VERSION.kept" "$v"
+# Over 6: a newer xymonapi released and this VERSION broken, both said.
+tags "xymonapi/v$(up "$api")" "xymonapi-rag/v$rag"
+: > "$v"
+run
+assert_equal 7 "$RC" "[S32] a newer release and a VERSION that cannot be compared: 7"
+assert_contains "released: ./xymon-plugin update --tools xymonapi" "$(out)" "both said: the newer release"
+assert_contains "xymonapi-rag: $v holds no version" "$(out)" "and the VERSION"
+# Under 1: GitHub not reached, nothing read.
+GH=fail CURL=fail run
+assert_equal 1 "$RC" "[S32] GitHub not reached and a VERSION broken: 1"
+assert_not_contains "holds no version" "$(out)" "nothing read"
 cp "$work/VERSION.kept" "$v"
+tags "xymonapi/v$api" "xymonapi-rag/v$rag"
+# On the server, the command names the tree, as it is to be typed.
+srv=$work/srv
+server_tree "$srv"
+"$ROOT/xymon-plugin" install --server xymonapi XYMONHOME="$srv" MANDIR="$work/man" >"$work/srv.log" 2>&1 \
+	|| fail "install --server xymonapi failed: $(tail -n 5 "$work/srv.log")"
+rm "$srv/ext/xymonapi/VERSION"
+RC=0; PATH="$bin:$PATH" "$ROOT/xymon-plugin" outdated --server XYMONHOME="$srv" >"$work/out" 2>"$work/err" || RC=$?
+assert_contains "To fix: XYMONHOME=$srv ./xymon-plugin install --server xymonapi" "$(out)" "[S32] on the server, the fix names the tree"
+# A plugin named but not installed here: nothing said, as before.
+RC=0; PATH="$bin:$PATH" "$ROOT/xymon-plugin" outdated --tools xymonapi-agent PREFIX="$prefix" >"$work/out" 2>"$work/err" || RC=$?
+assert_equal 0 "$RC" "a plugin named and not installed: 0"
+assert_equal "" "$(out)" "and nothing said of it"
+# What this user cannot read: as root nothing is closed, so not there.
+if [ "$(id -u)" -ne 0 ]; then
+	me=$(id -un)
+	chmod a-r "$v"
+	run
+	assert_contains "xymonapi-rag: cannot read $v: it is mode 200, owned by $me. To fix: chmod 644 '$v'" "$(out)" "[S32] an unreadable VERSION is said, with its owner and fix"
+	assert_equal 7 "$RC" "an unreadable VERSION: 7"
+	chmod u+r,go+r "$v"
+	chmod a-x "$d"
+	run
+	assert_contains "xymonapi-rag: cannot read $v: $d is mode 644, owned by $me. To fix: chmod 755 '$d'" "$(out)" "[S32] a directory that cannot be entered is said, with its owner and fix"
+	assert_equal 7 "$RC" "a directory that cannot be entered: 7"
+	assert_equal 1 "$(grep -c "xymonapi-rag: cannot read" "$work/out")" "and said once"
+	# And by a copy of the installer that holds no plugins, as the one
+	# installed on a server: it lists what it finds, and finds that
+	# directory by its name, which a release has.
+	mkdir -p "$work/lone"; cp "$ROOT/plugins/xymon-plugin/xymon-plugin" "$work/lone/"
+	RC=0; PATH="$bin:$PATH" "$work/lone/xymon-plugin" outdated --tools PREFIX="$prefix" >"$work/out" 2>"$work/err" || RC=$?
+	assert_contains "xymonapi-rag: cannot read $v: $d is mode 644" "$(out)" "[S32] a copy holding no plugins finds a directory it cannot enter"
+	assert_equal 7 "$RC" "and ends with 7"
+	chmod u+x,go+x "$d"
+	# Any directory it cannot enter, a release's name or not; but the
+	# virtualenv, the installer's own.
+	r=$prefix/libexec/xymon-plugins
+	mkdir -p "$r/private" "$r/venv"; chmod a-x "$r/private" "$r/venv"
+	RC=0; PATH="$bin:$PATH" "$work/lone/xymon-plugin" outdated --tools PREFIX="$prefix" >"$work/out" 2>"$work/err" || RC=$?
+	assert_contains "private: cannot read $r/private/VERSION: $r/private is mode 644" "$(out)" "[S32] a directory no release names, closed, is said"
+	assert_not_contains "venv" "$(out)" "the virtualenv, closed, is not taken for a plugin"
+	chmod u+x,go+x "$r/private" "$r/venv"; rmdir "$r/private" "$r/venv"
+	chmod a-x "$d"
+	chmod u+x,go+x "$d"
+	r=$prefix/libexec/xymon-plugins
+	chmod a-x "$r"
+	run
+	assert_contains "cannot read the plugins in $r: $r is mode 644, owned by $me. To fix: chmod 755 '$r'" "$(out)" "[S32] plugins that cannot be listed are said"
+	assert_equal 7 "$RC" "plugins that cannot be listed: 7"
+	chmod u+x,go+x "$r"
+	# Nor the directory above them.
+	chmod a-x "$prefix/libexec"
+	run
+	assert_contains "cannot read the plugins in $r: $prefix/libexec is mode 644, owned by $me" "$(out)" "[S32] a closed directory above them is said"
+	assert_equal 7 "$RC" "a closed directory above them: 7"
+	chmod u+x,go+x "$prefix/libexec"
+fi
+run
+assert_equal 0 "$RC" "all as it was: 0 ($(out))"
 
 # Each request curl makes is bounded in time; one that runs out of it is
 # GitHub not reached.
@@ -158,7 +245,8 @@ CURL=timeout GH=fail run
 assert_equal 1 "$RC" "[S32] a curl that runs out of time is GitHub not reached: 1"
 assert_contains "Operation timed out" "$(cat "$work/err")" "and says so"
 rm -f "$work/page1.json"
+
 # It changes nothing: the install is as it was.
 "$ROOT/xymon-plugin" verify --tools PREFIX="$prefix" >"$work/verify.log" 2>&1 || fail "[S32] verify after outdated: $(tail -n 5 "$work/verify.log")"
 
-pass "[S32] outdated says each plugin's version against its latest release -- up to date (0), newer released (6) with the update, newer than any, none released, a VERSION holding none -- through gh asked of github.com, else curl page after page; 1 when GitHub is not reached; changing nothing"
+pass "[S32] outdated says each plugin's version against its latest release -- up to date (0), newer released (6) with the update, newer than any, none released; a VERSION that cannot be compared (7) with why and its fix -- through gh asked of github.com, else curl page after page, each request bounded; 1 when GitHub is not reached; changing nothing"

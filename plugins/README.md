@@ -132,10 +132,13 @@ something is only untidy -- what a nightly check can test.
 `./xymon-plugin outdated` says, for what is installed, whether a newer
 release is published on GitHub, with the update that takes it. It changes
 nothing, reads the releases with `gh` or, when `gh` is missing or fails,
-`curl` or `wget`, and exits 6 when it said of a plugin that a newer release
-exists, 0 when it said of none, and 1, saying why, when GitHub cannot be
-reached, when it has more releases than the 60 pages read without `gh`, or
-when a `VERSION` cannot be read. Behind a proxy, each of `gh`, `curl` and
+`curl` or `wget`, each request of `curl` and GNU `wget` bounded in time.
+It exits 1, saying why, when GitHub cannot be reached or has more releases
+than the 60 pages read without `gh`; otherwise 7 when a plugin's `VERSION`
+cannot be compared -- missing, a link, unreadable, in a directory it cannot
+enter, holding no version -- each line saying why and what fixes it; else 6 when
+it said of a plugin that a newer release exists, and 0 when it said of
+none. Behind a proxy, each of `gh`, `curl` and
 `wget` uses the proxy settings it sees -- its environment, `~/.curlrc` for
 `curl`; under `sudo`, which those are depends on sudo's policy, so run it as
 yourself or with `sudo -E`.
