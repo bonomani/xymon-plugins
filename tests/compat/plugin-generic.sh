@@ -45,4 +45,32 @@ assert_contains "zz-demo: 1.2.3 installed" "$st" "[S1] status reports it"
 for f in "$home/ext/zz-demo" "$man/man8/zz-demo.8"; do
 	if [ -e "$f" ] || [ -L "$f" ]; then fail "[S1] $f is still there after remove --all"; fi
 done
+# An install that does not end -- here its manual page has nowhere to go,
+# MANDIR being a file -- leaves the plugin's PLUGIN file and no VERSION:
+# VERSION is written last, so that an unfinished install is told.
+: > "$work/notadir"
+rc=0
+"$repo/xymon-plugin" install --server zz-demo XYMONHOME="$home" MANDIR="$work/notadir" >"$work/broken.log" 2>&1 || rc=$?
+[ "$rc" -ne 0 ] || fail "an install whose manual page had nowhere to go succeeded"
+assert_file_exists "$home/ext/zz-demo/PLUGIN"
+[ -e "$home/ext/zz-demo/VERSION" ] && fail "an install that did not end wrote VERSION, which says it did"
+rm -rf "$home/ext/zz-demo"
+
+# An update that stops while staging for /plugins -- here a README.md it
+# cannot read, which is staged and not installed -- leaves the copy
+# staged before: what /plugins serves is never half gone. Not as root,
+# who reads anything.
+if [ "$(id -u)" -ne 0 ]; then
+	"$repo/xymon-plugin" install --server zz-demo XYMONHOME="$home" MANDIR="$man" >"$work/again.log" 2>&1 \
+		|| fail "installing zz-demo again failed: $(tail -n 5 "$work/again.log")"
+	chmod a-r "$d/README.md"
+	rc=0
+	"$repo/xymon-plugin" update --server zz-demo XYMONHOME="$home" MANDIR="$man" >"$work/stage.log" 2>&1 || rc=$?
+	chmod u+r,go+r "$d/README.md"
+	[ "$rc" -ne 0 ] || fail "an update that could not stage README.md succeeded"
+	assert_file_exists "$home/ext/xymon-plugins-dist/plugins/zz-demo/demo.sh"
+	assert_file_exists "$home/ext/xymon-plugins-dist/plugins/zz-demo/README.md"
+	"$repo/xymon-plugin" remove --server zz-demo --yes XYMONHOME="$home" MANDIR="$man" >/dev/null 2>&1 || :
+fi
+
 pass "a plugin no code knows is found by --all, installed, reported and removed"

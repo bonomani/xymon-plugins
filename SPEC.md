@@ -496,20 +496,30 @@ removed off a terminal without `--yes`, an answer N, or a thing left
 unproved.
 
 **S32. `outdated` says what a newer release would update.**
-`outdated` reads, as `status` does (S15), the Xymon servers' and the
-tools' parts installed -- both when neither is named, `--tools` alone; no
-plugin has a client part -- and says of each plugin installed the version
+`outdated` reads, as `status` does (S15), the Xymon servers' and the tools'
+parts installed -- both when neither is named, `--tools` alone; no plugin
+has a client part -- and says of each plugin installed the version
 installed against its latest published release on GitHub: up to date; a
 newer one released, with the update that takes it; installed newer than any
-released; none released; or, its `VERSION` holding no version, that
-`verify` says more. It changes nothing. It reads the releases from GitHub:
-with `gh` when it answers, drafts left out as an anonymous reader does not
-see them; otherwise GitHub's API, anonymously, through `curl` or `wget`, at
-most 60 pages of a hundred, as many as GitHub answers, from one address, in
-an hour. It ends with 1, saying why, when none reaches GitHub, when there are
-more releases than that, or when a `VERSION` cannot be read. Otherwise it
-ends with 6 when it said of a plugin that a newer release exists, and with
-0 when it said of none -- for a script or a Xymon task to read.
+released; none released; or that its `VERSION` cannot be compared --
+missing, a link, unreadable, in a directory this user cannot enter, holding
+no version -- with what fixes it when the cause is known (a `chmod` named
+with whoever owns what is closed, an `install` or `update`), how to find it
+otherwise, never what it holds. Every directory there that it cannot enter
+is said, but the virtualenv and `/plugins`' stage, the installer's own; so
+are plugins it cannot list, their directory or one above it closed. It
+changes nothing. It reads the releases from GitHub: with `gh` when it
+answers, drafts left out as an anonymous reader does not see them;
+otherwise GitHub's API, anonymously, through `curl` or `wget`, at most 60
+pages of a hundred, as many as GitHub answers, from one address, in an
+hour; each request of `curl`, and of GNU `wget`, bounded in time, one that
+runs out of it being GitHub not reached -- `gh` has no such bound, the task
+that runs `outdated` being bounded by xymonlaunch. It ends with 1, saying
+why, when none reaches GitHub or when there are more releases than that,
+before any `VERSION` is read. Otherwise it ends with 7 when a `VERSION`
+could not be compared, every line said; else with 6 when it said of a
+plugin that a newer release exists, and with 0 when it said of none -- for
+a script or a Xymon task to read.
 
 ### Getting the code
 

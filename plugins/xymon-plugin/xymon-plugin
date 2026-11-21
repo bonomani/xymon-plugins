@@ -505,6 +505,13 @@ client_home() {
 
 # The repository the plugins are released from.
 REPO="xymon-monitoring/xymon-plugins"
+# How long one request to GitHub may take, in seconds, where curl or GNU
+# wget can bound it: a network that answers nothing must not hold outdated
+# forever. gh has no such bound; the plugins column's task is bounded by
+# xymonlaunch's MAXTIME, and outdated run by hand by an interrupt.
+# XYMON_PLUGINS_TIMEOUT, for the tests.
+NET_T=${XYMON_PLUGINS_TIMEOUT:-30}
+case $NET_T in ''|*[!0-9]*|0) NET_T=30 ;; esac
 
 # releases -- the plugins' published releases, "NAME X.Y.Z" a line, from
 # GitHub: with gh when it answers, drafts left out as an anonymous reader
@@ -536,9 +543,14 @@ anon_releases() {
 	while :; do
 		u="https://api.github.com/repos/$REPO/releases?per_page=100&page=$page"
 		if command -v curl >/dev/null 2>&1; then
-			j=$(curl -fsSL -H 'Accept: application/vnd.github+json' "$u" 2>&1) || die "cannot read $u: $j"
+			j=$(curl -fsSL --connect-timeout 10 --max-time "$NET_T" -H 'Accept: application/vnd.github+json' "$u" 2>&1) \
+				|| die "cannot read $u: $j"
 		elif command -v wget >/dev/null 2>&1; then
-			j=$(wget -q -O - "$u") || die "cannot read $u: wget failed (exit status $?)"
+			# GNU wget's -T; busybox's has none.
+			wv=$(wget --version 2>/dev/null) || wv=
+			case $wv in *"GNU Wget"*) wt="-T $NET_T -t 1" ;; *) wt= ;; esac
+			# shellcheck disable=SC2086 # wt is options or nothing
+			j=$(wget -q $wt -O - "$u") || die "cannot read $u: wget failed (exit status $?)"
 		elif [ -n "${GHFAILED:-}" ]; then
 			die "gh could not read the releases from GitHub, and neither curl nor wget is here to read them"
 		else
@@ -547,13 +559,14 @@ anon_releases() {
 		t=$(printf '%s\n' "$j" | tr ',' '\n' \
 			| sed -n 's/^[][{[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*$/\1/p')
 		[ -n "$t" ] || break
+		# ponytail: 60 pages, as many as GitHub answers, from one address,
+		# in an hour; a 61st with releases on it is said rather than a
+		# partial list -- an empty one, 6000 exactly, is not.
+		[ "$page" -le 60 ] || die "github.com/$REPO has more than the 6000 releases outdated reads without gh: read them with gh, logged in"
 		all="$all$t
 "
 		# A page short of a hundred is the last.
 		[ "$(printf '%s\n' "$t" | wc -l)" -ge 100 ] || break
-		# ponytail: 60 pages, as many as GitHub answers, from one address,
-		# in an hour; past them, said rather than a partial list.
-		[ "$page" -lt 60 ] || die "github.com/$REPO has more than the 6000 releases outdated reads without gh: read them with gh, logged in"
 		page=$((page + 1))
 	done
 	printf '%s' "$all"
@@ -568,25 +581,114 @@ latest() {
 	echo "$best"
 }
 
+# o_mode PATH, o_owner PATH -- PATH's mode, in octal, and its owner's name
+# (or uid), from ls -ld, as GNU, BSD and busybox all print it.
+o_mode() {
+	# shellcheck disable=SC2012 # one path, its mode
+	ls -ld "$1" | awk '{ m = 0; for (i = 2; i <= 10; i++) { m = m * 2; if (substr($1, i, 1) !~ /[-ST]/) m++ } printf "%o", m }'
+}
+o_owner() {
+	# shellcheck disable=SC2012 # one path, its owner
+	ls -ld "$1" | awk '{ print $3 }'
+}
+# o_fix OWNER WHAT -- the chmod WHAT needs, run by OWNER: as is for one's
+# own, with sudo for root's, as that user or with sudo for another's.
+o_fix() {
+	if [ "$1" = "$(id -un)" ]; then echo "chmod $2"
+	elif [ "$1" = root ]; then echo "chmod $2, with sudo"
+	else echo "chmod $2 as $1, or with sudo"
+	fi
+}
+
+# o_cmd PART VERB PLUGIN -- the command that does VERB to PLUGIN there, as
+# it is to be typed: the server's tree named, the tools' prefix when one
+# was given.
+o_cmd() {
+	if [ "$1" = server ]; then echo "XYMONHOME=$XYMONHOME ./xymon-plugin $2 --server $3"
+	elif [ -n "$PREFIX_GIVEN" ]; then echo "./xymon-plugin $2 --tools $3 PREFIX=$PREFIX"
+	else echo "./xymon-plugin $2 --tools $3"
+	fi
+}
+
+# outdated_closed ROOT -- a line, when this user cannot list ROOT's
+# plugins -- ROOT closed, or a directory above it -- which would be silent
+# otherwise; false when it can, or when ROOT is not there.
+outdated_closed() {
+	o_c=$1
+	while [ ! -d "$o_c" ] && [ "$o_c" != / ] && [ -n "$o_c" ]; do o_c=$(dirname "$o_c"); done
+	[ -d "$o_c" ] || return 1
+	if [ "$o_c" = "$1" ]; then
+		[ ! -x "$o_c" ] || [ ! -r "$o_c" ] || return 1
+	else
+		[ ! -x "$o_c" ] || return 1
+	fi
+	o_o=$(o_owner "$o_c")
+	echo "cannot read the plugins in $1: $o_c is mode $(o_mode "$o_c"), owned by $o_o. To fix: $(o_fix "$o_o" "755 '$o_c'")"
+}
+
+# outdated_names ROOT -- the plugins outdated reads there, each once: those
+# status lists, and every directory it cannot enter, which would be silent
+# otherwise -- but the installer's own, the virtualenv and /plugins' stage.
+outdated_names() {
+	o_l=$(with_installed "$1")
+	printf '%s\n' "$o_l"
+	# shellcheck disable=SC2086 # the names, split into one list
+	o_l=" $(printf '%s ' $o_l)"
+	for d in "$1"/*; do
+		if [ -d "$d" ] && [ ! -x "$d" ] && plain "${d##*/}"; then
+			case ${d##*/} in venv|"${DIST##*/}") continue ;; esac
+			case $o_l in *" ${d##*/} "*) ;; *) echo "${d##*/}" ;; esac
+		fi
+	done
+}
+
 # outdated_line PART ROOT PLUGIN -- the plugin installed there against its
-# latest release: up to date, a newer one released (with the update that
-# takes it), none released, or installed newer than any released.
+# latest release, one line; ending 7 where its VERSION cannot be compared,
+# the line saying why and what fixes it, or how to find why. What VERSION
+# holds is never echoed.
 outdated_line() {
-	[ -f "$2/$3/VERSION" ] || return 0
-	# Its version, a bare X.Y.Z or this plugin's tag, checked to be one: a
-	# file changed by hand is said, never compared or echoed; one that
-	# cannot be read is an error.
-	ov=$(head -n 1 "$2/$3/VERSION") || die "cannot read $2/$3/VERSION"
+	o_d=$2/$3 o_v=$2/$3/VERSION
+	# Its directory, which this user cannot enter.
+	if [ -d "$o_d" ] && [ ! -x "$o_d" ]; then
+		o_o=$(o_owner "$o_d")
+		echo "$3: cannot read $o_v: $o_d is mode $(o_mode "$o_d"), owned by $o_o. To fix: $(o_fix "$o_o" "755 '$o_d'")"
+		return 7
+	fi
+	# Not installed here -- named, or one of --all: nothing to say.
+	if [ ! -e "$o_d" ] && [ ! -L "$o_d" ]; then
+		return 0
+	fi
+	# A VERSION that does not lead to a file is no install, for update
+	# too: install again.
+	if [ -L "$o_v" ]; then
+		if [ -f "$o_v" ]; then o_x=update; else o_x=install; fi
+		echo "$3: $o_v is a link, which no install makes. To fix: $(o_cmd "$1" "$o_x" "$3")"
+		return 7
+	fi
+	if [ ! -e "$o_v" ]; then
+		echo "$3: $o_v is missing: an install that did not end. To fix: $(o_cmd "$1" install "$3")"
+		return 7
+	fi
+	if [ ! -r "$o_v" ]; then
+		o_o=$(o_owner "$o_v")
+		echo "$3: cannot read $o_v: it is mode $(o_mode "$o_v"), owned by $o_o. To fix: $(o_fix "$o_o" "644 '$o_v'")"
+		return 7
+	fi
+	# Its version, a bare X.Y.Z or this plugin's tag, checked to be one.
+	if ! ov=$(head -n 1 "$o_v" 2>/dev/null); then
+		echo "$3: cannot read $o_v. To find why: ls -ld '$o_d' '$o_v', then $(o_cmd "$1" verify "$3")"
+		return 7
+	fi
 	case $ov in "$3"/v*) ov=${ov#"$3"/v} ;; esac
 	case $ov in ""|*[!0-9.]*|.*|*.|*..*)
-		echo "$3: its VERSION holds no version: ./xymon-plugin verify --$1 says more"
-		return 0 ;;
+		echo "$3: $o_v holds no version. To fix: $(o_cmd "$1" update "$3")"
+		return 7 ;;
 	esac
 	or=$(latest "$3")
 	if [ -z "$or" ]; then
 		echo "$3: $ov installed; no release of it is published"
 	elif older "$ov" "$or"; then
-		echo "$3: $ov installed; $or released: ./xymon-plugin update --$1 $3, from its release's archive"
+		echo "$3: $ov installed; $or released: $(o_cmd "$1" update "$3"), from its release's archive"
 	elif older "$or" "$ov"; then
 		echo "$3: $ov installed; newer than its latest release, $or"
 	else
@@ -940,7 +1042,7 @@ prune_dist() {
 	for p in "$DIST"/plugins/* "$DIST"/plugins/.[!.]* "$DIST"/plugins/..?*; do
 		[ -e "$p" ] || [ -L "$p" ] || continue
 		if [ -L "$p" ] || [ ! -d "$p" ] || [ ! -f "$p/PLUGIN" ] || [ -L "$p/PLUGIN" ] \
-			|| [ ! -f "$EXTROOT/${p##*/}/VERSION" ]; then
+			|| { [ ! -f "$EXTROOT/${p##*/}/VERSION" ] && [ ! -f "$EXTROOT/${p##*/}/PLUGIN" ]; }; then
 			rm -rf "$p" || die "could not remove $p, which /plugins would serve"
 			continue
 		fi
@@ -1654,15 +1756,17 @@ install_server() {
 	done
 	fresh "$ext" || exit 1
 	open_dir -1 "$EXTROOT"
-	copy "$1" server "$ext"
-	version "$1" "$ext"
+	# PLUGIN first, VERSION last: a plugin's directory with its PLUGIN file
+	# and no VERSION is an install that did not end, which outdated says.
 	record "$1" "$ext"
+	copy "$1" server "$ext"
 	dist "$1"
 	[ "$was_manual" = "$(field "$1" server-manual)" ] || drop_manual "$was_manual" "$MANDIR" "$XYMONHOME/ext/$1" ""
 	manual "$1" "$(field "$1" server-manual)" "$ext" "$MANDIR" "$XYMONHOME/ext/$1"
 	[ -z "$was_task" ] || [ -n "$(field "$1" task)" ] || drop_task "$1"
 	task "$1"
 	conf "$1"
+	version "$1" "$ext"
 	manifest_server "$1"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$ext/VERSION") in $XYMONHOME/ext/$1."
@@ -1697,9 +1801,9 @@ install_tools() {
 	was_command=$(held "$TOOLSROOT" "$1" command)
 	fresh "$dir" || exit 1
 	mkdir -p "$BIN" "$TOOLSMAN1"
-	copy "$1" tools "$dir"
-	version "$1" "$dir"
+	# PLUGIN first, VERSION last, as on the server.
 	record "$1" "$dir"
+	copy "$1" tools "$dir"
 	set -f
 	# shellcheck disable=SC2086
 	[ "$was_command" = "$(field "$1" command)" ] || drop_command "$1" $was_command
@@ -1713,6 +1817,7 @@ install_tools() {
 		chmod 755 "$BIN/$2"
 	fi
 	manual "$1" "$(field "$1" tools-manual)" "$dir" "$PREFIX/share/man" "$PREFIX/libexec/xymon-plugins/$1"
+	version "$1" "$dir"
 	manifest_tools "$1"
 	venv_auto "$1" "$TOOLSROOT" "$(echo $(field "$1" tools-modules) $(field "$1" tools-optional-modules))" --tools "$(field "$1" venv-note)"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
@@ -2367,17 +2472,22 @@ EOF
 		fi ;;
 	outdated)
 		# Read-only, as status: what is installed, against the latest
-		# release of each plugin. A newer one released ends with status 6.
-		NEWER=
+		# release of each plugin. GitHub not reached ends with 1 before
+		# anything is read; then a VERSION that cannot be compared with 7,
+		# else a newer one released with 6 -- every line said either way.
+		NEWER='' UNCOMPARED=''
 		RELEASES=$(releases) || exit 1
 		if [ "$PART" != tools ] && [ -z "$XYMONHOME" ] && [ -z "$DESTDIR" ]; then
 			while IFS= read -r t; do
 				[ -n "$t" ] || continue
 				echo "Xymon server $t:"
 				XYMONHOME=$t; server_paths
-				L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
+				if l=$(outdated_closed "$EXTROOT"); then echo "  $l"; UNCOMPARED=1; fi
+				L=$LIST; [ -n "$NAMES" ] || L=$(outdated_names "$EXTROOT")
 				for n in $L; do
-					l=$(outdated_line server "$EXTROOT" "$n") || exit 1; [ -n "$l" ] || continue
+					o_rc=0; l=$(outdated_line server "$EXTROOT" "$n") || o_rc=$?
+					case $o_rc in 0) ;; 7) UNCOMPARED=1 ;; *) exit 1 ;; esac
+					[ -n "$l" ] || continue
 					echo "  $l"; case $l in *" released: "*) NEWER=1 ;; esac
 				done
 			done <<EOF
@@ -2387,21 +2497,31 @@ EOF
 		elif [ "$PART" != tools ]; then
 			need_home
 			echo "Xymon server $XYMONHOME:"
-			L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
+			if l=$(outdated_closed "$EXTROOT"); then echo "  $l"; UNCOMPARED=1; fi
+			L=$LIST; [ -n "$NAMES" ] || L=$(outdated_names "$EXTROOT")
 			for n in $L; do
-				l=$(outdated_line server "$EXTROOT" "$n") || exit 1; [ -n "$l" ] || continue
+				o_rc=0; l=$(outdated_line server "$EXTROOT" "$n") || o_rc=$?
+				case $o_rc in 0) ;; 7) UNCOMPARED=1 ;; *) exit 1 ;; esac
+				[ -n "$l" ] || continue
 				echo "  $l"; case $l in *" released: "*) NEWER=1 ;; esac
 			done
 		fi
 		if [ "$PART" != server ]; then
-			L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$TOOLSROOT")
+			L=$LIST; [ -n "$NAMES" ] || L=$(outdated_names "$TOOLSROOT")
 			[ "$PART" = tools ] || echo "Your tools, $PREFIX:"
+			if l=$(outdated_closed "$TOOLSROOT"); then
+				UNCOMPARED=1
+				if [ "$PART" = tools ]; then echo "$l"; else echo "  $l"; fi
+			fi
 			for n in $L; do
-				l=$(outdated_line tools "$TOOLSROOT" "$n") || exit 1; [ -n "$l" ] || continue
+				o_rc=0; l=$(outdated_line tools "$TOOLSROOT" "$n") || o_rc=$?
+				case $o_rc in 0) ;; 7) UNCOMPARED=1 ;; *) exit 1 ;; esac
+				[ -n "$l" ] || continue
 				case $l in *" released: "*) NEWER=1 ;; esac
 				if [ "$PART" = tools ]; then echo "$l"; else echo "  $l"; fi
 			done
 		fi
+		[ -z "${UNCOMPARED:-}" ] || exit 7
 		[ -z "${NEWER:-}" ] || exit 6 ;;
 	verify)
 		# None named: every installation found, as status lists them.
