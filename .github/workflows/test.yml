@@ -29,12 +29,16 @@ jobs:
       matrix:
         xymon: [main, rel-4.3.31]
         modules: [newest]
+        # The search's three tests, half the time of the others together,
+        # run beside them, in a job of their own, on each Xymon.
+        suite: [core, rag]
         # The oldest modules xymonapi's requirements.txt asks, exactly
         # those: the versions written there are the ones its tests pass
         # with, so that an install may refuse an older one (SPEC, S26).
         include:
           - xymon: main
             modules: floors
+            suite: core
     steps:
       - name: Checkout xymon-plugins
         uses: actions/checkout@v7
@@ -99,6 +103,7 @@ jobs:
       # modules, changes the key, and the index is built afresh. Saved by a
       # run on main, read by pull requests.
       - name: Cache the search's model and index
+        if: matrix.suite == 'rag'
         uses: actions/cache@v6
         with:
           path: |
@@ -114,13 +119,22 @@ jobs:
           FASTEMBED_CACHE_PATH: ${{ runner.temp }}/fastembed
           XYMONAPI_RAG_EVAL_INDEX: ${{ runner.temp }}/rag-eval/docs.npz
           MODULES: ${{ matrix.modules }}
+          SUITE: ${{ matrix.suite }}
         run: |
           # With the oldest modules, xymonapi's own tests: the search's
-          # modules are not among them.
+          # modules are not among them. Otherwise the search's tests in
+          # their job, and every other directory in the other.
           if [ "$MODULES" = floors ]; then
             plugins-repo/tests/run.sh plugins/xymonapi/tests
+          elif [ "$SUITE" = rag ]; then
+            plugins-repo/tests/run.sh plugins/xymonapi-rag/tests
           else
-            plugins-repo/tests/run.sh
+            set --
+            for d in plugins-repo/plugins/*/tests; do
+              d=${d#plugins-repo/}
+              [ "$d" = plugins/xymonapi-rag/tests ] || set -- "$@" "$d"
+            done
+            plugins-repo/tests/run.sh "$@" tests/compat
           fi
 
   # The API's contract changes only with its version: build/contract-check.sh
