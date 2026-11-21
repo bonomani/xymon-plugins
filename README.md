@@ -93,6 +93,12 @@ XYMONHOME=/usr/lib/xymon/server ./xymon-plugin install --server NAME   # on the 
 ./xymon-plugin install --tools NAME                                     # on your own machine
 ```
 
+`./xymon-plugin` is a link to `plugins/xymon-plugin/xymon-plugin`. Where
+links are not kept -- a clone by Git for Windows, a ZIP unpacked on
+Windows -- run that script itself, `sh plugins/xymon-plugin/xymon-plugin
+install ...`, with a verb: the menu it shows with none runs its commands
+without `sh`, which a ZIP may have left unable to run.
+
 `--all` in place of `NAME`, every plugin of that part; `update` updates what is installed. What each command puts where,
 Python and the virtualenv, enabling, updating and uninstalling are in
 [`plugins/README.md`](plugins/README.md#installing-a-plugin); each plugin's

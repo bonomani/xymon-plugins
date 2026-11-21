@@ -35,7 +35,7 @@ g add -A
 g commit -q -m release
 api=$(sed -n 's/^version: *//p' "$repo/plugins/xymonapi/PLUGIN")
 mcp=$(sed -n 's/^version: *//p' "$repo/plugins/xymonapi-mcp/PLUGIN")
-inst=$(sed -n 's/^INSTALLER_VERSION=//p' "$repo/xymon-plugin")
+inst=$(sed -n 's/^version: *//p' "$repo/plugins/xymon-plugin/PLUGIN")
 g tag "xymonapi/v$api"
 g tag "xymonapi-mcp/v$mcp"
 g tag "xymon-plugin/v$inst"
@@ -52,10 +52,18 @@ assert_not_contains "xymonapi-mcp" "$list" "and no other plugin"
 assert_not_contains "xymon-plugins/xymon-plugin" "$list" "nor the installer"
 assert_equal "" "$(printf '%s\n' "$list" | grep -v '^xymon-plugins/' || true)" "everything under xymon-plugins/"
 
+# The installer is a plugin too, plugins/xymon-plugin: its archive holds
+# that directory, LICENSE, and ./xymon-plugin, the link at the top that
+# leads into it -- and nothing else (S2: its version is its PLUGIN file's).
 i=$(build "xymon-plugin/v$inst" "$work/out")
-assert_equal "xymon-plugins/
-xymon-plugins/LICENSE
-xymon-plugins/xymon-plugin" "$(tar tzf "$i" | LC_ALL=C sort)" "the installer's holds xymon-plugin and LICENSE alone"
+ilist=$(tar tzf "$i")
+assert_contains "xymon-plugins/plugins/xymon-plugin/PLUGIN" "$ilist" "[S2] the installer's archive holds its plugin directory"
+assert_contains "xymon-plugins/plugins/xymon-plugin/xymon-plugin" "$ilist" "with the installer in it"
+assert_equal "" "$(printf '%s\n' "$ilist" | grep -vE '^xymon-plugins/($|LICENSE$|xymon-plugin$|plugins/$|plugins/xymon-plugin/)' || true)" \
+	"and only that directory, LICENSE and ./xymon-plugin"
+ilong=$(tar tvzf "$i")
+grep -q '^l.* xymon-plugins/xymon-plugin -> plugins/xymon-plugin/xymon-plugin$' <<<"$ilong" \
+	|| fail "./xymon-plugin in the installer's archive is not the link into plugins/xymon-plugin: $ilong"
 
 first=$(cksum < "$a")
 sleep 1
@@ -90,4 +98,4 @@ PREFIX="$work/prefix2" XDG_CONFIG_HOME="$work/cfg2" HOME="$work" \
 assert_equal "$mcp" "$(cat "$work/prefix2/libexec/xymon-plugins/xymonapi-mcp/VERSION")" \
 	"[S2] from a checkout at a release tag, VERSION is the same X.Y.Z as from its archive"
 
-pass "a release's archive holds one plugin, or the installer, under xymon-plugins/, the same bytes for the same tag, refused when its version is not the tag's, and installs unpacked beside the others"
+pass "a release's archive holds one plugin, the installer's with its link at the top, under xymon-plugins/, the same bytes for the same tag, refused when its version is not the tag's, and installs unpacked beside the others"

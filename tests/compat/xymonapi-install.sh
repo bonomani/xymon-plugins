@@ -56,9 +56,11 @@ for f in xymonapi-rag/xymonrag.py xymonapi-rag/xymonapi-rag.sh xymonapi-rag/requ
 	assert_file_exists "$home/ext/$f"
 done
 [ -x "$home/ext/xymonapi/xymonapi.sh" ] || fail "the launcher is not executable"
-# xymon-plugin reads each plugin from its PLUGIN file, and names none.
+# xymon-plugin reads each plugin from its PLUGIN file, and names none but
+# its own (plugin-generic.sh installs one no code knows).
 for p in "$ROOT"/plugins/*/PLUGIN; do
 	p=$(sed -n 's/^name: *//p' "$p")
+	[ "$p" = xymon-plugin ] && continue
 	grep -qw -- "$p" "$ROOT/xymon-plugin" && fail "[S1] xymon-plugin names the plugin $p"
 done
 # Each plugin records its version beside its files, X.Y.Z, the PLUGIN

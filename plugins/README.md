@@ -8,7 +8,8 @@ conventions they share, in the [top README](../README.md).
 
 ## The plugins
 
-Four today, one family: the Xymon API and what builds on it. How they fit
+Four today, one family: the Xymon API and what builds on it -- and the
+installer, listed last, a plugin itself. How they fit
 together, and what each needs, is in [`xymonapi`'s
 README](xymonapi/README.md#the-api-and-what-builds-on-it); each plugin's
 own README says how to install and use it, its manual page every behaviour
@@ -20,6 +21,7 @@ and setting.
 | [`xymonapi-mcp`](xymonapi-mcp/README.md) | an MCP server that gives an AI tool read-only tools over the API |
 | [`xymonapi-rag`](xymonapi-rag/README.md) | a search of Xymon's manual pages and history by meaning: the index on the server, `search` and `ask` anywhere |
 | [`xymonapi-agent`](xymonapi-agent/README.md) | one command that asks an AI CLI a question about Xymon, with the MCP server as its only tool; on the server, the API's `/ask` |
+| [`xymon-plugin`](xymon-plugin/README.md) | the installer itself, `./xymon-plugin` at the top being a link to it: installed on the server, its version is known like the others' |
 
 ## Getting the code from the server
 
