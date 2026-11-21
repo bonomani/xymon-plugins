@@ -29,12 +29,16 @@ jobs:
       matrix:
         xymon: [main, rel-4.3.31]
         modules: [newest]
+        # The search's three tests, half the time of the others together,
+        # run beside them, in a job of their own, on each Xymon.
+        suite: [core, rag]
         # The oldest modules xymonapi's requirements.txt asks, exactly
         # those: the versions written there are the ones its tests pass
         # with, so that an install may refuse an older one (SPEC, S26).
         include:
           - xymon: main
             modules: floors
+            suite: core
     steps:
       - name: Checkout xymon-plugins
         uses: actions/checkout@v7
@@ -48,6 +52,10 @@ jobs:
           ref: ${{ matrix.xymon }}
           path: xymon
 
+      - name: Xymon's commit
+        id: xymon
+        run: echo "sha=$(git -C xymon rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       # The floors are old: a Python their wheels exist for.
       - name: A Python the oldest modules install on
         if: matrix.modules == 'floors'
@@ -56,6 +64,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
+        id: deps
         env:
           MODULES: ${{ matrix.modules }}
         run: |
@@ -74,6 +83,11 @@ jobs:
           else
             "$RUNNER_TEMP/venv/bin/pip" install -r plugins-repo/plugins/xymonapi/requirements.txt -r plugins-repo/plugins/xymonapi-rag/requirements.txt
           fi
+          # The search's modules as installed, for its caches' keys: its
+          # requirements give only floors.
+          echo "rag=$("$RUNNER_TEMP/venv/bin/pip" freeze | { grep -iE '^(fastembed|numpy|onnxruntime)==' || true; } | sort | paste -sd- -)" >> "$GITHUB_OUTPUT"
+          # And the model it embeds with by default, for the model's cache.
+          echo "model=$(sed -n 's|^MODEL = os.environ.get("XYMONAPI_RAG_MODEL", "\(.*\)")$|\1|p' plugins-repo/plugins/xymonapi-rag/xymonrag.py | tr / -)" >> "$GITHUB_OUTPUT"
 
       # The non-interactive configure recipe of Xymon's own build.yml.
       - name: Build Xymon
@@ -91,20 +105,32 @@ jobs:
           ./configure --server
           make -j"$(nproc)"
 
-      # The search's embedding model, downloaded otherwise at each run, and
-      # the index of every Xymon manual page the eval test builds, nearly
-      # four minutes of CPU. An index keeps the vectors of the passages it
-      # holds and embeds only new ones, so a change to the pages is still
-      # indexed; a change to how passages are cut or embedded, or to the
-      # modules, changes the key, and the index is built afresh. Saved by a
-      # run on main, read by pull requests.
-      - name: Cache the search's model and index
+      # The search's embedding model, downloaded otherwise at each run: one
+      # per model and per version of the modules installed.
+      - name: Cache the search's model
+        if: matrix.suite == 'rag'
         uses: actions/cache@v6
         with:
-          path: |
-            ${{ runner.temp }}/fastembed
-            ${{ runner.temp }}/rag-eval
-          key: rag-${{ hashFiles('plugins-repo/plugins/xymonapi-rag/xymonrag.py', 'plugins-repo/plugins/xymonapi-rag/requirements.txt') }}
+          path: ${{ runner.temp }}/fastembed
+          key: rag-model-${{ runner.os }}-${{ steps.deps.outputs.model }}-${{ steps.deps.outputs.rag }}
+
+      # The index of every Xymon manual page the eval test builds, nearly
+      # four minutes of CPU. An index keeps the vectors of the passages it
+      # holds and embeds only new ones. One per Xymon branch, whose pages
+      # differ, and per Xymon commit: a newer commit starts from the index
+      # of an older one (restore-keys), embeds the pages that changed, and
+      # is saved under its own key -- with the commit left out, a key once
+      # saved was never saved again, and every run embedded the changes
+      # anew. A change to how passages are cut or embedded, or to the
+      # modules installed, changes the prefix, and the index is built
+      # afresh. Saved by a run on main, read by pull requests.
+      - name: Cache the search's index
+        if: matrix.suite == 'rag'
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/rag-eval
+          key: rag-index-${{ matrix.xymon }}-${{ steps.deps.outputs.rag }}-${{ hashFiles('plugins-repo/plugins/xymonapi-rag/xymonrag.py') }}-${{ steps.xymon.outputs.sha }}
+          restore-keys: rag-index-${{ matrix.xymon }}-${{ steps.deps.outputs.rag }}-${{ hashFiles('plugins-repo/plugins/xymonapi-rag/xymonrag.py') }}-
 
       - name: Test
         env:
@@ -114,13 +140,22 @@ jobs:
           FASTEMBED_CACHE_PATH: ${{ runner.temp }}/fastembed
           XYMONAPI_RAG_EVAL_INDEX: ${{ runner.temp }}/rag-eval/docs.npz
           MODULES: ${{ matrix.modules }}
+          SUITE: ${{ matrix.suite }}
         run: |
           # With the oldest modules, xymonapi's own tests: the search's
-          # modules are not among them.
+          # modules are not among them. Otherwise the search's tests in
+          # their job, and every other directory in the other.
           if [ "$MODULES" = floors ]; then
             plugins-repo/tests/run.sh plugins/xymonapi/tests
+          elif [ "$SUITE" = rag ]; then
+            plugins-repo/tests/run.sh plugins/xymonapi-rag/tests
           else
-            plugins-repo/tests/run.sh
+            set --
+            for d in plugins-repo/plugins/*/tests; do
+              d=${d#plugins-repo/}
+              [ "$d" = plugins/xymonapi-rag/tests ] || set -- "$@" "$d"
+            done
+            plugins-repo/tests/run.sh "$@" tests/compat
           fi
 
   # The API's contract changes only with its version: build/contract-check.sh

@@ -299,16 +299,18 @@ def _events_since(src, since: str) -> list[dict]:
 def _events_when_up(client, since: str, before: str | None) -> list[dict]:
     """/events, waiting for the API to come up: as an xymonlaunch task, index
     can start seconds before xymonapi listens, and its only failure then is
-    "cannot reach" with no HTTP status. Try for about a minute; anything the
-    API answers, a 401 for instance, is passed on at once."""
-    for attempt in range(6):
+    "cannot reach" with no HTTP status. Try every 2 seconds, so the index
+    starts soon after the API does, and no new try after a minute: one that
+    hangs ends with the client's own timeout. Anything the API answers, a 401
+    for instance, is passed on at once."""
+    deadline = time.monotonic() + 60
+    while True:
         try:
             return client.api("/events", since=since, limit="1000", before=before)["items"]
         except client.APIError as e:
-            if e.status is not None or attempt == 5:
+            if e.status is not None or time.monotonic() + 2 > deadline:
                 raise
-            time.sleep(10)
-    raise AssertionError("unreachable")
+            time.sleep(2)
 
 
 # --- The index ----------------------------------------------------------------------
