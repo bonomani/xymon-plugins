@@ -30,7 +30,10 @@ plugin installed is published, yellow when one is or a plugin's `VERSION`
 cannot be compared, with what to run. When GitHub is not reached it sends
 nothing, and the status goes purple once 31 hours have passed since the
 last one -- as it does when a restart of xymond stops the task while it
-waits. What it does is in `xymon-plugin.log`, in Xymon's log directory.
+waits. The status is for `MACHINEDOTS`, the server's name in
+`xymonserver.cfg`, which `hosts.cfg` must name; read back, one that xymond
+did not keep is said. What it does is in `xymon-plugin.log`, in Xymon's
+log directory.
 
 Yellow and purple alert as any column: in `alerts.cfg`, `EXSERVICE=plugins`
 on a rule keeps it out, or a rule of its own sends it elsewhere. Behind a

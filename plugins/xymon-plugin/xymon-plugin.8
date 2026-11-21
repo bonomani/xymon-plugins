@@ -54,7 +54,7 @@ reporter,
 .IR xymon-plugin-report.sh ,
 runs the installer installed beside it,
 .BR "outdated --server" ,
-and sends this host's status
+and sends the server's status
 .BR plugins ,
 valid 31 hours, with
 .BR outdated 's
@@ -69,7 +69,14 @@ xymond stops the task while it waits. It reads GitHub with
 .BR curl ,
 bounded in time, not
 .BR gh .
-Its log is
+The status is for
+.BR MACHINEDOTS ,
+the server's name in
+.IR xymonserver.cfg ,
+which
+.I hosts.cfg
+must name; read back, one that xymond did not keep is said, and the
+reporter ends with 1. Its log is
 .IR xymon-plugin.log ,
 in Xymon's log directory. Yellow and purple alert as any column:
 .B EXSERVICE=plugins
