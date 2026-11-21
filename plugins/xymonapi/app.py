@@ -642,12 +642,21 @@ async def _local_app(scope, receive, send):
 MANIFEST_POLL = 5
 
 
-def _manifest_stamp() -> tuple | None:
-    try:
-        st = (HERE / "MANIFEST").stat()
-    except OSError:
-        return None
-    return (st.st_ino, st.st_mtime_ns, st.st_size)
+# The MANIFESTs of the code this process runs: its own, and xymonapi-rag's,
+# whose xymonrag.py /search imports.
+MANIFESTS = (HERE / "MANIFEST", RAG_DIR / "MANIFEST")
+
+
+def _manifest_stamp() -> tuple:
+    out = []
+    for m in MANIFESTS:
+        try:
+            st = m.stat()
+        except OSError:
+            out.append(None)
+            continue
+        out.append((st.st_ino, st.st_mtime_ns, st.st_size))
+    return tuple(out)
 
 
 # Taken when the module is read, before the code it describes runs.
@@ -753,17 +762,21 @@ def main(argv: list[str]) -> int:
 
     async def watch():
         # The code this process runs is the code installed when it started,
-        # by its MANIFEST, an install's last step (S29). An update rewrites
-        # it: this process then stops as on SIGTERM, ending with 0, and
-        # xymonlaunch starts the new code. Gone, an update is under way.
-        # Absent when it started -- started during an update, or a checkout,
-        # which never has one -- it is watched for all the same.
+        # by the MANIFESTs of its plugin and xymonapi-rag's, written once an
+        # install or update command is done (S29). One written anew: this
+        # process then stops as on SIGTERM, ending with 0, and xymonlaunch
+        # starts the new code. Gone, an update is under way. Absent when it
+        # started -- started during an update, xymonapi-rag not installed,
+        # or a checkout, which never has one -- it is watched for all the
+        # same.
         while True:
             await asyncio.sleep(MANIFEST_POLL)
             now = _manifest_stamp()
-            if now is not None and now != MANIFEST_AT_START:
+            changed = [str(m) for m, s, s0 in zip(MANIFESTS, now, MANIFEST_AT_START)
+                       if s is not None and s != s0]
+            if changed:
                 log.info("%s changed, an update: stopping, for xymonlaunch to start the new code",
-                         HERE / "MANIFEST")
+                         ", ".join(changed))
                 stop(signal.SIGTERM, None)
                 return
 

@@ -86,23 +86,28 @@ assert_contains "${TAB}/usr/lib/xymon/server/ext/xymon-plugins-dist/plugins/xymo
 assert_contains "link${TAB}/usr/share/man/man8/xymonapi.8${TAB}/usr/lib/xymon/server/ext/xymonapi/xymonapi.8" "$m" "[S29] and the manual page's link too"
 assert_not_contains "$stage" "$m" "[S29] the stage is named nowhere"
 
-# MANIFEST is the last step, after the virtualenv (S29): a Python that
-# records whether it is there each time the install runs it, looking for
-# modules or making the virtualenv in a tree with none yet, never finds it.
+# MANIFEST is the command's last step, after every plugin it installs and
+# the virtualenv they share (S29): xymonapi-rag installed, xymonapi with it
+# as it needs it, a Python that records whether either's MANIFEST is there
+# each time the install runs it -- for xymonapi, then for xymonapi-rag,
+# looking for modules or making the virtualenv -- never finds one.
 real=${XYMONAPI_PYTHON:-python3}
 if command -v "$real" >/dev/null 2>&1; then
 	home2=$work/server2; server_tree "$home2"
 	cat > "$work/py" <<SH
 #!/bin/sh
 echo "\$*" >> "$work/py.ran"
-[ -e "$home2/ext/xymonapi/MANIFEST" ] && echo "\$*" >> "$work/py.early"
+for m in "$home2/ext/xymonapi/MANIFEST" "$home2/ext/xymonapi-rag/MANIFEST"; do
+	[ -e "\$m" ] && echo "\$m: \$*" >> "$work/py.early"
+done
 exec "$(command -v "$real")" "\$@"
 SH
 	chmod 755 "$work/py"
-	XYMON_PLUGINS_TREES="$home2" PYTHON="$work/py" x install --server xymonapi XYMONHOME="$home2"
+	XYMON_PLUGINS_TREES="$home2" PYTHON="$work/py" x install --server xymonapi-rag XYMONHOME="$home2"
 	[ -s "$work/py.ran" ] || fail "the install never ran the Python PYTHON names: $(tail -n 5 "$work/x.log")"
-	[ -e "$work/py.early" ] && fail "[S29] MANIFEST was written before the virtualenv: Python ran after it with $(head -n 1 "$work/py.early")"
+	[ -e "$work/py.early" ] && fail "[S29] a MANIFEST was written before the command's end: Python ran after it -- $(head -n 1 "$work/py.early")"
 	assert_file_exists "$home2/ext/xymonapi/MANIFEST"
+	assert_file_exists "$home2/ext/xymonapi-rag/MANIFEST"
 fi
 
 pass "an install and an update write MANIFEST: each file of the plugin's directory with its cksum, the task file and snippets marked admin, and outside it the staged copy, the command and the manual page's link, as installed; no task link"

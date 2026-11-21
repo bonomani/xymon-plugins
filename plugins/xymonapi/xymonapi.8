@@ -18,9 +18,11 @@ from the task file \fBext/xymonapi/tasks.cfg\fR, once
 \fBtasks.d/xymonapi.cfg\fR beside tasks.cfg; its installation makes no link.
 xymonlaunch starts it once xymond is running, and restarts it if it stops.
 An update takes effect by itself: the API checks every five seconds whether
-\fBext/xymonapi/MANIFEST\fR, an install's last step, was written anew, and
-then stops, ending with 0, for xymonlaunch to start the new code; one
-started while it was gone stops once it is there.
+\fBext/xymonapi/MANIFEST\fR or \fBext/xymonapi-rag/MANIFEST\fR, whose code
+/search loads, was written anew -- the last step of an install or update
+command, once every plugin and the virtualenv are in place -- and then
+stops, ending with 0, for xymonlaunch to start the new code; one started
+while one was gone stops once it is there.
 
 It needs Xymon 4.3.31 or later: its settings go in xymonserver.d/, which
 Xymon reads from 4.3.31. On 4.3.30 a file there is ignored, password
