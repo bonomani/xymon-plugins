@@ -1821,17 +1821,19 @@ install_server() {
 	task "$1"
 	conf "$1"
 	version "$1" "$ext"
-	manifest_server "$1"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$ext/VERSION") in $XYMONHOME/ext/$1."
 	[ -n "${UPDATING:-}" ] || say "$1" installed
-	restart "$1"
 	# A module the installed version loaded and this one has not goes.
 	if [ -n "$was_selinux" ] && [ -z "$(field "$1" selinux)" ] && [ -z "$DESTDIR" ] && command -v semodule >/dev/null 2>&1; then
 		semodule -r "$1" >/dev/null 2>&1 || :
 	fi
 	selinux "$1"
 	venv_auto "$1" "$EXTROOT" "$(field "$1" server-modules)" --server ""
+	# The last step (S29), once the modules are there: what watches
+	# MANIFEST to take up new code then finds what that code needs.
+	manifest_server "$1"
+	restart "$1"
 	DONE="$DONE $1"
 }
 
@@ -1872,8 +1874,8 @@ install_tools() {
 	fi
 	manual "$1" "$(field "$1" tools-manual)" "$dir" "$PREFIX/share/man" "$PREFIX/libexec/xymon-plugins/$1"
 	version "$1" "$dir"
-	manifest_tools "$1"
 	venv_auto "$1" "$TOOLSROOT" "$(echo $(field "$1" tools-modules) $(field "$1" tools-optional-modules))" --tools "$(field "$1" venv-note)"
+	manifest_tools "$1"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$dir/VERSION") in $PREFIX/libexec/xymon-plugins/$1."
 	# Said once, and not under DESTDIR, where PATH is the build machine's.
