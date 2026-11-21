@@ -45,16 +45,35 @@ jobs:
         with:
           path: plugins-repo
 
+      # The commit the branch or tag names, read before anything is
+      # fetched: Xymon built at that commit is cached, and a hit skips
+      # both the checkout and the build. The tree is cached whole -- a
+      # fresh checkout's files would be newer than the cached objects, and
+      # make would build everything again.
+      - name: Xymon's commit
+        id: xymon
+        env:
+          REF: ${{ matrix.xymon }}
+        run: |
+          refs=$(git ls-remote https://github.com/xymon-monitoring/xymon "refs/heads/$REF" "refs/tags/$REF" "refs/tags/$REF^{}")
+          sha=$(printf '%s\n' "$refs" | awk '$2 ~ /\^\{\}$/ { peeled = $1 } { first = first ? first : $1 } END { print peeled ? peeled : first }')
+          [ -n "$sha" ] || { echo "no $REF in xymon-monitoring/xymon" >&2; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Xymon, built
+        id: xymon-built
+        uses: actions/cache@v6
+        with:
+          path: xymon
+          key: xymon-built-${{ runner.os }}-${{ steps.xymon.outputs.sha }}-${{ hashFiles('plugins-repo/.github/workflows/test.yml') }}
+
       - name: Checkout Xymon (${{ matrix.xymon }})
+        if: steps.xymon-built.outputs.cache-hit != 'true'
         uses: actions/checkout@v7
         with:
           repository: xymon-monitoring/xymon
-          ref: ${{ matrix.xymon }}
+          ref: ${{ steps.xymon.outputs.sha }}
           path: xymon
-
-      - name: Xymon's commit
-        id: xymon
-        run: echo "sha=$(git -C xymon rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # The floors are old: a Python their wheels exist for.
       - name: A Python the oldest modules install on
@@ -62,6 +81,20 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.11"
+
+      # The virtualenv, kept from run to run per Python and modules: the
+      # install below then only upgrades what has a newer release, which
+      # newest still means (--upgrade-strategy eager), and adds nothing for
+      # floors, whose versions are exact.
+      - name: Python's version
+        id: python
+        run: echo "version=$(python3 -c 'import sys; print(sys.version.split()[0])')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the virtualenv
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/venv
+          key: venv-${{ runner.os }}-${{ steps.python.outputs.version }}-${{ matrix.modules }}-${{ hashFiles('plugins-repo/plugins/*/requirements.txt') }}
 
       - name: Install dependencies
         id: deps
@@ -75,13 +108,14 @@ jobs:
             rrdtool apache2-utils openssl curl python3 python3-venv
           # The system Python takes no pip installs (PEP 668); the launcher
           # uses whichever Python XYMONAPI_PYTHON names.
-          python3 -m venv "$RUNNER_TEMP/venv"
+          [ -x "$RUNNER_TEMP/venv/bin/python3" ] || python3 -m venv "$RUNNER_TEMP/venv"
           if [ "$MODULES" = floors ]; then
             sed -e 's/>=/==/' plugins-repo/plugins/xymonapi/requirements.txt > "$RUNNER_TEMP/floors.txt"
             cat "$RUNNER_TEMP/floors.txt"
             "$RUNNER_TEMP/venv/bin/pip" install -r "$RUNNER_TEMP/floors.txt"
           else
-            "$RUNNER_TEMP/venv/bin/pip" install -r plugins-repo/plugins/xymonapi/requirements.txt -r plugins-repo/plugins/xymonapi-rag/requirements.txt
+            "$RUNNER_TEMP/venv/bin/pip" install --upgrade --upgrade-strategy eager \
+              -r plugins-repo/plugins/xymonapi/requirements.txt -r plugins-repo/plugins/xymonapi-rag/requirements.txt
           fi
           # The search's modules as installed, for its caches' keys: its
           # requirements give only floors.
@@ -91,6 +125,7 @@ jobs:
 
       # The non-interactive configure recipe of Xymon's own build.yml.
       - name: Build Xymon
+        if: steps.xymon-built.outputs.cache-hit != 'true'
         working-directory: xymon
         run: |
           USEXYMONPING=y ENABLESSL=y ENABLELDAP=y ENABLELDAPSSL=y \
