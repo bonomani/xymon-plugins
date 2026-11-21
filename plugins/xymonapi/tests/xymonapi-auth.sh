@@ -86,9 +86,10 @@ assert_contains "\"api\":{\"version\":\"${version##*/v}\"}" "$(curl -s -u alice:
 # restart finds it by: pkill -f "$XYMONHOME/ext/xymonapi/".
 grep -qx "$API_PID" <<<"$(pgrep -f "$work/inst/ext/xymonapi/" || true)" \
 	|| fail "pgrep -f on the API's directory does not find it, so the documented pkill would not stop it: $(ps -o command= -p "$API_PID")"
-# An install over it stops it, saying so, since it would go on with the
-# code it loaded; xymonlaunch, not run here, would start the new. With
-# DESTDIR, a package's staging, nothing runs from there: it is left alone.
+# An install over it has it stop by itself, its MANIFEST written anew
+# (S7), since it would go on with the code it loaded; xymonlaunch, not run
+# here, would start the new. The install signals nothing. With DESTDIR, a
+# package's staging, nothing runs from there: it goes on.
 "$ROOT/xymon-plugin" install --server xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" DESTDIR="$work/stage" >"$work/stage.log" 2>&1 \
 	|| fail "xymon-plugin install --server with DESTDIR failed: $(tail -n 5 "$work/stage.log")"
 kill -0 "$API_PID" 2>/dev/null || fail "an install with DESTDIR stopped the running API"
@@ -96,9 +97,11 @@ assert_not_contains "Stopped" "$(cat "$work/stage.log")" "and says nothing of it
 rc=0
 "$ROOT/xymon-plugin" update --server xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/reinstall.log" 2>&1 || rc=$?
 assert_equal "0" "$rc" "an install over a running API succeeds, not stopping itself ($(tail -n 3 "$work/reinstall.log"))"
-assert_contains "Sent xymonapi's app.py (PID $API_PID) the signal to stop, so that it runs the code just installed: if its task is on, xymonlaunch starts it again." "$(cat "$work/reinstall.log")" "and signals the API to stop, saying which"
-for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$API_PID" 2>/dev/null || break; sleep 0.5; done
-kill -0 "$API_PID" 2>/dev/null && fail "the API still runs after an install over it"
+assert_not_contains "signal to stop" "$(cat "$work/reinstall.log")" "[S7] and signals no process"
+for _ in $(seq 1 40); do kill -0 "$API_PID" 2>/dev/null || break; sleep 0.5; done
+kill -0 "$API_PID" 2>/dev/null && fail "[S7] the API still runs 20 seconds after an install over it"
+rc=0; wait "$API_PID" || rc=$?
+assert_equal 0 "$rc" "[S7] it stopped by itself, with 0"
 API_PID=""
 printf '%s\n' "$version" > "$work/inst/ext/xymonapi/VERSION"   # the test's own, which the install replaced
 start_api
