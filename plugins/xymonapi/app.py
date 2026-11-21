@@ -639,6 +639,21 @@ async def _local_app(scope, receive, send):
     await app(scope, receive, send)
 
 
+MANIFEST_POLL = 5
+
+
+def _manifest_stamp() -> tuple | None:
+    try:
+        st = (HERE / "MANIFEST").stat()
+    except OSError:
+        return None
+    return (st.st_ino, st.st_mtime_ns, st.st_size)
+
+
+# Taken when the module is read, before the code it describes runs.
+MANIFEST_AT_START = _manifest_stamp()
+
+
 def main(argv: list[str]) -> int:
     """Serve the app on the address given; with --relay-socket, on a Unix
     socket for the web server's relay too, a password asked there; with
@@ -736,8 +751,28 @@ def main(argv: list[str]) -> int:
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, stop)
 
+    async def watch():
+        # The code this process runs is the code installed when it started,
+        # by its MANIFEST, an install's last step (S29). An update rewrites
+        # it: this process then stops as on SIGTERM, ending with 0, and
+        # xymonlaunch starts the new code. Gone, an update is under way.
+        # Absent when it started -- started during an update, or a checkout,
+        # which never has one -- it is watched for all the same.
+        while True:
+            await asyncio.sleep(MANIFEST_POLL)
+            now = _manifest_stamp()
+            if now is not None and now != MANIFEST_AT_START:
+                log.info("%s changed, an update: stopping, for xymonlaunch to start the new code",
+                         HERE / "MANIFEST")
+                stop(signal.SIGTERM, None)
+                return
+
     async def serve():
-        await asyncio.gather(*(server.serve(sockets=[sock]) for server, sock in servers))
+        watcher = asyncio.create_task(watch())
+        try:
+            await asyncio.gather(*(server.serve(sockets=[sock]) for server, sock in servers))
+        finally:
+            watcher.cancel()
     try:
         asyncio.run(serve())
     finally:
