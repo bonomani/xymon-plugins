@@ -513,13 +513,28 @@ answers, drafts left out as an anonymous reader does not see them;
 otherwise GitHub's API, anonymously, through `curl` or `wget`, at most 60
 pages of a hundred, as many as GitHub answers, from one address, in an
 hour; each request of `curl`, and of GNU `wget`, bounded in time, one that
-runs out of it being GitHub not reached -- `gh` has no such bound, the task
-that runs `outdated` being bounded by xymonlaunch. It ends with 1, saying
-why, when none reaches GitHub or when there are more releases than that,
-before any `VERSION` is read. Otherwise it ends with 7 when a `VERSION`
-could not be compared, every line said; else with 6 when it said of a
-plugin that a newer release exists, and with 0 when it said of none -- for
-a script or a Xymon task to read.
+runs out of it being GitHub not reached -- `gh` has no such bound, and
+`XYMON_PLUGINS_NO_GH` leaves it out; `GH_TOKEN`, when set, is given to
+`curl` on its standard input, never on its command line. It ends with 1,
+saying why, when none reaches GitHub or when there are more releases than
+that, before any `VERSION` is read. Otherwise it ends with 7 when a
+`VERSION` could not be compared, every line said; else with 6 when it said
+of a plugin that a newer release exists, and with 0 when it said of none --
+for a script or a Xymon task to read.
+
+**S33. The plugins column says it on the server.**
+The `xymon-plugin` plugin installs, off as every task (S5), a task that the
+administrator turns on with `enable` (S13): once a day, after a wait drawn
+at random up to 6 hours, it runs the installer installed beside it,
+`outdated --server` (S32) without `gh` (`XYMON_PLUGINS_NO_GH`), which no
+time bounds -- xymonlaunch's `MAXTIME` stops the task, not what it started
+-- and sends this host's status `plugins`, valid 31 hours, with
+`outdated`'s lines: green for 0, no newer release published; yellow for 6,
+7 or any other status, saying which; nothing for 1 -- GitHub not reached,
+or `outdated` unable to run -- so that the status there stays, and goes
+purple once 31 hours have passed since it was sent, as it also does when
+xymond's restart stops the task while it waits. What it does goes to its
+log, `xymon-plugin.log`; a status it could not send ends it with 1.
 
 ### Getting the code
 

@@ -9,7 +9,8 @@ manual: xymon-plugin.8
 
 # How ./xymon-plugin installs it: see xymonapi's PLUGIN file. It is the
 # installer itself: its version is the one --version gives.
-server-short: the installer, kept on the server
-server-files: xymon-plugin
+server-short: the installer, kept on the server, and the plugins column
+server-files: xymon-plugin xymon-plugin-report.sh
 server-manual: xymon-plugin.8
-executable: xymon-plugin
+task: xymon-plugin.tasks.DIST
+executable: xymon-plugin xymon-plugin-report.sh

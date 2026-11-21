@@ -520,12 +520,14 @@ case $NET_T in ''|*[!0-9]*|0) NET_T=30 ;; esac
 # says why, and fails (S32).
 releases() {
 	GHFAILED=
-	if command -v gh >/dev/null 2>&1 \
+	# XYMON_PLUGINS_NO_GH: not gh, which no time bounds -- for the plugins
+	# column's task, which xymonlaunch can stop but not what it started.
+	if [ -z "${XYMON_PLUGINS_NO_GH:-}" ] && command -v gh >/dev/null 2>&1 \
 		&& tags=$(gh api --hostname github.com "repos/$REPO/releases?per_page=100" --paginate \
 			--jq '.[] | select(.draft == false) | .tag_name' 2>/dev/null); then
 		:
 	else
-		command -v gh >/dev/null 2>&1 && GHFAILED=1
+		[ -z "${XYMON_PLUGINS_NO_GH:-}" ] && command -v gh >/dev/null 2>&1 && GHFAILED=1
 		tags=$(anon_releases) || exit 1
 	fi
 	# A tag is NAME/vX.Y.Z, its name as plain() allows a plugin's, each
@@ -539,20 +541,38 @@ releases() {
 # where a key "tag_name" opens a field, so that the words of a release's
 # text, its quotes escaped, are not taken for one.
 anon_releases() {
-	page=1 all=
+	page=1 all='' tok_said=''
 	while :; do
 		u="https://api.github.com/repos/$REPO/releases?per_page=100&page=$page"
 		if command -v curl >/dev/null 2>&1; then
-			j=$(curl -fsSL --connect-timeout 10 --max-time "$NET_T" -H 'Accept: application/vnd.github+json' "$u" 2>&1) \
-				|| die "cannot read $u: $j"
+			# GH_TOKEN, when set and plainly a token, as gh would send it:
+			# given on curl's standard input (-K -), never on its command
+			# line, where ps shows it to every user.
+			case ${GH_TOKEN:-} in
+				'') tok= ;;
+				*[!A-Za-z0-9_]*)
+					tok=
+					[ -n "$tok_said" ] || echo "xymon-plugin: GH_TOKEN holds a character no GitHub token has: GitHub is read without it" >&2
+					tok_said=1 ;;
+				*) tok="header = \"Authorization: Bearer $GH_TOKEN\"" ;;
+			esac
+			j=$(printf '%s\n' "$tok" | curl -fsSL -K - --connect-timeout 10 --max-time "$NET_T" \
+				-H 'Accept: application/vnd.github+json' "$u" 2>&1) || die "cannot read $u: $j"
 		elif command -v wget >/dev/null 2>&1; then
-			# GNU wget's -T; busybox's has none.
+			# GNU wget's -T; busybox's has none. No token: wget would show it
+			# on its command line.
+			if [ -n "${GH_TOKEN:-}" ] && [ -z "$tok_said" ]; then
+				echo "xymon-plugin: wget is not given GH_TOKEN, which its command line would show: GitHub is read without it" >&2
+				tok_said=1
+			fi
 			wv=$(wget --version 2>/dev/null) || wv=
 			case $wv in *"GNU Wget"*) wt="-T $NET_T -t 1" ;; *) wt= ;; esac
 			# shellcheck disable=SC2086 # wt is options or nothing
 			j=$(wget -q $wt -O - "$u") || die "cannot read $u: wget failed (exit status $?)"
 		elif [ -n "${GHFAILED:-}" ]; then
 			die "gh could not read the releases from GitHub, and neither curl nor wget is here to read them"
+		elif [ -n "${XYMON_PLUGINS_NO_GH:-}" ]; then
+			die "outdated reads the releases from GitHub with curl or wget, gh being left out (XYMON_PLUGINS_NO_GH): neither is here"
 		else
 			die "outdated reads the releases from GitHub, with gh, curl or wget: none is here"
 		fi

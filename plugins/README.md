@@ -21,7 +21,7 @@ and setting.
 | [`xymonapi-mcp`](xymonapi-mcp/README.md) | an MCP server that gives an AI tool read-only tools over the API |
 | [`xymonapi-rag`](xymonapi-rag/README.md) | a search of Xymon's manual pages and history by meaning: the index on the server, `search` and `ask` anywhere |
 | [`xymonapi-agent`](xymonapi-agent/README.md) | one command that asks an AI CLI a question about Xymon, with the MCP server as its only tool; on the server, the API's `/ask` |
-| [`xymon-plugin`](xymon-plugin/README.md) | the installer itself, `./xymon-plugin` at the top being a link to it: installed on the server, its version is known like the others' |
+| [`xymon-plugin`](xymon-plugin/README.md) | the installer itself, `./xymon-plugin` at the top being a link to it: installed on the server, its version is known like the others', and its task sends the `plugins` column |
 
 ## Getting the code from the server
 
@@ -138,7 +138,11 @@ than the 60 pages read without `gh`; otherwise 7 when a plugin's `VERSION`
 cannot be compared -- missing, a link, unreadable, in a directory it cannot
 enter, holding no version -- each line saying why and what fixes it; else 6 when
 it said of a plugin that a newer release exists, and 0 when it said of
-none. Behind a proxy, each of `gh`, `curl` and
+none. With `XYMON_PLUGINS_NO_GH` set it leaves `gh`, which nothing bounds,
+out, as the plugins column's task does. `curl` sends `GH_TOKEN` when it is
+set, given on its standard input, never on its command line; one holding
+other characters than a token's is not sent, said; `wget` sends none,
+said. Behind a proxy, each of `gh`, `curl` and
 `wget` uses the proxy settings it sees -- its environment, `~/.curlrc` for
 `curl`; under `sudo`, which those are depends on sudo's policy, so run it as
 yourself or with `sudo -E`.
