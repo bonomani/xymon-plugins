@@ -8,7 +8,9 @@
 # naming the page or section a Xymon admin would want. At least eight must
 # find it among the first three passages. A change to the chunking, the
 # model or the pages then shows as a number, not a feeling; a drop below
-# eight fails here before it reaches anyone.
+# eight fails here before it reaches anyone. It is the one test with the
+# real model -- xymonapi-rag.sh has a stand-in -- so it also shows a search
+# working offline (XYMONAPI_RAG_OFFLINE) once the model is cached.
 #
 # Needs no xymond: the API is not asked (index --no-history). The embedding
 # model is the real one. Skips where the search cannot run.
@@ -39,4 +41,8 @@ rag eval -k 3 --min 8 "$ROOT/tests/eval/docs.json" > "$work/eval.out" || rc=$?
 cat "$work/eval.out"
 [ "$rc" -eq 0 ] || fail "the search scored below 8/10 on tests/eval/docs.json"
 
+# The model is in fastembed's cache now: offline, nothing is downloaded,
+# and the search works as before.
+XYMONAPI_RAG_OFFLINE=1 rag search -k 1 'anything' > /dev/null \
+	|| fail "a search with XYMONAPI_RAG_OFFLINE=1 failed with the model cached: $(tail -n 3 "$work/rag.err")"
 pass "the search finds the right manual page for at least 8 of the 10 questions of tests/eval/docs.json: $(tail -n 1 "$work/eval.out")"

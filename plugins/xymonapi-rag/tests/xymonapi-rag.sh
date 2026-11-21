@@ -6,14 +6,15 @@
 # xymonapi-rag indexes Xymon's own manual pages and the history of colour
 # changes with the status text saved at each -- from xymond's files where
 # XYMONHISTDIR names them, as the task on the server has it, with no API, user
-# or token, and through the API elsewhere -- and finds the passage a question
-# is about: how long a problem must last before an alert
-# is sent is in alerts.cfg(5) under RULES, a full disk is in analysis.cfg(5),
-# and an HTTP 500 on the login page is the red http change of web.example.com.
+# or token, and through the API elsewhere -- and finds the passage a search
+# names: the rules of alerts.cfg(5), the DISK settings of analysis.cfg(5),
+# and the red http change of web.example.com for an HTTP 500 on its login
+# page. How good the search is at meaning, not words, is
+# xymonapi-rag-eval.sh's to show, with the real model.
 # Only Xymon's pages are indexed, none under a hidden directory such as .git,
 # and .TP items are read whether the item is a text line or a macro line. A
-# section cut into several passages is given once in an answer. The status text is indexed, marked as sent by a
-# monitored host. A failing /histlog fails the indexing; an index searched
+# section cut into several passages is given once in an answer. The status
+# text is indexed, marked as sent by a monitored host. A failing /histlog fails the indexing; an index searched
 # with another model than its own is refused.
 # The API serves the same search at /search from the same index, reloading
 # it when the file changes, and /health says what the index holds; the MCP
@@ -25,9 +26,10 @@
 #
 # The pages are three real ones from the Xymon tree in XYMON_SRC; the history
 # is written here in xymond_history's format; the language model is
-# tests/lib/fake-llm.py. The embedding model is the real one, downloaded on
-# first use into FASTEMBED_CACHE_PATH when that is set. Skips where the API,
-# the search or the MCP server cannot run. Needs curl.
+# tests/lib/fake-llm.py; the embedding model is tests/lib/fake-fastembed,
+# which embeds words, not meaning, and in no time: what is shown here is what
+# index, search, the API and the MCP server do with vectors. Skips where the
+# API, the search or the MCP server cannot run. Needs curl.
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
@@ -37,6 +39,10 @@ ROOT=$(find_root)
 
 require_bin XYMONCLIENT "$XYMON_SRC/common/xymon"
 command -v curl >/dev/null 2>&1 || skip "curl is not installed"
+
+# The stand-in embedding model, for this test and every process it starts:
+# the API, the MCP server.
+export PYTHONPATH="$ROOT/tests/lib/fake-fastembed${PYTHONPATH:+:$PYTHONPATH}"
 
 work=$(mktempdir)
 LLM_PID=""
@@ -87,42 +93,28 @@ assert_contains '"search":null' "$(api_get /health)" "/health reports no index"
 
 # The pages are embedded once, into a seed with no history that every index
 # file below starts from: index keeps the vectors it knows and embeds only
-# the changes, which is what those blocks are about. Embedded afresh for
-# each of them, the same pages cost a minute apiece on a CI runner.
-# Where CI keeps the index of every Xymon page (XYMONAPI_RAG_EVAL_INDEX,
-# xymonapi-rag-eval.sh), the seed starts from it: these pages' passages
-# keep their vectors, the others drop out, and only this test's own pages
-# are embedded.
-[ -s "${XYMONAPI_RAG_EVAL_INDEX:-}" ] && cp "$XYMONAPI_RAG_EVAL_INDEX" "$work/seed.npz"
+# the changes, which is what those blocks are about.
 rc=0
 XYMONAPI_RAG_INDEX="$work/seed.npz" rag index --no-history > "$work/index.out" || rc=$?
 [ "$rc" -eq 77 ] && skip "$(cat "$work/rag.err")"
 [ "$rc" -eq 0 ] || fail "xymonapi-rag index exited with $rc: $(tail -n 5 "$work/rag.err")"
 assert_match "indexed [0-9]+ passages \([0-9]+ new\)" "$(cat "$work/index.out")" "index says what it did"
 first=$(sed -E 's/indexed ([0-9]+) passages \(([0-9]+) new\).*/\1 \2/' "$work/index.out")
-if [ -s "${XYMONAPI_RAG_EVAL_INDEX:-}" ]; then
-	[ "${first#* }" -lt "${first% *}" ] || fail "seeded from the index of every page, the first indexing embedded all ${first% *} passages"
-else
-	assert_equal "${first% *}" "${first#* }" "the first indexing embeds every passage"
-fi
+assert_equal "${first% *}" "${first#* }" "the first indexing embeds every passage"
 cp "$work/seed.npz" "$work/index.npz"
 rag index > "$work/index.out" || fail "indexing the history over the seed failed: $(tail -n 5 "$work/rag.err")"
 assert_contains "(2 new)" "$(cat "$work/index.out")" "over the seed, only the two changes are new"
 # Again, with nothing changed: every vector is kept, none embedded.
 rag index > "$work/index.out" || fail "a second index failed: $(tail -n 5 "$work/rag.err")"
 assert_contains "(0 new)" "$(cat "$work/index.out")" "a second indexing with nothing new embeds nothing"
-# The model is in fastembed's cache now: offline, nothing is downloaded,
-# and the search works as before.
-XYMONAPI_RAG_OFFLINE=1 rag search -k 1 'anything' > /dev/null \
-	|| fail "a search with XYMONAPI_RAG_OFFLINE=1 failed with the model cached: $(tail -n 3 "$work/rag.err")"
 
 # top QUESTION [ARGS] -- the title of the passage nearest QUESTION.
 top() {
 	local q=$1; shift
 	first_line "$(rag search -k 1 "$@" "$q" | grep '"title"')"
 }
-assert_contains 'alerts.cfg.5 -- RULES' "$(top 'how long must a problem last before an alert is sent' --kind docs)" "a question about alert delay"
-assert_contains 'analysis.cfg.5 -- DISK' "$(top 'warn when a filesystem is 90 percent full' --kind docs)" "a question about a full disk"
+assert_contains 'alerts.cfg.5 -- RULES' "$(top 'a rule consists of filters using these keywords' --kind docs)" "a passage of a section, by its words"
+assert_contains 'analysis.cfg.5 -- DISK' "$(top 'DISK filesystem warnlevel paniclevel' --kind docs)" "and of another page"
 assert_contains 'web.example.com http' "$(top 'HTTP 500 error on the login page' --kind history)" "a question the history answers"
 hist=$(rag search -k 1 --kind history 'HTTP 500 error on the login page')
 assert_contains 'Internal Server Error' "$hist" "the saved status text is indexed, not only the change"
@@ -143,7 +135,7 @@ XYMONAPI_RAG_MODEL=BAAI/bge-base-en-v1.5 rag search 'anything' > /dev/null || rc
 assert_contains 'was built with BAAI/bge-small-en-v1.5' "$(cat "$work/rag.err")" "and says which model built the index"
 
 # The same search, served by the API from the same file.
-assert_contains 'alerts.cfg.5 -- RULES' "$(api_get '/search?q=how+long+must+a+problem+last+before+an+alert+is+sent&kind=docs&k=1')" "/search finds the manual-page passage"
+assert_contains 'alerts.cfg.5 -- RULES' "$(api_get '/search?q=a+rule+consists+of+filters+using+these+keywords&kind=docs&k=1')" "/search finds the manual-page passage"
 assert_contains 'web.example.com http' "$(api_get '/search?q=HTTP+500+error+on+the+login+page&kind=history&k=1')" "/search finds the change"
 assert_contains '"score":' "$(api_get '/search?q=HTTP+500+error&k=1')" "with a score"
 assert_equal "400" "$(api_code '/search?kind=docs')" "/search without a question"
@@ -158,7 +150,7 @@ assert_match '"built":"20[0-9][0-9]-' "$health" "and when it was built"
 
 # A search where there is no index asks the API instead: a laptop needs
 # neither fastembed nor the manual pages.
-assert_contains 'alerts.cfg.5 -- RULES' "$(first_line "$(XYMONAPI_RAG_INDEX="$work/none.npz" rag search -k 1 --kind docs 'how long must a problem last before an alert is sent' | grep '"title"')")" "search with no index here uses the API's"
+assert_contains 'alerts.cfg.5 -- RULES' "$(first_line "$(XYMONAPI_RAG_INDEX="$work/none.npz" rag search -k 1 --kind docs 'a rule consists of filters using these keywords' | grep '"title"')")" "search with no index here uses the API's"
 rc=0
 XYMONAPI_RAG_INDEX="$work/none.npz" XYMONAPI_URL="http://127.0.0.1:1" rag search 'x' > /dev/null || rc=$?
 [ "$rc" -ne 0 ] || fail "a search with no index and no API succeeded"
@@ -169,7 +161,7 @@ assert_contains 'could not search either' "$(cat "$work/rag.err")" "naming both"
 # before -- asks the API too. A numpy that will not import stands in.
 mkdir -p "$work/nonumpy/numpy"
 printf 'raise ImportError("no numpy here", name="numpy")\n' > "$work/nonumpy/numpy/__init__.py"
-assert_contains 'alerts.cfg.5 -- RULES' "$(first_line "$(PYTHONPATH="$work/nonumpy" rag search -k 1 --kind docs 'how long must a problem last before an alert is sent' | grep '"title"')")" "search with an index but no numpy uses the API's"
+assert_contains 'alerts.cfg.5 -- RULES' "$(first_line "$(PYTHONPATH="$work/nonumpy" rag search -k 1 --kind docs 'a rule consists of filters using these keywords' | grep '"title"')")" "search with an index but no numpy uses the API's"
 rc=0
 PYTHONPATH="$work/nonumpy" rag index > /dev/null || rc=$?
 assert_equal "77" "$rc" "index without numpy exits 77"
@@ -177,7 +169,7 @@ assert_contains 'missing Python module: numpy' "$(cat "$work/rag.err")" "and nam
 assert_contains './xymon-plugin update --tools --venv installs it' "$(cat "$work/rag.err")" "and what installs it"
 
 # eval: a file of questions with the title each should find, and a score.
-printf '[{"question":"how long must a problem last before an alert is sent","kind":"docs","expect":"alerts.cfg.5 -- RULES"},\n{"question":"HTTP 500 error on the login page","kind":"history","expect":"web.example.com http"},\n{"question":"zebra crossing stripes","kind":"docs","expect":"zebra.1"}]\n' > "$work/eval.json"
+printf '[{"question":"a rule consists of filters using these keywords","kind":"docs","expect":"alerts.cfg.5 -- RULES"},\n{"question":"HTTP 500 error on the login page","kind":"history","expect":"web.example.com http"},\n{"question":"zebra crossing stripes","kind":"docs","expect":"zebra.1"}]\n' > "$work/eval.json"
 rc=0
 rag eval --min 3 "$work/eval.json" > "$work/eval.out" || rc=$?
 assert_equal "1" "$rc" "eval exits 1 below --min"
@@ -186,7 +178,7 @@ assert_contains 'MISS zebra' "$(cat "$work/eval.out")" "naming the miss"
 rag eval --min 2 "$work/eval.json" > /dev/null || fail "eval failed at --min 2: $(cat "$work/rag.err")"
 
 # --kind keeps to one kind even when the other holds a nearer passage.
-assert_contains '.example.com' "$(top 'how long must a problem last before an alert is sent' --kind history)" "--kind history returns history"
+assert_contains '.example.com' "$(top 'a rule consists of filters using these keywords' --kind history)" "--kind history returns history"
 assert_contains '.cfg.5 -- ' "$(top 'HTTP 500 error on the login page' --kind docs)" "--kind docs returns manual pages"
 
 # The same search, as the MCP server's tool.
@@ -206,11 +198,11 @@ for _ in $(seq 1 50); do [ -s "$work/llm.port" ] && break; sleep 0.1; done
 XYMONAPI_RAG_LLM_URL="http://127.0.0.1:$(cat "$work/llm.port")/v1"
 export XYMONAPI_RAG_LLM_URL
 
-out=$(rag ask -k 2 'how long must a problem last before an alert is sent') \
+out=$(rag ask -k 2 'a rule consists of filters using these keywords') \
 	|| fail "xymonapi-rag ask failed: $(tail -n 5 "$work/rag.err")"
 assert_equal "FAKE ANSWER" "$out" "ask prints the model's answer"
 req=$(cat "$work/llm.req")
-assert_contains 'how long must a problem last before an alert is sent' "$req" "the model is given the question"
+assert_contains 'a rule consists of filters using these keywords' "$req" "the model is given the question"
 assert_contains 'alerts.cfg.5 -- RULES' "$req" "and the passage nearest it"
 assert_contains 'Authorization: '$'\n' "$req" "and no key when none is set"
 
