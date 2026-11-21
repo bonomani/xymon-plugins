@@ -66,7 +66,8 @@ to come.
 **S1. A plugin is a directory with a `PLUGIN` file.**
 `plugins/NAME/` holds the `PLUGIN` file, a README, a manual page per side,
 tests and the code. `xymon-plugin` installs every plugin from its `PLUGIN`
-file, and names none.
+file, and names none: a plugin no code knows is installed, reported and
+removed as any other.
 
 **S2. A plugin carries its version.**
 The `version:` line, `X.Y.Z`, moves as `CONTRIBUTING.md` (Versions) says. The
