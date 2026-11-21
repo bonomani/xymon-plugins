@@ -179,7 +179,11 @@ The tests run against a server build of Xymon's current `main`, named by
 ```sh
 XYMON_SRC=/path/to/built/xymon tests/run.sh                      # every test
 XYMON_SRC=/path/to/built/xymon tests/run.sh plugins/<name>/tests # one plugin's
+XYMON_SRC=/path/to/built/xymon tests/run.sh -j4 tests/compat      # four at once
 ```
+
+Tests run at once with `-j`: each keeps to its own temporary directory,
+ports and configuration, as CI runs all but the search's three at once.
 
 A test belongs to the plugin it checks, under `plugins/<name>/tests/`, and
 may start the plugins that one requires, never others: `xymonapi-mcp`'s

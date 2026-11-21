@@ -144,9 +144,11 @@ jobs:
         run: |
           # With the oldest modules, xymonapi's own tests: the search's
           # modules are not among them. Otherwise the search's tests in
-          # their job, and every other directory in the other.
+          # their job, one after the other (xymonapi-rag.sh reads the index
+          # the eval test leaves), and every other directory in the other,
+          # four at once, one per CPU of the runner.
           if [ "$MODULES" = floors ]; then
-            plugins-repo/tests/run.sh plugins/xymonapi/tests
+            plugins-repo/tests/run.sh -j4 plugins/xymonapi/tests
           elif [ "$SUITE" = rag ]; then
             plugins-repo/tests/run.sh plugins/xymonapi-rag/tests
           else
@@ -155,7 +157,7 @@ jobs:
               d=${d#plugins-repo/}
               [ "$d" = plugins/xymonapi-rag/tests ] || set -- "$@" "$d"
             done
-            plugins-repo/tests/run.sh "$@" tests/compat
+            plugins-repo/tests/run.sh -j4 "$@" tests/compat
           fi
 
   # The API's contract changes only with its version: build/contract-check.sh
