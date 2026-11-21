@@ -91,19 +91,23 @@ printf 'xymon-plugin/v%s\n' "$want" > "$work/tags"
 report
 assert_equal 0 "$RC" "[S33] the reporter ends with 0: $(cat "$work/log")"
 assert_contains "status+31h srv,example,com.plugins green " "$(first_line "$(sent)")" "[S33] every plugin up to date: green, valid 31 hours, for this host"
-assert_contains "xymon-plugin: $want installed; up to date" "$(sent)" "[S33] with outdated's lines"
+assert_contains "  &green xymon-plugin: $want installed; up to date" "$(sent)" "[S33] with outdated's lines, each with its colour's icon"
+assert_contains "1 plugin: no newer release is published" "$(first_line "$(sent)")" "[S33] the summary counts the plugins"
 assert_contains "sent green" "$(cat "$work/log")" "and the log says so"
 
 printf 'xymon-plugin/v99.0.0\n' > "$work/tags"
 report
 assert_contains "srv,example,com.plugins yellow " "$(first_line "$(sent)")" "[S33] a newer release published: yellow"
-assert_contains "99.0.0 released" "$(sent)" "naming it"
+assert_contains "  &yellow xymon-plugin: $want installed; 99.0.0 released" "$(sent)" "naming it, its line yellow"
+assert_contains "1 of 1 plugin with a newer release published: xymon-plugin" "$(first_line "$(sent)")" "[S33] the summary names it"
 
 printf 'xymon-plugin/v%s\n' "$want" > "$work/tags"
 mv "$ext/VERSION" "$work/VERSION"
 report
 assert_contains "srv,example,com.plugins yellow " "$(first_line "$(sent)")" "[S33] a VERSION that cannot be compared: yellow"
 assert_contains "is missing" "$(sent)" "saying why"
+assert_contains "  &yellow xymon-plugin: " "$(sent)" "its line yellow"
+assert_contains "1 of 1 plugin whose VERSION cannot be compared: xymon-plugin" "$(first_line "$(sent)")" "[S33] the summary names it"
 mv "$work/VERSION" "$ext/VERSION"
 
 CURL=fail report
@@ -120,6 +124,30 @@ printf '#!/bin/sh\necho "usage: ./xymon-plugin ..." >&2\nexit 2\n' > "$work/odd/
 report "$work/odd/xymon-plugin-report.sh"
 assert_contains "srv,example,com.plugins yellow " "$(first_line "$(sent)")" "[S33] another status of outdated: yellow"
 assert_contains "outdated ended with 2" "$(sent)" "saying it"
+
+# Several plugins, from an installer that prints outdated's lines: each its
+# icon, the summary counting them and naming those behind.
+cat > "$work/odd/xymon-plugin" <<'SH'
+#!/bin/sh
+echo "Xymon server /x:"
+echo "  a: 1.0.0 installed; up to date"
+echo "  b: 1.0.0 installed; 2.0.0 released: XYMONHOME=/x ./xymon-plugin update --server b, from its release's archive"
+echo "  c: 0.3.0 installed; newer than its latest release, 0.2.0"
+echo "  d: 1.0.0 installed; 1.1.0 released: XYMONHOME=/x ./xymon-plugin update --server d, from its release's archive"
+echo "  e: 1.0.0 installed; no release of it is published"
+exit 6
+SH
+report "$work/odd/xymon-plugin-report.sh"
+assert_contains "srv,example,com.plugins yellow " "$(first_line "$(sent)")" "[S33] several plugins, two behind: yellow"
+assert_contains "2 of 5 plugins with a newer release published: b, d" "$(first_line "$(sent)")" "[S33] the summary counts and names them"
+for l in "  &green a: " "  &yellow b: " "  &green c: " "  &yellow d: " "  &green e: " "Xymon server /x:"; do
+	assert_contains "$l" "$(sent)" "[S33] each line its icon: $l"
+done
+sed 's/^exit 6$/echo "  f: \/x\/ext\/f\/VERSION is missing. To fix: ..."; exit 7/' "$work/odd/xymon-plugin" > "$work/odd/new" \
+	&& mv "$work/odd/new" "$work/odd/xymon-plugin" && chmod 755 "$work/odd/xymon-plugin"
+report "$work/odd/xymon-plugin-report.sh"
+assert_contains "1 of 6 plugins whose VERSION cannot be compared: f; 2 with a newer release published: b, d" "$(first_line "$(sent)")" "[S33] both said"
+assert_contains "  &yellow f: " "$(sent)" "its line yellow"
 
 XYMONFAIL=1 report
 assert_equal 1 "$RC" "[S33] a status that could not be sent ends the reporter with 1"
