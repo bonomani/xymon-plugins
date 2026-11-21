@@ -70,7 +70,13 @@ case $u in *page=1) ;; *) echo '[]'; exit 0 ;; esac
 printf '['; sep=; while read -r t; do printf '%s{"tag_name": "%s"}' "$sep" "$t"; sep=,; done < "$WORK/tags"; printf ']\n'
 SH
 # shellcheck disable=SC2016 # expanded by the stand-in
-printf '#!/bin/sh\necho "$1" >> "$WORK/slept"\n' > "$bin/sleep"
+# With SWAP, it also replaces the reporter with SWAP meanwhile, a new file
+# as an update writes.
+cat > "$bin/sleep" <<'SH'
+#!/bin/sh
+echo "$1" >> "$WORK/slept"
+if [ -n "${SWAP:-}" ]; then rm -f "$SWAPTO" && cp "$SWAP" "$SWAPTO" && chmod 755 "$SWAPTO"; fi
+SH
 chmod 755 "$bin/xymon" "$bin/gh" "$bin/curl" "$bin/sleep"
 export WORK=$work
 # report [REPORTER] -- the reporter run as xymonlaunch runs it.
@@ -141,6 +147,28 @@ for _ in 1 2 3 4 5 6; do WAIT=40 report; done
 while read -r s; do
 	if [ "$s" -lt 1 ] || [ "$s" -gt 40 ]; then fail "[S33] a wait of $s seconds, outside 1-40"; fi
 done < "$work/slept"
+
+# The file replaced during the wait, as an update does: what sends is the
+# new code, told how long was waited, in the same process; told, it does not
+# wait again.
+cp "$ext/xymon-plugin-report.sh" "$work/reporter.keep"
+# shellcheck disable=SC2016 # expanded by the new reporter, not here
+printf '#!/bin/sh\necho "new code, waited ${XYMON_PLUGINS_WAITED:-}, pid $$" >> "$WORK/newcode"\n' > "$work/reporter.new"
+rm -f "$work/slept" "$work/newcode"
+RC=0; rm -f "$work/sent"
+PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
+	XYMON_PLUGINS_WAIT=40 SWAP="$work/reporter.new" SWAPTO="$ext/xymon-plugin-report.sh" \
+	"$ext/xymon-plugin-report.sh" >"$work/log" 2>&1 & r_pid=$!
+wait "$r_pid" || RC=$?
+rm -f "$ext/xymon-plugin-report.sh" && cp "$work/reporter.keep" "$ext/xymon-plugin-report.sh" && chmod 755 "$ext/xymon-plugin-report.sh"
+[ -s "$work/newcode" ] || fail "[S33] after its wait the reporter did not run the code installed meanwhile: $(cat "$work/log")"
+assert_equal "new code, waited $(cat "$work/slept"), pid $r_pid" "$(cat "$work/newcode")" "[S33] in the same process, told how long it waited"
+[ -s "$work/sent" ] && fail "[S33] the code replaced sent all the same"
+rm -f "$work/slept"
+RC=0; PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
+	XYMON_PLUGINS_WAIT=40 XYMON_PLUGINS_WAITED=12 "$ext/xymon-plugin-report.sh" >"$work/log" 2>&1 || RC=$?
+[ -e "$work/slept" ] && fail "[S33] told it waited, the reporter waited again"
+assert_contains "waited 12s;" "$(cat "$work/log")" "[S33] and says how long it waited"
 
 # gh, which may hang, was never run: what it starts the task's MAXTIME
 # could not stop.

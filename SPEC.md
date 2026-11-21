@@ -534,7 +534,9 @@ for a script or a Xymon task to read.
 **S33. The plugins column says it on the server.**
 The `xymon-plugin` plugin installs, off as every task (S5), a task that the
 administrator turns on with `enable` (S13): once a day, after a wait drawn
-at random up to 6 hours, it runs the installer installed beside it,
+at random up to 6 hours -- after which it runs again from its file, in the
+same process, so that an update meanwhile has its code send --, it runs the
+installer installed beside it,
 `outdated --server` (S32) without `gh` (`XYMON_PLUGINS_NO_GH`), which no
 time bounds -- xymonlaunch's `MAXTIME` stops the task, not what it started
 -- and sends the server's status `plugins` -- for `MACHINEDOTS`, its name
