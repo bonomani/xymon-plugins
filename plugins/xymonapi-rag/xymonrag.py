@@ -275,8 +275,14 @@ def history_passages(since: str) -> list[dict]:
                         "host": ev["host"], "test": ev["test"], "epoch": ev["epoch"],
                         "trust": UNTRUSTED})
     except client.APIError as e:
+        # Said with what the index needs, ending the run with 1, for
+        # whatever started it -- xymonlaunch, cron, launchd -- to start it
+        # again at its next time (S34).
+        where = (f"xymond's files in XYMONHISTDIR={os.environ['XYMONHISTDIR']}, read as the Xymon user"
+                 if os.environ.get("XYMONHISTDIR") else "the API, XYMONAPI_URL, answering")
         raise SystemExit(f"xymonapi-rag: cannot read the history: {e}\n"
-                         "  (index --no-history indexes the manual pages alone)") from e
+                         f"  The index needs {where};\n"
+                         "  index --no-history indexes the manual pages alone") from e
     return out
 
 

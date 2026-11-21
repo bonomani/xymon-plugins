@@ -2,7 +2,7 @@
 # it alone. One key per line, a key repeated for each line of a message;
 # ./xymon-plugin at the repository's top installs it from the lines below.
 name: xymonapi-rag
-version: 0.2.1
+version: 0.2.2
 summary: a search of Xymon's manual pages and history by meaning; the index task on the server, search and ask anywhere
 server-short: the search index, kept up to date
 tools-short: search by meaning, from here

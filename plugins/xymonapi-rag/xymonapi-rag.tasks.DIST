@@ -4,9 +4,11 @@
 # once installed: it needs the Python modules in xymonapi-rag/requirements.txt,
 # and XYMONAPI_RAG_DOCS set in a file under xymonserver.d/; then
 # ./xymon-plugin enable --server xymonapi-rag.
+# NEEDS xymond, whose files it reads, a task of Xymon's tasks.cfg: known when
+# tasks.d/ is read, as one of another plugin may not be yet (S34).
 [xymonapi-rag]
 	ENVFILE @XYMONHOME@/etc/xymonserver.cfg
-	NEEDS xymonapi
+	NEEDS xymond
 	INTERVAL 1d
 	CMD $XYMONHOME/ext/xymonapi-rag/xymonapi-rag.sh index
 	LOGFILE $XYMONSERVERLOGS/xymonapi-rag.log

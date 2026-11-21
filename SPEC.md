@@ -551,6 +551,20 @@ was sent, as it also does when xymond's restart stops the task while it
 waits. What it does goes to its log, `xymon-plugin.log`; a status it could
 not send, or that xymond did not keep, read back, ends it with 1.
 
+**S34. A task says what it needs to what can wait for it, and checks the
+rest itself.**
+A plugin's task names in `NEEDS` only a task its launcher knows when it
+reads the task: on the server, one of Xymon's own `tasks.cfg`, defined
+before the line that reads `tasks.d/`, as `xymond` -- never another
+plugin's, which xymonlaunch may read after it and then ignore, saying
+"unknown dependency" at each reload; a task of another part, when one
+comes, one of that part's launcher (`clientlaunch.cfg`'s `client` on a
+client), or none where its launcher has no such thing (cron, launchd).
+What no launcher can wait for -- a server or an API elsewhere, files that
+may not be there -- the task checks itself before its work: what is
+missing is said, and the run ends with 1, for its launcher to start it
+again at its next time.
+
 ### Getting the code
 
 **S11. `stable` is code every test passed.**
