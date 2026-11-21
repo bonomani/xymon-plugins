@@ -43,6 +43,8 @@ cat > "$bin/curl" <<'SH'
 #!/bin/sh
 [ "${CURL:-}" = fail ] && { echo "curl: (6) Could not resolve host: api.github.com" >&2; exit 6; }
 printf '%s\n' "$*" > "$WORK/curl.args"
+# What it reads from its standard input, with -K -: its configuration.
+case " $* " in *" -K - "*) cat > "$WORK/curl.config" ;; esac
 [ "${CURL:-}" = timeout ] && { echo "curl: (28) Operation timed out after 1000 milliseconds" >&2; exit 28; }
 # Never more than 70 calls in a run: a loop that does not stop fails, not
 # hangs.
@@ -241,6 +243,20 @@ assert_equal 0 "$RC" "all as it was: 0 ($(out))"
 tags "xymonapi/v$api"; page 1 "xymonapi/v$api"
 GH=fail XYMON_PLUGINS_TIMEOUT=1 run
 assert_contains "--max-time 1" "$(cat "$work/curl.args")" "[S32] curl is given its bound"
+# XYMON_PLUGINS_NO_GH: gh not asked, curl asked; GH_TOKEN, when set, given
+# to curl on its standard input, never on its command line.
+: > "$work/gh.args"; rm -f "$work/curl.config"
+XYMON_PLUGINS_NO_GH=1 GH_TOKEN=ghp_Abc123 run
+assert_equal 0 "$RC" "[S32] with XYMON_PLUGINS_NO_GH, read through curl: 0 ($(cat "$work/err"))"
+[ -s "$work/gh.args" ] && fail "[S32] XYMON_PLUGINS_NO_GH, and gh was asked"
+assert_contains 'Authorization: Bearer ghp_Abc123' "$(cat "$work/curl.config")" "[S32] GH_TOKEN given to curl on its standard input"
+assert_not_contains 'ghp_Abc123' "$(cat "$work/curl.args")" "[S32] and not on its command line"
+# One holding characters no token has is not sent, said, and not echoed.
+rm -f "$work/curl.config"
+XYMON_PLUGINS_NO_GH=1 GH_TOKEN='a"b c' run
+assert_contains "GH_TOKEN holds a character no GitHub token has" "$(cat "$work/err")" "[S32] a GH_TOKEN that is no token is said"
+assert_not_contains 'a"b c' "$(cat "$work/err") $(out)" "and not echoed"
+assert_not_contains 'Authorization' "$(cat "$work/curl.config" 2>/dev/null)" "nor sent"
 CURL=timeout GH=fail run
 assert_equal 1 "$RC" "[S32] a curl that runs out of time is GitHub not reached: 1"
 assert_contains "Operation timed out" "$(cat "$work/err")" "and says so"

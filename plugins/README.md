@@ -138,7 +138,11 @@ than the 60 pages read without `gh`; otherwise 7 when a plugin's `VERSION`
 cannot be compared -- missing, a link, unreadable, in a directory it cannot
 enter, holding no version -- each line saying why and what fixes it; else 6 when
 it said of a plugin that a newer release exists, and 0 when it said of
-none. Behind a proxy, each of `gh`, `curl` and
+none. With `XYMON_PLUGINS_NO_GH` set it leaves `gh`, which nothing bounds,
+out, as the plugins column's task does. `curl` sends `GH_TOKEN` when it is
+set, given on its standard input, never on its command line; one holding
+other characters than a token's is not sent, said; `wget` sends none,
+said. Behind a proxy, each of `gh`, `curl` and
 `wget` uses the proxy settings it sees -- its environment, `~/.curlrc` for
 `curl`; under `sudo`, which those are depends on sudo's policy, so run it as
 yourself or with `sudo -E`.

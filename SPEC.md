@@ -513,13 +513,14 @@ answers, drafts left out as an anonymous reader does not see them;
 otherwise GitHub's API, anonymously, through `curl` or `wget`, at most 60
 pages of a hundred, as many as GitHub answers, from one address, in an
 hour; each request of `curl`, and of GNU `wget`, bounded in time, one that
-runs out of it being GitHub not reached -- `gh` has no such bound, the task
-that runs `outdated` being bounded by xymonlaunch. It ends with 1, saying
-why, when none reaches GitHub or when there are more releases than that,
-before any `VERSION` is read. Otherwise it ends with 7 when a `VERSION`
-could not be compared, every line said; else with 6 when it said of a
-plugin that a newer release exists, and with 0 when it said of none -- for
-a script or a Xymon task to read.
+runs out of it being GitHub not reached -- `gh` has no such bound, and
+`XYMON_PLUGINS_NO_GH` leaves it out; `GH_TOKEN`, when set, is given to
+`curl` on its standard input, never on its command line. It ends with 1,
+saying why, when none reaches GitHub or when there are more releases than
+that, before any `VERSION` is read. Otherwise it ends with 7 when a
+`VERSION` could not be compared, every line said; else with 6 when it said
+of a plugin that a newer release exists, and with 0 when it said of none --
+for a script or a Xymon task to read.
 
 ### Getting the code
 
