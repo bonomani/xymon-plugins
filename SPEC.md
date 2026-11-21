@@ -522,6 +522,20 @@ that, before any `VERSION` is read. Otherwise it ends with 7 when a
 of a plugin that a newer release exists, and with 0 when it said of none --
 for a script or a Xymon task to read.
 
+**S33. The plugins column says it on the server.**
+The `xymon-plugin` plugin installs, off as every task (S5), a task that the
+administrator turns on with `enable` (S13): once a day, after a wait drawn
+at random up to 6 hours, it runs the installer installed beside it,
+`outdated --server` (S32) without `gh` (`XYMON_PLUGINS_NO_GH`), which no
+time bounds -- xymonlaunch's `MAXTIME` stops the task, not what it started
+-- and sends this host's status `plugins`, valid 31 hours, with
+`outdated`'s lines: green for 0, no newer release published; yellow for 6,
+7 or any other status, saying which; nothing for 1 -- GitHub not reached,
+or `outdated` unable to run -- so that the status there stays, and goes
+purple once 31 hours have passed since it was sent, as it also does when
+xymond's restart stops the task while it waits. What it does goes to its
+log, `xymon-plugin.log`; a status it could not send ends it with 1.
+
 ### Getting the code
 
 **S11. `stable` is code every test passed.**

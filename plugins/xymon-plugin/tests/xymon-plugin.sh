@@ -41,7 +41,7 @@ if [ -e "$home/etc/tasks.d/xymon-plugin.cfg" ] || [ -L "$home/etc/tasks.d/xymon-
 	fail "[S5] installing it turned a task on"
 fi
 assert_equal "xymon-plugin $want" "$("$ext/xymon-plugin" --version)" "the copy installed gives the same version"
-assert_contains "xymon-plugin: $want installed; not in this copy" "$("$ext/xymon-plugin" status --server XYMONHOME="$home" 2>&1)" \
+assert_contains "xymon-plugin: $want installed, off; not in this copy" "$("$ext/xymon-plugin" status --server XYMONHOME="$home" 2>&1)" \
 	"the copy installed holds no plugin, and does not take itself for a checkout"
 assert_contains "xymon-plugin: $want installed" "$("$ROOT/xymon-plugin" status --server XYMONHOME="$home" 2>&1)" "[S15] status reports it"
 
@@ -106,7 +106,7 @@ server_tree "$home3"
 sh "$tree/plugins/xymon-plugin/xymon-plugin" install --server xymon-plugin XYMONHOME="$home3" MANDIR="$work/man3" >"$work/install3.log" 2>&1 \
 	|| fail "[S1] install run as plugins/xymon-plugin/xymon-plugin failed: $(tail -n 5 "$work/install3.log")"
 assert_equal "$want" "$(cat "$home3/ext/xymon-plugin/VERSION")" "[S1] and installs from the tree"
-assert_contains "xymon-plugin: $want installed; this copy has $want" \
+assert_contains "xymon-plugin: $want installed, off; this copy has $want" \
 	"$(sh "$tree/plugins/xymon-plugin/xymon-plugin" status --server XYMONHOME="$home3" 2>&1)" "[S1] whose plugins status compares"
 assert_equal "#!/bin/sh" "$(first_line "$(cat "$home3/ext/xymon-plugins-dist/xymon-plugin")")" "[S19] the stage gets the script, not the text file"
 assert_equal "xymon-plugin $want" "$("$home3/ext/xymon-plugins-dist/xymon-plugin" --version 2>&1)" "[S19] which gives its version"
