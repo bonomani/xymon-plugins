@@ -691,24 +691,25 @@ need_home() {
 fresh() { rm -rf "$1" && mkdir -p "$1"; }
 
 # open_dir [-1] DIR -- what is closed to other users in DIR, or with -1 in
-# DIR alone, opened to them: read, and enter or run where its owner may.
-# What an install keeps from one to the next on the server -- ext/,
-# tasks.d/, /plugins' stage, the virtualenv -- may come from one made under
-# umask 077. Only what is closed is touched, so a directory already open
-# that belongs to another user -- a packaged Xymon's ext/ -- is left, and
-# nothing said. No link is touched or followed, DIR itself included: a
-# link is the admin's to keep as it is, and chmod follows one on macOS. A
-# setuid or setgid file, or one with another hard link, is not touched (a
-# setgid directory is). What cannot be opened is said, with why and the
-# command that does it.
+# DIR alone, opened to them as far as its owner may use it: a directory
+# its owner can read and enter, read and entered; a regular file its owner
+# can read, read, and run where its owner can run it. What an install
+# keeps from one to the next on the server -- ext/, tasks.d/, /plugins'
+# stage, the virtualenv -- may come from one made under umask 077. Nothing
+# else is touched: no link, DIR itself included (chmod follows one on
+# macOS); no fifo, socket or device; no setuid or setgid file, nor one with
+# another hard link; and nothing already open, so a directory of another
+# user, a packaged Xymon's ext/, is left and nothing said. What cannot be
+# opened is said, with its owner, who can.
 open_dir() {
-	open_p='' open_m='-R '; [ "$1" != -1 ] || { open_p=-prune open_m=''; shift; }
+	open_p=''; [ "$1" != -1 ] || { open_p=-prune; shift; }
 	{ [ -d "$1" ] && [ ! -L "$1" ]; } || return 0
-	# shellcheck disable=SC2086 # open_p is -prune or nothing
-	find "$1" $open_p ! -type l \( -type d -o ! -perm -4000 ! -perm -2000 -links 1 \) \
-		\( ! -perm -0044 -o -perm -0100 ! -perm -0011 \) \
-		-exec chmod go+rX {} + \
-		|| echo "xymon-plugin: could not open $1 to every user: as its owner, or with sudo, chmod ${open_m}go+rX '$1'" >&2
+	# shellcheck disable=SC2086,SC2012 # open_p is -prune or nothing; ls names one owner
+	find "$1" $open_p \( \
+		\( -type d -perm -0500 ! -perm -0055 -exec chmod go+rx {} + \) -o \
+		\( -type f -links 1 ! -perm -4000 ! -perm -2000 -perm -0500 ! -perm -0055 -exec chmod go+rx {} + \) -o \
+		\( -type f -links 1 ! -perm -4000 ! -perm -2000 -perm -0400 ! -perm -0100 ! -perm -0044 -exec chmod go+r {} + \) \
+		\) || echo "xymon-plugin: could not open all of $1 to every user: run the update as its owner, $(ls -ld "$1" | awk '{ print $3 }'), to open it" >&2
 }
 
 # copy PLUGIN SIDE DIR -- the side's files into DIR, executable or not.
