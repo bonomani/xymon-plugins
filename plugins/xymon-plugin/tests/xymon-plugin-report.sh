@@ -182,12 +182,17 @@ done < "$work/slept"
 cp "$ext/xymon-plugin-report.sh" "$work/reporter.keep"
 # shellcheck disable=SC2016 # expanded by the new reporter, not here
 printf '#!/bin/sh\necho "new code, waited ${XYMON_PLUGINS_WAITED:-}, pid $$" >> "$WORK/newcode"\n' > "$work/reporter.new"
-rm -f "$work/slept" "$work/newcode"
-RC=0; rm -f "$work/sent"
-PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
-	XYMON_PLUGINS_WAIT=40 SWAP="$work/reporter.new" SWAPTO="$ext/xymon-plugin-report.sh" \
-	"$ext/xymon-plugin-report.sh" >"$work/log" 2>&1 & r_pid=$!
-wait "$r_pid" || RC=$?
+# A wait drawn 0 -- one in 41 -- sleeps not, and has nothing to take up:
+# drawn again, up to five times.
+for _ in 1 2 3 4 5; do
+	rm -f "$work/slept" "$work/newcode"
+	RC=0; rm -f "$work/sent"
+	PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
+		XYMON_PLUGINS_WAIT=40 SWAP="$work/reporter.new" SWAPTO="$ext/xymon-plugin-report.sh" \
+		"$ext/xymon-plugin-report.sh" >"$work/log" 2>&1 & r_pid=$!
+	wait "$r_pid" || RC=$?
+	[ -e "$work/slept" ] && break
+done
 rm -f "$ext/xymon-plugin-report.sh" && cp "$work/reporter.keep" "$ext/xymon-plugin-report.sh" && chmod 755 "$ext/xymon-plugin-report.sh"
 [ -s "$work/newcode" ] || fail "[S33] after its wait the reporter did not run the code installed meanwhile: $(cat "$work/log")"
 assert_equal "new code, waited $(cat "$work/slept"), pid $r_pid" "$(cat "$work/newcode")" "[S33] in the same process, told how long it waited"
