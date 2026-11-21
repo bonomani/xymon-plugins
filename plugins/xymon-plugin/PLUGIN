@@ -5,9 +5,11 @@
 name: xymon-plugin
 version: 0.2.0
 summary: the installer of these plugins, installed beside them as one of them, so that what is installed and its version are known on the server
+manual: xymon-plugin.8
 
 # How ./xymon-plugin installs it: see xymonapi's PLUGIN file. It is the
 # installer itself: its version is the one --version gives.
 server-short: the installer, kept on the server
 server-files: xymon-plugin
+server-manual: xymon-plugin.8
 executable: xymon-plugin
