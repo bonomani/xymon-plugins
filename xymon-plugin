@@ -54,6 +54,12 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 INSTALLER_VERSION=0.1.3
 
 die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
+
+# What is installed is read by other users -- the Xymon user that runs the
+# tasks, the web server that serves /plugins -- whoever installs it: under
+# umask 077 a new directory would be its owner's alone. Every file is given
+# its mode as it is written; this gives every directory its own.
+umask 022
 usage() {
 	echo "usage: ./xymon-plugin install|update|enable|disable|remove|status|verify|outdated|clean [--server|--tools] [--all] [--venv] [--force] [--yes] [--xymon-home PATH] [PLUGIN...] [NAME=value...]" >&2
 	echo "       ./xymon-plugin --version" >&2
@@ -684,6 +690,27 @@ need_home() {
 # PLUGIN file.
 fresh() { rm -rf "$1" && mkdir -p "$1"; }
 
+# open_dir [-1] DIR -- what is closed to other users in DIR, or with -1 in
+# DIR alone, opened to them: read, and enter or run where its owner may.
+# What an install keeps from one to the next on the server -- ext/,
+# tasks.d/, /plugins' stage, the virtualenv -- may come from one made under
+# umask 077. Only what is closed is touched, so a directory already open
+# that belongs to another user -- a packaged Xymon's ext/ -- is left, and
+# nothing said. No link is touched or followed, DIR itself included: a
+# link is the admin's to keep as it is, and chmod follows one on macOS. A
+# setuid or setgid file, or one with another hard link, is not touched (a
+# setgid directory is). What cannot be opened is said, with why and the
+# command that does it.
+open_dir() {
+	open_p='' open_m='-R '; [ "$1" != -1 ] || { open_p=-prune open_m=''; shift; }
+	{ [ -d "$1" ] && [ ! -L "$1" ]; } || return 0
+	# shellcheck disable=SC2086 # open_p is -prune or nothing
+	find "$1" $open_p ! -type l \( -type d -o ! -perm -4000 ! -perm -2000 -links 1 \) \
+		\( ! -perm -0044 -o -perm -0100 ! -perm -0011 \) \
+		-exec chmod go+rX {} + \
+		|| echo "xymon-plugin: could not open $1 to every user: as its owner, or with sudo, chmod ${open_m}go+rX '$1'" >&2
+}
+
 # copy PLUGIN SIDE DIR -- the side's files into DIR, executable or not.
 copy() {
 	exe=" $(field "$1" executable) "
@@ -813,6 +840,7 @@ plain() {
 # and moved into place, so that a failure leaves the old copy whole.
 dist() {
 	prune_dist
+	open_dir "$DIST"
 	d=$DIST/plugins/$1
 	new=$DIST/plugins/.$1.new
 	exe=" $(field "$1" executable) "
@@ -1005,7 +1033,7 @@ task() {
 	tf=$EXTROOT/$1/tasks.cfg
 	link=$TASKDIR/$1.cfg
 	ours "$1"
-	mkdir -p "$TASKDIR"
+	mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"
 	old_link "$1"
 	on=
 	this=$EXTROOT/.$1.tasks.cfg.this
@@ -1057,7 +1085,7 @@ enable() {
 as Xymon's own tasks.cfg has it; --force makes the link all the same, where the server reads tasks.d/ another way"
 		echo "xymon-plugin: $XYMONHOME/etc/tasks.cfg does not read tasks.d/: $1's link is made all the same, as --force asks, and its task may not start" >&2
 	fi
-	mkdir -p "$TASKDIR"
+	mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"
 	ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$1.cfg" || exit 1
 	echo "$1 is on: xymonlaunch reads it within half a minute and starts it; one that keeps failing it holds for ten minutes after five restarts"
 }
@@ -1426,6 +1454,7 @@ venv_auto() {
 		echo "The virtualenv $root/venv has no Python that runs: it is made anew."
 		rm -rf "$root/venv" || die "could not remove $root/venv"
 	fi
+	if [ "$target" = --server ] && [ -f "$root/venv/pyvenv.cfg" ]; then open_dir "$root/venv"; fi
 	if [ -x "$root/venv/bin/python3" ]; then
 		# shellcheck disable=SC2086
 		missing=$(lacking "$root/venv/bin/python3" $modules)
@@ -1570,6 +1599,7 @@ install_server() {
 		fi
 	done
 	fresh "$ext" || exit 1
+	open_dir -1 "$EXTROOT"
 	copy "$1" server "$ext"
 	version "$1" "$ext"
 	record "$1" "$ext"
