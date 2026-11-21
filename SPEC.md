@@ -54,8 +54,8 @@ to come.
   is in Xymon's runtime directory, its own directory there, made when it
   starts and taken away when it stops; a log, in Xymon's log directory.
 - **One command, nothing particular to a plugin.** The command reads each
-  plugin's `PLUGIN` file and holds no plugin's name; a new plugin is a
-  directory and its `PLUGIN` file.
+  plugin's `PLUGIN` file and holds no other plugin's name -- it is one of
+  them itself; a new plugin is a directory and its `PLUGIN` file.
 - **Every rule is enforced by a test**, so a change that breaks one fails at
   once.
 
@@ -66,14 +66,16 @@ to come.
 **S1. A plugin is a directory with a `PLUGIN` file.**
 `plugins/NAME/` holds the `PLUGIN` file, a README, a manual page per side,
 tests and the code. `xymon-plugin` installs every plugin from its `PLUGIN`
-file, and names none: a plugin no code knows is installed, reported and
-removed as any other.
+file, and names none but its own: it is one of them, `plugins/xymon-plugin/`,
+which `./xymon-plugin` at the repository's top links to, installed as any
+other; a plugin no code knows is installed, reported and removed alike.
 
 **S2. A plugin carries its version.**
 The `version:` line, `X.Y.Z`, moves as `CONTRIBUTING.md` (Versions) says. The
 install writes it beside the installed files, in `VERSION`, from a checkout
 or a release's archive alike: whether the code is exactly a release's is
-said by `status` and `verify` (S15, S30), and an archive's attestation.
+said by `status` and `verify` (S15, S30), and an archive's attestation. The
+installer's own version, which `--version` gives, is its `PLUGIN` file's.
 
 **S3. A plugin names the plugins it needs, part by part.**
 Its `server-needs:` and `tools-needs:` lines name them for that part: the
@@ -211,7 +213,8 @@ the install says how to turn it on.
 What a server stages for `/plugins`, in `ext/xymon-plugins-dist`, is for
 each plugin its `PLUGIN` file, its `README.md`, and the files, manual
 pages, task and web server snippets its `PLUGIN` file names, with
-`xymon-plugin` and `LICENSE`: a file left beside them in the checkout is not
+`xymon-plugin`, its own `PLUGIN` file beside it as `xymon-plugin.PLUGIN`, and `LICENSE`: a file left
+beside them in the checkout is not
 served. Each install prunes what is staged to the same, and to the
 plugins installed on the server, before staging, so that what an older
 install staged, or a plugin since renamed or removed left, is not served
@@ -515,7 +518,7 @@ only; installing from `stable` installs tested code.
 
 **S12. The installer runs on every machine a plugin goes to.**
 `xymon-plugin` and the tests keep to Xymon's portability rules, but the one
-against Python, which every plugin needs, and the one against the
+against Python, which every plugin but the installer needs, and the one against the
 `rrdtool` command, which the API runs to read the RRD files.
 
 ## Planned

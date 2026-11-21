@@ -34,7 +34,16 @@ assert_contains "0) nothing" "$out" "[S27] nothing is offered, the default"
 assert_contains "Nothing done." "$out" "[S27] and Enter does nothing"
 [ -e "$s/ext/xymonapi" ] && fail "[S27] Enter at the menu installed something"
 menu=$out
-assert_contains "1) install xymonapi on the server: the HTTP API" "$menu" "[S27] the plugins others need come first, each said in a few words"
+assert_match "[0-9]+\) install xymonapi on the server: the HTTP API" "$menu" "[S27] each plugin offered, said in a few words"
+# Each plugin offered comes after every plugin it needs on the server.
+pos() { printf '%s\n' "$menu" | sed -n "s/^  \\([0-9]*\\)) install $1 on the server.*/\\1/p"; }
+for f in "$ROOT"/plugins/*/PLUGIN; do
+	n=$(sed -n 's/^name: *//p' "$f"); k=$(pos "$n"); [ -n "$k" ] || continue
+	for d in $(sed -n 's/^server-needs: *//p' "$f"); do
+		dk=$(pos "${d%%:*}")
+		[ -n "$dk" ] && [ "$dk" -lt "$k" ] || fail "[S27] the plugins others need come first: $n is $k, ${d%%:*}, which it needs, ${dk:-not offered}"
+	done
+done
 assert_contains "Its client" "$menu" "[S27] the server's client has its section"
 assert_contains "Your tools, $work/prefix:" "$menu" "[S27] and so have the person's tools"
 

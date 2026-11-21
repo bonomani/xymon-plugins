@@ -1,0 +1,2444 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Install, update and remove the plugins, on the Xymon server or on your
+# own machine, with nothing but a POSIX shell and the usual tools: no make.
+#
+#   XYMONHOME=/usr/lib/xymon/server ./xymon-plugin install --server PLUGIN...|--all
+#   ./xymon-plugin install --tools PLUGIN...|--all    on your own machine, under PREFIX (~/.local)
+#   ./xymon-plugin update [--server|--tools] [PLUGIN...]
+#   ./xymon-plugin enable|disable [--server] [PLUGIN...]   a server task on or off
+#   ./xymon-plugin remove [--server|--tools] PLUGIN...|--all
+#   ./xymon-plugin status [--server|--tools] [PLUGIN...]  what is installed, and on
+#   ./xymon-plugin venv --server|--tools               the virtualenv beside the plugins
+#
+# --server and --tools name the part a verb acts on, --tools alone: the
+# tools are the person's, the server part its tree's owner's. Without one,
+# on a terminal, the server part is said and acted on; off a terminal, a
+# verb that changes something needs one; status covers both. --client is
+# refused until a plugin has a client part. Run as root, a verb that changes
+# the tools is refused unless DESTDIR or PREFIX is given; status --tools
+# under sudo reads the tools of the person who typed it, SUDO_USER.
+#
+# install and remove need a plugin named, or --all. install refuses a
+# plugin already installed, and update one that is not; --all, and a plugin
+# one needs, pass over those installed already, saying so. A server plugin
+# whose xymon: line names a newer Xymon than $XYMONHOME/bin/xymon --version
+# gives is refused, unless --force. A development version, 4.3.32-dev,
+# comes after 4.3.31 and before 4.3.32: a plugin that needs 4.3.32 installs
+# on it with a warning, as it may lack what 4.3.32 brought. A plugin that
+# needs another installs it first, part by part, and a removal is refused
+# while one installed needs the plugin removed. An install starts nothing: a
+# server task is on when tasks.d/PLUGIN.cfg, a link to it, is there, which
+# enable makes and disable removes. update replaces each plugin's directory
+# as a whole, and keeps the admin's task files, whether each is on, web
+# server snippets and data. Settings come from the environment, or as
+# NAME=value arguments: XYMONHOME, PREFIX, MANDIR (/usr/share/man;
+# Homebrew's share/man for a Xymon it installed), DESTDIR, which stages
+# either part for a package, and PYTHON, the Python a virtualenv is made
+# with.
+#
+# What each plugin installs is in its plugins/NAME/PLUGIN file. On a server
+# the plugins go under $XYMONHOME/ext/, one directory each, and a plugin that
+# needs another finds it beside itself; elsewhere they go under
+# $PREFIX/libexec/xymon-plugins/ the same way, with a command per plugin in
+# $PREFIX/bin. Each records its version beside its files, in VERSION, and
+# its PLUGIN file, by which it is uninstalled, enabled and updated later;
+# the virtualenv they share sits beside them, as venv/. Every path is
+# quoted, and escaped before it reaches sed: a directory with a space, an &
+# or a | in its name is a directory like any other.
+
+ROOT=$(cd "$(dirname "$0")" && pwd)
+# The name it runs as: its own, as a plugin, plugins/$self/ (S1).
+self=${0##*/}
+
+die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
+
+# What is installed is read by other users -- the Xymon user that runs the
+# tasks, the web server that serves /plugins -- whoever installs it: under
+# umask 077 a new directory would be its owner's alone. Every file is given
+# its mode as it is written; this gives every directory its own.
+umask 022
+usage() {
+	echo "usage: ./xymon-plugin install|update|enable|disable|remove|status|verify|outdated|clean [--server|--tools] [--all] [--venv] [--force] [--yes] [--xymon-home PATH] [PLUGIN...] [NAME=value...]" >&2
+	echo "       ./xymon-plugin --version" >&2
+	exit 2
+}
+
+# The installer is a plugin, plugins/xymon-plugin/ (S1): its version is its
+# PLUGIN file's -- beside it once installed; under plugins/ in a checkout or
+# an archive, where ./xymon-plugin is a link to it; beside it as
+# $self.PLUGIN in the /plugins stage, where a PLUGIN file would make the
+# stage look like a plugin installed. Found by the name it is run as, so
+# that no plugin's name is written here.
+if [ "${1:-}" = --version ]; then
+	for f in "$ROOT/PLUGIN" "$ROOT/plugins/$self/PLUGIN" "$ROOT/$self.PLUGIN"; do
+		if [ -f "$f" ] && [ "$(sed -n 's/^name: *//p' "$f")" = "$self" ]; then
+			echo "$self $(sed -n 's/^version: *//p' "$f")"; exit 0
+		fi
+	done
+	die "no PLUGIN file of $self beside it, under plugins/$self/, nor as $self.PLUGIN"
+fi
+# No verb: on a terminal, the dialogue; off one, the usage (S17).
+if [ $# -eq 0 ]; then
+	[ -t 0 ] && [ -t 1 ] || usage
+	set -- dialogue
+fi
+VERB=$1; shift
+case $VERB in
+	dialogue) ;;
+	install|update|enable|disable|remove|status|verify|outdated|clean) ;;
+	venv) die "venv is now part of install and update: ./xymon-plugin update --server --venv, or --tools --venv" ;;
+	install-server|install-tools|uninstall-server|uninstall-tools|enable-server|disable-server|status-server|status-tools|venv-server|venv-tools)
+		v=${VERB%-*}; [ "$v" = uninstall ] && v=remove
+		[ "$v" = venv ] && die "$VERB is now: ./xymon-plugin update --${VERB##*-} --venv"
+		die "$VERB is now: ./xymon-plugin $v --${VERB##*-}" ;;
+	*-client) die "$VERB: a client, here, is Xymon's, on a monitored host, and no plugin has a client part yet" ;;
+	*) usage ;;
+esac
+NAMES=
+FORCE=
+VENV_FETCH=
+ALL=
+YES=
+SEL_SERVER=
+SEL_TOOLS=
+PREFIX_GIVEN=${PREFIX:+1}
+XH_OPT=
+while [ $# -gt 0 ]; do
+	a=$1; shift
+	case $a in
+		--xymon-home=*) XH_OPT=${a#--xymon-home=} ;;
+		--xymon-home) [ $# -gt 0 ] || usage; XH_OPT=$1; shift ;;
+		--force) FORCE=1 ;;
+		--venv) VENV_FETCH=1 ;;
+		--all) ALL=1 ;;
+		--yes) YES=1 ;;
+		--server) SEL_SERVER=1 ;;
+		--tools) SEL_TOOLS=1 ;;
+		--client) die "no plugin has a client part yet: --server, or --tools" ;;
+		-*) usage ;;
+		PREFIX=*) PREFIX_GIVEN=1; export "$a" ;;
+		*=*) export "$a" ;;
+		*) NAMES="$NAMES $a" ;;
+	esac
+done
+ROOTUSER=
+[ "$(id -u)" -ne 0 ] || ROOTUSER=1
+# status --tools under sudo reads the tools of the person who typed it.
+if [ -z "$PREFIX_GIVEN" ] && [ -n "$ROOTUSER" ] && { [ "$VERB" = status ] || [ "$VERB" = verify ] || [ "$VERB" = outdated ]; } && [ -n "${SUDO_USER:-}" ]; then
+	case $SUDO_USER in
+		*[!A-Za-z0-9._-]*|-*) ;;
+		*) eval "h=~$SUDO_USER"; [ -d "$h" ] && PREFIX=$h/.local ;;
+	esac
+fi
+
+XYMONHOME=${XYMONHOME:-}
+DESTDIR=${DESTDIR:-}
+# What chose the installation, said before anything changes: --xymon-home,
+# which wins over XYMONHOME, XYMONHOME, or detection, confirmed.
+CHOSEN=
+if [ -n "$XH_OPT" ]; then
+	if [ -n "$XYMONHOME" ] && [ "$XYMONHOME" != "$XH_OPT" ]; then CHOSEN="named by --xymon-home, over XYMONHOME=$XYMONHOME"
+	else CHOSEN="named by --xymon-home"; fi
+	XYMONHOME=$XH_OPT
+elif [ -n "$XYMONHOME" ]; then
+	CHOSEN="named by XYMONHOME"
+fi
+MANDIR_GIVEN=${MANDIR:+1}
+# MANDIR, /usr/share/man by default, which macOS lets no one write: for a
+# Xymon that Homebrew installed, XYMONHOME under its prefix, Homebrew's
+# share/man, where man looks.
+mandir() {
+	[ -z "$MANDIR_GIVEN" ] || return 0
+	MANDIR=/usr/share/man
+	bp=$(brew --prefix 2>/dev/null) || bp=
+	if [ -n "$bp" ]; then
+		case $XYMONHOME in "$bp"/*) MANDIR=$bp/share/man ;; esac
+	fi
+}
+mandir
+PREFIX=${PREFIX:-$HOME/.local}
+# PYTHON given is also the one an install makes the virtualenv from, in
+# place of its search for one.
+PYTHON_GIVEN=${PYTHON:-}
+PYTHON=${PYTHON:-python3}
+
+# inside PATH -- where PATH, absolute and without DESTDIR, lies under
+# DESTDIR, each part followed inside it: a link to an absolute path taken
+# from DESTDIR, a relative one from where it lies, a .. stopping at
+# DESTDIR. Xymon's own staged install links $XYMONHOME/etc to INSTALLETCDIR,
+# /etc/xymon on Debian and with the RPM, and a packager may link any
+# directory of the stage the same way: followed as they are, such links
+# lead out of the stage into the build host's directories, and an install
+# under DESTDIR writes nothing outside it. A link that cannot be read, or
+# forty in a row, stops the run rather than be guessed at. Without
+# DESTDIR, PATH as it is. Run in $(...): its variables stay there.
+inside() {
+	if [ -z "$DESTDIR" ]; then printf '%s\n' "$1"; return; fi
+	rest=$1 cur= hops=0
+	while [ -n "$rest" ]; do
+		case $rest in /*) rest=${rest#/}; continue ;; esac
+		part=${rest%%/*}
+		if [ "$part" = "$rest" ]; then rest=; else rest=${rest#*/}; fi
+		case $part in
+			.) continue ;;
+			..) cur=${cur%/*}; continue ;;
+		esac
+		if [ -L "$DESTDIR$cur/$part" ]; then
+			hops=$((hops + 1))
+			[ "$hops" -le 40 ] || die "more than 40 links under DESTDIR at $cur/$part"
+			t=$(readlink "$DESTDIR$cur/$part") && [ -n "$t" ] || die "cannot read the link $DESTDIR$cur/$part"
+			case $t in /*) cur= ;; esac
+			rest=$t${rest:+/$rest}
+		else
+			cur=$cur/$part
+		fi
+	done
+	printf '%s\n' "$DESTDIR${cur:-/}"
+}
+
+# server_paths -- what the server's part uses, from XYMONHOME: again once
+# the installation is chosen.
+server_paths() {
+	EXTROOT=$(inside "$XYMONHOME/ext") || exit 1
+	ETC=$(inside "$XYMONHOME/etc") || exit 1
+	TASKDIR=$(inside "$XYMONHOME/etc/tasks.d") || exit 1
+	# What other machines install from, which the API serves at /plugins:
+	# each plugin installed on the server stages its directory here, as in
+	# the repository, beside this script and LICENSE.
+	DIST=$EXTROOT/xymon-plugins-dist
+}
+server_paths
+TOOLSROOT=$(inside "$PREFIX/libexec/xymon-plugins") || exit 1
+BIN=$(inside "$PREFIX/bin") || exit 1
+TOOLSMAN1=$(inside "$PREFIX/share/man/man1") || exit 1
+
+# field PLUGIN KEY -- the value of KEY in the plugin's PLUGIN file, one line
+# for each time the key appears; nothing for a plugin gone from the checkout.
+field() { [ ! -f "$ROOT/plugins/$1/PLUGIN" ] || sed -n "s/^$2: //p" "$ROOT/plugins/$1/PLUGIN"; }
+
+# held ROOT PLUGIN KEY -- the value of KEY in the PLUGIN file installed with
+# the plugin under ROOT ($EXTROOT or $TOOLSROOT): the record of what that
+# install put in place, which uninstall, enable, disable and an update act
+# on, rather than on what this checkout would install. An install from
+# before the record has none: the checkout's is read, as it was. The record
+# lies in a directory the Xymon user can write, so a name read from it is
+# used only once plain says it names no other directory.
+held() {
+	if [ -f "$1/$2/PLUGIN" ] && [ ! -L "$1/$2/PLUGIN" ]; then
+		sed -n "s/^$3: //p" "$1/$2/PLUGIN"
+	elif [ -f "$ROOT/plugins/$2/PLUGIN" ]; then
+		field "$2" "$3"
+	fi
+}
+
+# sedesc TEXT -- TEXT escaped for the right-hand side of a sed s|||.
+sedesc() { printf '%s\n' "$1" | sed -e 's/[\\&|]/\\&/g'; }
+
+# say PLUGIN KEY -- print the plugin's message KEY, its placeholders filled
+# with the paths of the installed system, never the stage's under DESTDIR:
+# the message is for whoever runs that system.
+say() {
+	t=$(field "$1" "$2")
+	# Xymon's runtime directory, read only for a message that names it; one
+	# the install cannot read is named in words, not as a variable a shell
+	# would take for set.
+	r=
+	case $t in *@XYMONRUNDIR@*) r=${RUNDIR:-$(rundir)} || exit 1 ;; esac
+	# One the install cannot read: the lines naming it are left out --
+	# conf says to put the directory in the snippets -- rather than give a
+	# command that cannot be typed as it is.
+	[ -z "$t" ] || printf '%s\n' "$t" | { if [ -z "$r" ]; then sed '/@XYMONRUNDIR@/d'; else cat; fi; } | sed -e "s|@ETC@|$(sedesc "$XYMONHOME/etc")|g" -e "s|@TASKDIR@|$(sedesc "$XYMONHOME/etc/tasks.d")|g" \
+		-e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g" -e "s|@XYMONRUNDIR@|$(sedesc "$r")|g"
+}
+
+# Every plugin, by the directories under plugins/ that hold a PLUGIN file.
+all_plugins() {
+	for f in "$ROOT"/plugins/*/PLUGIN; do
+		[ -e "$f" ] && basename "$(dirname "$f")"
+	done
+}
+
+# known PLUGIN -- refuse a name that is not a plugin here, or that could
+# name a directory other than one plugin's.
+known() {
+	plain "$1" || die "not a plugin name: '$1'"
+	[ -f "$ROOT/plugins/$1/PLUGIN" ] || [ -f "$EXTROOT/$1/PLUGIN" ] || [ -f "$TOOLSROOT/$1/PLUGIN" ] \
+		|| die "no plugin $1 here: the plugins are $(echo $(all_plugins))"
+}
+
+# needs PLUGIN PART [ROOT] -- the plugins its PART part needs, by its
+# PART-needs: line, or by the record under ROOT when given: each NAME, the
+# same part of it, or NAME:part for another part. A part this run does not
+# install -- a server install installs no tools, nor yet a client part --
+# is a need it cannot hold, refused.
+needs() {
+	if [ -n "${3:-}" ]; then v=$(held "$3" "$1" "$2-needs"); else v=$(field "$1" "$2-needs"); fi
+	for n in $v; do
+		case $n in
+			*:*) want=${n#*:}; n=${n%%:*} ;;
+			*) want=$2 ;;
+		esac
+		case $want in
+			server|client|tools) ;;
+			*) die "$1's $2-needs: names $n:$want, and $want is no part: server, client or tools" ;;
+		esac
+		[ "$want" = "$2" ] || die "$1's $2 part needs $n's $want part, which an install of the $2 part cannot hold"
+		echo "$n"
+	done
+}
+
+# depth PLUGIN PART ROOT -- how many plugins deep its PART part stands on,
+# by the records of the plugins installed under ROOT: 0 for one that needs
+# none, as an uninstall goes from the deepest up among what is installed.
+depth() {
+	# Always run in $(...): globbing off for this subshell only.
+	set -f
+	d=0
+	for n in $(needs "$1" "$2" "$3"); do
+		plain "$n" || continue
+		x=$(depth "$n" "$2" "$3"); [ $((x + 1)) -gt $d ] && d=$((x + 1))
+	done
+	echo $d
+}
+
+# older A B -- true when version A is older than B, comparing X.Y.Z by
+# number; awk reads 32-dev as 32.
+older() {
+	awk -v a="$1" -v b="$2" 'BEGIN {
+		n = split(a, x, "."); m = split(b, y, ".")
+		for (i = 1; i <= (n > m ? n : m); i++) {
+			if (x[i] + 0 < y[i] + 0) exit 0
+			if (x[i] + 0 > y[i] + 0) exit 1
+		}
+		exit 1
+	}'
+}
+
+# declared_ok PLUGIN -- refuse, before anything is installed, a data: or
+# writes: line S28 does not allow, in the plugin or one it needs: data: a
+# directory $XYMONVAR/NAME/, $XDG_CONFIG_HOME/NAME/, $XDG_CACHE_HOME/NAME/
+# or $XDG_STATE_HOME/NAME/, NAME the plugin's own or one it needs; writes:
+# one file, then the command that changes it, in parentheses.
+DECLARED=
+declared_ok() {
+	case " $DECLARED " in *" $1 "*) return 0 ;; esac
+	DECLARED="$DECLARED $1"
+	own=" $1 "
+	for n in $(field "$1" server-needs) $(field "$1" tools-needs) $(field "$1" client-needs); do
+		own="$own${n%%:*} "
+	done
+	while IFS= read -r d; do
+		[ -n "$d" ] || continue
+		case $d in
+			'$XYMONVAR/'*/|'$XDG_CONFIG_HOME/'*/|'$XDG_CACHE_HOME/'*/|'$XDG_STATE_HOME/'*/) ;;
+			*) die "$1's data: $d is no directory S28 allows: \$XYMONVAR/NAME/, \$XDG_CONFIG_HOME/NAME/, \$XDG_CACHE_HOME/NAME/ or \$XDG_STATE_HOME/NAME/" ;;
+		esac
+		n=${d#*/}; n=${n%/}
+		case $n in ''|*/*) die "$1's data: $d names no single directory" ;; esac
+		case $own in *" $n "*) ;; *) die "$1's data: $d is in the name of $n, which is neither $1 nor a plugin it needs" ;; esac
+	done <<EOF
+$(field "$1" data)
+EOF
+	while IFS= read -r w; do
+		[ -n "$w" ] || continue
+		case $w in
+			?*' ('?*')') ;;
+			*) die "$1's writes: $w is not a file, then the command that changes it in parentheses" ;;
+		esac
+		f=${w% (*}
+		case $f in */|*' '*) die "$1's writes: $w names no single file" ;; esac
+	done <<EOF
+$(field "$1" writes)
+EOF
+	for n in $(field "$1" server-needs) $(field "$1" tools-needs) $(field "$1" client-needs); do
+		n=${n%%:*}
+		[ ! -f "$ROOT/plugins/$n/PLUGIN" ] || declared_ok "$n"
+	done
+}
+
+# xymon_ok PLUGIN -- refuse the plugin, or one it needs, when its xymon:
+# line names a newer Xymon than the server's, unless --force; say so when
+# the server's cannot be read. Run on every plugin to install before any is
+# touched.
+CHECKED=
+xymon_ok() {
+	case " $CHECKED " in *" $1 "*) return 0 ;; esac
+	CHECKED="$CHECKED $1"
+	ns=$(needs "$1" server) || exit 1
+	for n in $ns; do xymon_ok "$n"; done
+	want=$(field "$1" xymon); [ -n "$want" ] || return 0
+	xymon=$(inside "$XYMONHOME/bin/xymon") || exit 1
+	have=$("$xymon" --version 2>/dev/null | sed -n 's/^Xymon version \([0-9][0-9.]*[^ ]*\).*/\1/p')
+	if [ -z "$have" ]; then
+		echo "xymon-plugin: $1 needs Xymon $want or newer, and the version of $xymon could not be read: not checked" >&2
+	elif older "$have" "$want"; then
+		[ -n "$FORCE" ] || die "$1 needs Xymon $want or newer, and this server's is $have: --force installs it anyway"
+		echo "xymon-plugin: $1 needs Xymon $want or newer, and this server's is $have: installed anyway, as --force asks" >&2
+	elif [ "$have" != "${have%%-*}" ] && ! older "$want" "${have%%-*}"; then
+		echo "xymon-plugin: $1 needs Xymon $want or newer, and this server's is $have, on the way to $want: not checked" >&2
+	fi
+	return 0
+}
+
+# reads_d -- say when the server's xymonserver.cfg does not read
+# xymonserver.d/, where the plugins' settings go: a configuration kept from
+# before 4.3.31 would ignore them all, without a word.
+reads_d() {
+	c=$(inside "$XYMONHOME/etc/xymonserver.cfg") || exit 1
+	[ -f "$c" ] || return 0
+	grep -q '^[[:space:]]*\(optional[[:space:]]\{1,\}\)\{0,1\}directory[[:space:]]\{1,\}\(.*/\)\{0,1\}xymonserver\.d/\{0,1\}[[:space:]]*$' "$c" && return 0
+	echo "xymon-plugin: $c does not read xymonserver.d/, where the plugins' settings go: add the line" >&2
+	echo "  optional directory $XYMONHOME/etc/xymonserver.d" >&2
+	echo "as Xymon's own xymonserver.cfg has it since 4.3.31" >&2
+}
+
+# marks TREE -- what TREE is by Xymon's marks, a whole pair counting before
+# any single mark: server, when both of a server's are there, a client's
+# files with them or not, as where server and client share /etc/xymon;
+# else client; else "some MARK..." naming the marks there; else none.
+SERVER_MARKS="etc/xymonserver.cfg bin/xymond"
+CLIENT_MARKS="etc/xymonclient.cfg bin/xymonclient.sh"
+marks() {
+	found=
+	for m in $SERVER_MARKS $CLIENT_MARKS; do
+		if [ -e "$1/$m" ]; then found="$found $m"; fi
+	done
+	case " $found " in
+		*" etc/xymonserver.cfg"*" bin/xymond "*) echo server ;;
+		*" etc/xymonclient.cfg"*" bin/xymonclient.sh "*) echo client ;;
+		"  ") echo none ;;
+		*) echo "some$found" ;;
+	esac
+}
+
+# canon DIR -- DIR with every link resolved, or nothing when it is no
+# directory: one tree reached by two paths, as Homebrew's opt/ and Cellar/,
+# is one tree.
+canon() { (cd "$1" 2>/dev/null && pwd -P); }
+
+# client_of SERVER -- the client tree SERVER's xymonserver.cfg names as its
+# XYMONCLIENTHOME, resolved, or nothing when it names none or a variable.
+client_of() {
+	c=$(sed -n 's/^[[:space:]]*XYMONCLIENTHOME[[:space:]]*=[[:space:]]*//p' "$1/etc/xymonserver.cfg" 2>/dev/null \
+		| tail -n 1 | sed -e 's/[[:space:]]*#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/")
+	case $c in ''|*'$'*) return 0 ;; esac
+	canon "$c"
+}
+
+# xymon_trees -- the Xymon installations on this machine, "KIND DIR" each:
+# those XYMON_PLUGINS_TREES names, colon-separated, the packages' usual
+# paths, Homebrew's among them where brew is installed, the trees of a
+# running xymonlaunch, and the xymon user's home -- not the current
+# directory; with XYMON_PLUGINS_TREES_ONLY set, those it names alone. Each is told once, by its resolved path, shown as found; a
+# client tree a server found names as its own is part of that server, not
+# told apart. It only tells what is here: nothing is chosen from it.
+xymon_trees() {
+	# Inside $( ), a case pattern opens with "(": bash 3.2, macOS's /bin/sh,
+	# reads a bare "pattern)" there as the end of the substitution.
+	trees=$({
+		printf '%s\n' "${XYMON_PLUGINS_TREES:-}" | tr ':' '\n'
+		# XYMON_PLUGINS_TREES_ONLY, for the tests: the trees named above, and
+		# none of this machine's.
+		[ -z "${XYMON_PLUGINS_TREES_ONLY:-}" ] || exit 0
+		for t in /usr/lib/xymon/server /usr/lib/xymon/client /usr/local/xymon/server \
+			/usr/local/xymon/client /home/xymon/server /home/xymon/client; do
+			printf '%s\n' "$t"
+		done
+		bp=$(brew --prefix 2>/dev/null) && [ -n "$bp" ] && printf '%s\n' "$bp/opt/xymon-server/server"
+		# A running xymonlaunch: the tree its program, or its --config,
+		# lies in.
+		ps -A -o args= 2>/dev/null | awk '/xymonlaunch/ {
+			if ($1 ~ /\/bin\/xymonlaunch$/) { d = $1; sub(/\/bin\/xymonlaunch$/, "", d); print d }
+			for (i = 2; i <= NF; i++) if ($i ~ /^--config=/) { c = substr($i, 10); sub(/\/etc\/[^\/]*$/, "", c); print c }
+		}'
+		eval "xh=~xymon" 2>/dev/null
+		case $xh in ("~xymon"|'') ;; (*) printf '%s\n%s\n%s\n' "$xh" "$xh/server" "$xh/client" ;; esac
+	} | while IFS= read -r t; do
+		[ -n "$t" ] || continue
+		c=$(canon "$t") || continue
+		[ -n "$c" ] || continue
+		k=$(marks "$t")
+		case $k in (server|client) printf '%s %s %s\n' "$c" "$k" "$t" ;; esac
+	done | awk '!seen[$1]++ { print }')
+	owned=
+	while read -r c k t; do
+		[ "$k" = server ] || continue
+		o=$(client_of "$t"); [ -z "$o" ] || owned="$owned $o "
+	done <<EOF
+$trees
+EOF
+	while read -r c k t; do
+		[ -n "$c" ] || continue
+		case $owned in *" $c "*) continue ;; esac
+		printf '%s %s\n' "$k" "$t"
+	done <<EOF
+$trees
+EOF
+}
+
+# client_home SERVER -- the client tree SERVER's xymonserver.cfg names as
+# its XYMONCLIENTHOME, as written, or nothing.
+client_home() {
+	c=$(sed -n 's/^[[:space:]]*XYMONCLIENTHOME[[:space:]]*=[[:space:]]*//p' "$1/etc/xymonserver.cfg" 2>/dev/null \
+		| tail -n 1 | sed -e 's/[[:space:]]*#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/")
+	case $c in *'$'*) c= ;; esac
+	printf '%s\n' "$c"
+}
+
+# The repository the plugins are released from.
+REPO="xymon-monitoring/xymon-plugins"
+
+# releases -- the plugins' published releases, "NAME X.Y.Z" a line, from
+# GitHub: with gh when it answers, drafts left out as an anonymous reader
+# does not see them; else the API, anonymously, through curl or wget. An
+# answer with no release is one, not a failure; when none reaches GitHub it
+# says why, and fails (S32).
+releases() {
+	GHFAILED=
+	if command -v gh >/dev/null 2>&1 \
+		&& tags=$(gh api --hostname github.com "repos/$REPO/releases?per_page=100" --paginate \
+			--jq '.[] | select(.draft == false) | .tag_name' 2>/dev/null); then
+		:
+	else
+		command -v gh >/dev/null 2>&1 && GHFAILED=1
+		tags=$(anon_releases) || exit 1
+	fi
+	# A tag is NAME/vX.Y.Z, its name as plain() allows a plugin's, each
+	# number of its version one digit or more; any other is no plugin's.
+	printf '%s\n' "$tags" | sed -n 's|^\([A-Za-z0-9._+-][A-Za-z0-9._+-]*\)/v\([0-9][0-9]*\(\.[0-9][0-9]*\)*\)$|\1 \2|p'
+}
+
+# anon_releases -- the tag names of every release, page after page of
+# GitHub's API read anonymously (drafts are not shown to an anonymous
+# reader), through curl, else wget. The answer is JSON; a tag name is read
+# where a key "tag_name" opens a field, so that the words of a release's
+# text, its quotes escaped, are not taken for one.
+anon_releases() {
+	page=1 all=
+	while :; do
+		u="https://api.github.com/repos/$REPO/releases?per_page=100&page=$page"
+		if command -v curl >/dev/null 2>&1; then
+			j=$(curl -fsSL -H 'Accept: application/vnd.github+json' "$u" 2>&1) || die "cannot read $u: $j"
+		elif command -v wget >/dev/null 2>&1; then
+			j=$(wget -q -O - "$u") || die "cannot read $u: wget failed (exit status $?)"
+		elif [ -n "${GHFAILED:-}" ]; then
+			die "gh could not read the releases from GitHub, and neither curl nor wget is here to read them"
+		else
+			die "outdated reads the releases from GitHub, with gh, curl or wget: none is here"
+		fi
+		t=$(printf '%s\n' "$j" | tr ',' '\n' \
+			| sed -n 's/^[][{[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*$/\1/p')
+		[ -n "$t" ] || break
+		all="$all$t
+"
+		# A page short of a hundred is the last.
+		[ "$(printf '%s\n' "$t" | wc -l)" -ge 100 ] || break
+		# ponytail: 60 pages, as many as GitHub answers, from one address,
+		# in an hour; past them, said rather than a partial list.
+		[ "$page" -lt 60 ] || die "github.com/$REPO has more than the 6000 releases outdated reads without gh: read them with gh, logged in"
+		page=$((page + 1))
+	done
+	printf '%s' "$all"
+}
+
+# latest PLUGIN -- the highest version $RELEASES has of PLUGIN, or nothing.
+latest() {
+	best=
+	for lv in $(printf '%s\n' "$RELEASES" | awk -v n="$1" '$1 == n { print $2 }'); do
+		if [ -z "$best" ] || older "$best" "$lv"; then best=$lv; fi
+	done
+	echo "$best"
+}
+
+# outdated_line PART ROOT PLUGIN -- the plugin installed there against its
+# latest release: up to date, a newer one released (with the update that
+# takes it), none released, or installed newer than any released.
+outdated_line() {
+	[ -f "$2/$3/VERSION" ] || return 0
+	# Its version, a bare X.Y.Z or this plugin's tag, checked to be one: a
+	# file changed by hand is said, never compared or echoed; one that
+	# cannot be read is an error.
+	ov=$(head -n 1 "$2/$3/VERSION") || die "cannot read $2/$3/VERSION"
+	case $ov in "$3"/v*) ov=${ov#"$3"/v} ;; esac
+	case $ov in ""|*[!0-9.]*|.*|*.|*..*)
+		echo "$3: its VERSION holds no version: ./xymon-plugin verify --$1 says more"
+		return 0 ;;
+	esac
+	or=$(latest "$3")
+	if [ -z "$or" ]; then
+		echo "$3: $ov installed; no release of it is published"
+	elif older "$ov" "$or"; then
+		echo "$3: $ov installed; $or released: ./xymon-plugin update --$1 $3, from its release's archive"
+	elif older "$or" "$ov"; then
+		echo "$3: $ov installed; newer than its latest release, $or"
+	else
+		echo "$3: $ov installed; up to date"
+	fi
+}
+
+# show_client SERVER -- its client tree's section: where it is, and each
+# plugin installed there, or that there is none.
+show_client() {
+	c=$(client_home "$1")
+	if [ -z "$c" ]; then echo "Its client: none named in $1/etc/xymonserver.cfg"; return 0; fi
+	echo "Its client $c:"
+	any=
+	for d in "$c"/ext/*/; do
+		[ -f "$d/PLUGIN" ] && [ -f "$d/VERSION" ] || continue
+		d=${d%/}; any=1; echo "  ${d##*/}: $(sed -e 's|^.*/v||' "$d/VERSION") installed"
+	done
+	[ -n "$any" ] || echo "  no plugin"
+}
+
+# person_conf -- the directory of the person who typed the command:
+# SUDO_USER's under sudo, else the account's that runs it.
+person_conf() {
+	if [ -n "$ROOTUSER" ] && [ -n "${SUDO_USER:-}" ]; then
+		case $SUDO_USER in *[!A-Za-z0-9._-]*|-*) return 1 ;; esac
+		eval "h=~$SUDO_USER"; printf '%s\n' "$h/.config/xymon-plugin"
+	else
+		printf '%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}/xymon-plugin"
+	fi
+}
+
+# choose_tree -- XYMONHOME, from the installations detection finds, on a
+# terminal: the one found proposed, Enter for yes; several listed, the one
+# used last as the default, or none, said when it is gone. Off a terminal,
+# or with none found, refused, the trees found named. The one chosen is
+# remembered as the one used last -- not under sudo, which only reads it.
+choose_tree() {
+	trees=$(xymon_trees)
+	found=$(printf '%s\n' "$trees" | sed -n 's/^\([a-z]*\) \(.*\)/  \2, a Xymon \1/p')
+	servers=$(printf '%s\n' "$trees" | sed -n 's/^server //p')
+	if ! { [ -t 0 ] && [ -t 1 ]; } || [ -z "$servers" ]; then
+		one=; [ "$(printf '%s\n' "$servers" | grep -c .)" -ne 1 ] || one=$servers
+		die "XYMONHOME is not set: XYMONHOME=${one:-<the Xymon server directory>} ./xymon-plugin $VERB --server${NAMES:+ $(echo $NAMES)}${ALL:+ --all}${found:+
+Xymon trees found here, none chosen:
+$found}"
+	fi
+	n=$(printf '%s\n' "$servers" | wc -l | tr -d ' ')
+	if [ "$n" -eq 1 ]; then
+		printf 'Xymon server: %s (detected). Use it? [Y/n] ' "$servers"
+		read -r ans || ans=n
+		case $ans in [Nn]*) none_chosen; return 1 ;; esac
+		XYMONHOME=$servers
+	else
+		conf=$(person_conf) || conf=
+		last=; [ -z "$conf" ] || last=$(cat "$conf/installation-used-last" 2>/dev/null) || last=
+		def=; i=0
+		echo "Xymon servers here:"
+		while IFS= read -r t; do
+			i=$((i + 1)); echo "  $i) $t"
+			[ -n "$last" ] && [ "$(canon "$t")" = "$(canon "$last" 2>/dev/null)" ] && def=$i
+		done <<EOF2
+$servers
+EOF2
+		[ -z "$last" ] || [ -n "$def" ] || echo "The one used last, $last, is gone."
+		printf 'Which one? [%s] ' "${def:-1-$n}"
+		read -r ans || ans=
+		[ -n "$ans" ] || ans=$def
+		case $ans in ''|*[!0-9]*) none_chosen; return 1 ;; esac
+		[ "$ans" -ge 1 ] && [ "$ans" -le "$n" ] || { none_chosen; return 1; }
+		XYMONHOME=$(printf '%s\n' "$servers" | sed -n "${ans}p")
+	fi
+	CHOSEN="detected, confirmed"
+	mandir
+	server_paths
+}
+
+# none_chosen -- no installation taken at the proposal: a verb stops there,
+# changing nothing; the dialogue, SOFT set, goes on with the person's tools.
+none_chosen() { [ -n "${SOFT:-}" ] || die "no installation chosen: nothing done"; }
+
+# remember_tree -- XYMONHOME as the one used last, for the person who typed
+# the command; not under sudo, which reads it only.
+remember_tree() {
+	[ -z "$DESTDIR" ] || return 0
+	{ [ -n "$ROOTUSER" ] && [ -n "${SUDO_USER:-}" ]; } && return 0
+	conf=$(person_conf) || return 0
+	mkdir -p "$conf" 2>/dev/null && printf '%s\n' "$XYMONHOME" > "$conf/installation-used-last" 2>/dev/null || :
+}
+
+# need_home -- the server's part goes in the tree XYMONHOME names, and only
+# in a server's: without XYMONHOME, the trees found are named, none chosen;
+# a client's tree, part of a pair and no marks at all are refused before
+# anything changes. Under DESTDIR, a staging target, no marks are read,
+# the host's included.
+need_home() {
+	if [ -z "$XYMONHOME" ]; then
+		[ -z "$DESTDIR" ] || die "XYMONHOME is not set: under DESTDIR it names the installation, XYMONHOME=<the Xymon server directory> ./xymon-plugin $VERB --server [PLUGIN...]"
+		choose_tree
+	fi
+	[ -z "$DESTDIR" ] || return 0
+	set -- $(marks "$XYMONHOME")
+	case $1 in
+		client)
+			# A server's own client tree: that server named, and what to type.
+			me=$(canon "$XYMONHOME"); srv=
+			s2=${XYMONHOME%/}; s2=${s2%/*}/server
+			[ "$(marks "$s2")" = server ] && [ "$(client_of "$s2")" = "$me" ] && srv=$s2
+			if [ -z "$srv" ]; then
+				srv=$(xymon_trees | sed -n 's/^server //p' | while IFS= read -r t; do
+					[ "$(client_of "$t")" = "$me" ] && { printf '%s\n' "$t"; break; }
+				done)
+			fi
+			[ -z "$srv" ] || die "$XYMONHOME is the client tree of the Xymon server $srv: name the server, ./xymon-plugin $VERB --xymon-home $srv --server; its client part, --client, comes once a plugin has one"
+			die "$XYMONHOME is a Xymon client's tree ($CLIENT_MARKS), not a server's: the server's part of a plugin goes in a server's tree" ;;
+		some) shift; die "$XYMONHOME is not a whole Xymon server's tree: it has $*, and a server's has $SERVER_MARKS" ;;
+		none) die "$XYMONHOME is no Xymon server's tree: none of $SERVER_MARKS is there; to stage one for a package, set DESTDIR" ;;
+	esac
+	# Before anything changes: the target, the part, and what chose them.
+	if [ "$VERB" != status ] && [ "$VERB" != outdated ]; then
+		echo "Target: $XYMONHOME ($CHOSEN), part: server"
+		remember_tree
+	fi
+}
+
+# fresh DIR -- DIR, emptied: an install replaces a plugin's directory as a
+# whole, so that a file a newer version no longer ships does not stay behind
+# to be imported. It holds only what the plugin ships, its VERSION and its
+# PLUGIN file.
+fresh() { rm -rf "$1" && mkdir -p "$1"; }
+
+# open_dir [-1] DIR -- what is closed to other users in DIR, or with -1 in
+# DIR alone, opened to them as far as its owner may use it: a directory
+# its owner can read and enter, read and entered; a regular file its owner
+# can read, read, and run where its owner can run it. What an install
+# keeps from one to the next on the server -- ext/, tasks.d/, /plugins'
+# stage, the virtualenv -- may come from one made under umask 077. Nothing
+# else is touched: no link, DIR itself included (chmod follows one on
+# macOS); no fifo, socket or device; no setuid or setgid file, nor one with
+# another hard link; and nothing already open, so a directory of another
+# user, a packaged Xymon's ext/, is left and nothing said. What cannot be
+# opened is said, with its owner, who can.
+open_dir() {
+	open_p=''; [ "$1" != -1 ] || { open_p=-prune; shift; }
+	{ [ -d "$1" ] && [ ! -L "$1" ]; } || return 0
+	# shellcheck disable=SC2086,SC2012 # open_p is -prune or nothing; ls names one owner
+	find "$1" $open_p \( \
+		\( -type d -perm -0500 ! -perm -0055 -exec chmod go+rx {} + \) -o \
+		\( -type f -links 1 ! -perm -4000 ! -perm -2000 -perm -0500 ! -perm -0055 -exec chmod go+rx {} + \) -o \
+		\( -type f -links 1 ! -perm -4000 ! -perm -2000 -perm -0400 ! -perm -0100 ! -perm -0044 -exec chmod go+r {} + \) \
+		\) || echo "xymon-plugin: could not open all of $1 to every user: run the update as its owner, $(ls -ld "$1" | awk '{ print $3 }'), to open it" >&2
+}
+
+# copy PLUGIN SIDE DIR -- the side's files into DIR, executable or not.
+copy() {
+	exe=" $(field "$1" executable) "
+	set -f
+	for f in $(field "$1" "$2-files"); do
+		plain "$f" || die "$1's PLUGIN file names '$f' to install, which is no file of its own directory"
+		[ ! -L "$ROOT/plugins/$1/$f" ] || die "$1's $f is a link, which is not installed"
+		cp -f "$ROOT/plugins/$1/$f" "$3/" || exit 1
+		case $exe in *" $f "*) chmod 755 "$3/$f" ;; *) chmod 644 "$3/$f" ;; esac || exit 1
+	done
+	set +f
+}
+
+# version PLUGIN DIR -- the plugin's version, X.Y.Z, in DIR/VERSION: the
+# PLUGIN file's, from a checkout or a release's archive alike (S2). Whether
+# the code is exactly a release's is for status and verify to say, and an
+# archive's attestation.
+version() {
+	printf '%s\n' "$(field "$1" version)" > "$2/VERSION" && chmod 644 "$2/VERSION"
+}
+
+# manual PLUGIN PAGE DIR MANROOT FINAL -- the page kept in the plugin's
+# directory DIR, and linked from its section's directory under MANROOT,
+# without DESTDIR, found inside it; the link names FINAL, that directory as
+# installed, without DESTDIR too. Removing
+# the directory leaves a link that points nowhere, and a removal knows the
+# page is the plugin's by the link, not by what its record says.
+manual() {
+	[ -n "$2" ] || return 0
+	plain "$2" || die "$1's PLUGIN file names '$2' as its manual page, which is no file of its own directory"
+	[ ! -L "$ROOT/plugins/$1/$2" ] || die "$1's $2 is a link, which is not installed"
+	cp -f "$ROOT/plugins/$1/$2" "$3/$2" && chmod 644 "$3/$2" || exit 1
+	sec=$(inside "$4/man${2##*.}") || exit 1
+	mkdir -p "$sec" || exit 1
+	rm -f "$sec/$2" && ln -s "$5/$2" "$sec/$2" || exit 1
+}
+
+# mf_file ACTUAL NAME [admin] -- a MANIFEST line for a file written: its
+# cksum and size, and NAME, its path as installed (S29).
+mf_file() {
+	c=$(cksum < "$1") || exit 1
+	printf 'file\t%s\t%s' "$c" "$2"
+	[ -z "${3:-}" ] || printf '\t%s' "$3"
+	echo
+}
+
+# mf_link ACTUAL NAME -- a MANIFEST line for a link made: NAME, and where
+# it points.
+mf_link() { printf 'link\t%s\t%s\n' "$2" "$(readlink "$1")"; }
+
+# mf_dir DIR ADMIN -- the lines for every file and link under the plugin's
+# directory DIR, MANIFEST aside, by their path from it; the names in ADMIN,
+# the task file and the snippets, marked the administrator's to edit.
+mf_dir() {
+	(cd "$1" && find . \( -type f -o -type l \) ! -name MANIFEST ! -name .MANIFEST.new) \
+		| sed -e 's|^\./||' | LC_ALL=C sort | while IFS= read -r f; do
+		case " $2 " in *" ${f%.new} "*|*" ${f%.old} "*) [ "$f" = "${f%.new}" ] && [ "$f" = "${f%.old}" ] || continue ;; esac
+		if [ -L "$1/$f" ]; then mf_link "$1/$f" "$f"
+		else case " $2 " in *" $f "*) mf_file "$1/$f" "$f" admin ;; *) mf_file "$1/$f" "$f" ;; esac
+		fi
+	done
+}
+
+# manifest DIR -- write what the lines on standard input say into
+# DIR/MANIFEST, the install's last step: a new file, moved in place.
+manifest() {
+	cat > "$1/.MANIFEST.new" && chmod 644 "$1/.MANIFEST.new" && mv -f "$1/.MANIFEST.new" "$1/MANIFEST" || exit 1
+}
+
+# manifest_server PLUGIN -- S29 for the server part: the plugin's directory,
+# the copy /plugins serves, and the manual page's link, by their paths as
+# installed, without DESTDIR. The task link and a SELinux module loaded are
+# states, not files, and stay out.
+manifest_server() {
+	{
+		mf_dir "$EXTROOT/$1" "tasks.cfg $(field "$1" conf)"
+		for f in $(cd "$DIST/plugins/$1" && ls); do
+			mf_file "$DIST/plugins/$1/$f" "$XYMONHOME/ext/xymon-plugins-dist/plugins/$1/$f"
+		done
+		pg=$(field "$1" server-manual)
+		if [ -n "$pg" ]; then
+			sec=$(inside "$MANDIR/man${pg##*.}") || exit 1
+			[ ! -L "$sec/$pg" ] || mf_link "$sec/$pg" "$MANDIR/man${pg##*.}/$pg"
+		fi
+	} | manifest "$EXTROOT/$1"
+}
+
+# manifest_tools PLUGIN -- S29 for your tools: the plugin's directory, its
+# command and its manual page's link.
+manifest_tools() {
+	{
+		mf_dir "$TOOLSROOT/$1" ""
+		set -- "$1" $(field "$1" command)
+		[ $# -ne 3 ] || [ ! -f "$BIN/$2" ] || mf_file "$BIN/$2" "$PREFIX/bin/$2"
+		pg=$(field "$1" tools-manual)
+		[ -z "$pg" ] || [ ! -L "$TOOLSMAN1/$pg" ] || mf_link "$TOOLSMAN1/$pg" "$PREFIX/share/man/man1/$pg"
+	} | manifest "$TOOLSROOT/$1"
+}
+
+# declared PLUGINFILE -- the names a PLUGIN file gives to stage, one per
+# line: itself, README.md, each side's files and manual page, the task and
+# the snippets. Read with globbing off; the callers check each is a plain
+# name of the plugin's own directory.
+declared() {
+	echo PLUGIN
+	echo README.md
+	for k in server-files tools-files server-manual tools-manual task conf; do
+		sed -n "s/^$k: //p" "$1" | tr ' ' '\n'
+	done
+}
+
+# plain NAME -- true when NAME is a file name of a plugin's own directory:
+# letters, digits, ., _, + and - only, and not . or ..: no /, and nothing a
+# shell would expand or split.
+plain() {
+	case $1 in ""|.|..|*[!A-Za-z0-9._+-]*) return 1 ;; esac
+	return 0
+}
+
+# self_sources -- the installer to stage for /plugins and its PLUGIN file,
+# self_src and self_meta, from the tree it runs from: its directory under
+# plugins/ in a checkout or an archive -- the script itself, not
+# ./xymon-plugin, which is only a text file where links are not kept -- or
+# beside it in a /plugins stage it was fetched from. No script at all is
+# said, false, before a server install changes anything.
+self_sources() {
+	self_src=$ROOT/plugins/$self/$self; [ -f "$self_src" ] || self_src=$ROOT/$self
+	self_meta=$ROOT/plugins/$self/PLUGIN; [ -f "$self_meta" ] || self_meta=$ROOT/$self.PLUGIN
+	[ -f "$self_src" ] && return 0
+	echo "xymon-plugin: no installer to stage for /plugins: neither $ROOT/plugins/$self/$self nor $ROOT/$self is a file" >&2
+	return 1
+}
+
+# dist PLUGIN -- stage under $DIST/plugins what a machine needs to install
+# the plugin, with this script and LICENSE beside: a machine unpacking it
+# runs ./xymon-plugin install --tools there, at the server's versions. Only
+# what the PLUGIN file names is staged, each a plain file of the plugin's
+# directory and no link, so that a file left beside them in the checkout,
+# a note, a key, a build's leftover, is not served to anyone by /plugins.
+# The stage is pruned first, then the plugin built beside its old copy
+# and moved into place, so that a failure leaves the old copy whole.
+dist() {
+	prune_dist
+	open_dir "$DIST"
+	d=$DIST/plugins/$1
+	new=$DIST/plugins/.$1.new
+	exe=" $(field "$1" executable) "
+	mkdir -p "$new" || exit 1
+	set -f
+	for f in $(declared "$ROOT/plugins/$1/PLUGIN"); do
+		plain "$f" || die "$1's PLUGIN file names '$f' to stage, which is no file of its own directory"
+		src=$ROOT/plugins/$1/$f
+		if [ "$f" = README.md ] && [ ! -e "$src" ]; then continue; fi
+		[ ! -L "$src" ] || die "$1's $f is a link, which /plugins does not serve"
+		cp -f "$src" "$new/" || exit 1
+		case $exe in *" $f "*) chmod 755 "$new/$f" ;; *) chmod 644 "$new/$f" ;; esac || exit 1
+	done
+	set +f
+	rm -rf "$d" || die "could not replace $d"
+	mv "$new" "$d" || die "could not replace $d"
+	# The installer, its PLUGIN file beside it as xymon-plugin.PLUGIN -- so
+	# that it knows its version, staged as a plugin or not; a file named
+	# PLUGIN there would make the stage look like a plugin installed -- and
+	# LICENSE.
+	self_sources || exit 1
+	rm -f "$DIST/xymon-plugin" "$DIST/xymon-plugin.PLUGIN" "$DIST/LICENSE" || die "could not replace $DIST/xymon-plugin, xymon-plugin.PLUGIN and LICENSE"
+	cp -f "$self_src" "$DIST/xymon-plugin" && cp -f "$ROOT/LICENSE" "$DIST/" || exit 1
+	chmod 755 "$DIST/xymon-plugin" && chmod 644 "$DIST/LICENSE" || exit 1
+	if [ -f "$self_meta" ]; then
+		cp -f "$self_meta" "$DIST/xymon-plugin.PLUGIN" && chmod 644 "$DIST/xymon-plugin.PLUGIN" || exit 1
+	else
+		echo "xymon-plugin: no PLUGIN file of $self under $ROOT/plugins/$self/ nor as $ROOT/$self.PLUGIN: the installer /plugins serves will not know its version" >&2
+	fi
+}
+
+# prune_dist -- what /plugins serves holds nothing else: at the top only
+# xymon-plugin and LICENSE, files, and plugins/, a directory, none a link; in
+# plugins/ only the directories of plugins installed here, each with a
+# PLUGIN file holding plain names, and holding only the files it names.
+# An install before this one staged a plugin's whole source directory,
+# whatever lay in it, and a plugin since renamed or gone leaves a copy that
+# no install of this one rewrites. A removal that fails stops the run: a
+# file left would still be served.
+prune_dist() {
+	[ -e "$DIST" ] || [ -L "$DIST" ] || return 0
+	if [ -L "$DIST" ] || [ ! -d "$DIST" ]; then
+		rm -rf "$DIST" || die "could not remove $DIST"
+		return 0
+	fi
+	for e in "$DIST"/* "$DIST"/.[!.]* "$DIST"/..?*; do
+		[ -e "$e" ] || [ -L "$e" ] || continue
+		case ${e##*/} in
+			xymon-plugin|xymon-plugin.PLUGIN|LICENSE) [ -f "$e" ] && [ ! -L "$e" ] && continue ;;
+			plugins) [ -d "$e" ] && [ ! -L "$e" ] && continue ;;
+		esac
+		rm -rf "$e" || die "could not remove $e, which /plugins would serve"
+	done
+	for p in "$DIST"/plugins/* "$DIST"/plugins/.[!.]* "$DIST"/plugins/..?*; do
+		[ -e "$p" ] || [ -L "$p" ] || continue
+		if [ -L "$p" ] || [ ! -d "$p" ] || [ ! -f "$p/PLUGIN" ] || [ -L "$p/PLUGIN" ] \
+			|| [ ! -f "$EXTROOT/${p##*/}/VERSION" ]; then
+			rm -rf "$p" || die "could not remove $p, which /plugins would serve"
+			continue
+		fi
+		set -f
+		keep=" "
+		for f in $(declared "$p/PLUGIN"); do
+			if plain "$f"; then keep="$keep$f "; else keep=; break; fi
+		done
+		set +f
+		if [ -z "$keep" ]; then
+			rm -rf "$p" || die "could not remove $p, which /plugins would serve"
+			continue
+		fi
+		for e in "$p"/* "$p"/.[!.]* "$p"/..?*; do
+			[ -e "$e" ] || [ -L "$e" ] || continue
+			case $keep in *" ${e##*/} "*) [ -f "$e" ] && [ ! -L "$e" ] && continue ;; esac
+			rm -rf "$e" || die "could not remove $e, which /plugins would serve"
+		done
+	done
+}
+
+# ours PLUGIN -- refuse a tasks.d/PLUGIN.cfg, or the tasks.d/PLUGIN an
+# install before that name made, that is a link to something other than the
+# plugin's task file: it is not ours to change.
+ours() {
+	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
+		if [ -L "$l" ] && [ "$(readlink "$l")" != "$XYMONHOME/ext/$1/tasks.cfg" ]; then
+			die "$l is a link to $(readlink "$l"), not $1's task: left alone"
+		fi
+	done
+}
+
+# is_on PLUGIN -- true when its task link is there, under its name or the
+# one an install before it made.
+is_on() { [ -L "$TASKDIR/$1.cfg" ] || [ -L "$TASKDIR/$1" ]; }
+
+# old_link PLUGIN -- the task link is tasks.d/PLUGIN.cfg: a packaged Xymon
+# may read only the files of tasks.d/ that end so, where Xymon's own
+# tasks.cfg reads them all. An install before this name made
+# tasks.d/PLUGIN: that link, or the file an editor left in its place, takes
+# the new name, the task staying on. Called after ours, so a link here is
+# the plugin's own. With both there, the new name is the one read on every
+# Xymon: the old link goes, and a file at the old name is left, and said.
+old_link() {
+	o=$TASKDIR/$1 n=$TASKDIR/$1.cfg
+	[ -L "$o" ] || [ -f "$o" ] || return 0
+	if [ -e "$n" ] || [ -L "$n" ]; then
+		if [ -L "$o" ]; then rm -f "$o"; else echo "xymon-plugin: $o is left as it is: $n is $1's task" >&2; fi
+		return 0
+	fi
+	mv "$o" "$n" || exit 1
+	echo "$o is now $n: a packaged Xymon may read only the files of tasks.d/ that end in .cfg"
+}
+
+# reads_tasks -- true when the server's tasks.cfg reads tasks.d/, by a
+# directory line naming it, as Xymon's own has it: xymonlaunch then has a
+# task whose link is there. With no tasks.cfg, and under DESTDIR, there is
+# nothing to look at.
+reads_tasks() {
+	[ -z "$DESTDIR" ] || return 0
+	c=$(inside "$XYMONHOME/etc/tasks.cfg") || exit 1
+	[ -f "$c" ] || return 0
+	grep -q '^[[:space:]]*\(optional[[:space:]]\{1,\}\)\{0,1\}directory[[:space:]]\{1,\}\(.*/\)\{0,1\}tasks\.d/\{0,1\}[[:space:]]*$' "$c"
+}
+
+# task PLUGIN -- its xymonlaunch task file, @XYMONHOME@ replaced, kept in
+# the plugin's directory as ext/PLUGIN/tasks.cfg. The task is on when
+# tasks.d/PLUGIN.cfg, a link to that file, is there: removing ext/PLUGIN by hand
+# then takes the task with it, since xymonlaunch skips a link that points
+# nowhere and stops the task at its next reload, where a copy in tasks.d
+# would have it log that it cannot start the task, forever. A first install
+# makes no link. A later one keeps the task file as the admin left it --
+# install_server sets it aside before it replaces the directory -- and
+# whether the task is on. A regular file at tasks.d/PLUGIN.cfg wins over the
+# one set aside, as it is the one xymonlaunch was reading: the copy an older
+# install made there, or what an editor that writes by renaming, "sed -i"
+# among them, left where the link was. It is moved into the directory, and
+# linked. Older installs said off with a DISABLED line in the file: a file
+# with one is off, its line taken out and its link removed.
+# merge PLUGIN NAME NEW -- the administrator's file NAME in the plugin's
+# directory, kept as it was, met with NEW, this version's, and with the
+# version it started from, set aside as .PLUGIN.NAME.shipped: unedited, it
+# takes this version's; edited, and this version's the same as before, it
+# stays; both changed, with no conflict, on a terminal both changes are
+# shown and merged on y, the file before kept as NAME.old; on N, off a
+# terminal, under DESTDIR, on a conflict, or with no diff3 or no version to
+# start from, it stays, and this version's is written beside it as
+# NAME.new. .shipped/NAME is left the version it now starts from. MCHANGED
+# is set when the file changed.
+merge() {
+	md=$EXTROOT/$1/$2 mb=$EXTROOT/.$1.$2.shipped ms=$EXTROOT/$1/.shipped/$2
+	mkdir -p "$EXTROOT/$1/.shipped" || exit 1
+	rm -f "$md.new" || exit 1
+	if cmp -s "$md" "$3"; then
+		cp -f "$3" "$ms" && rm -f "$mb" || exit 1
+	elif [ ! -f "$mb" ]; then
+		cp -f "$3" "$md.new" && chmod 644 "$md.new" && cp -f "$3" "$ms" || exit 1
+		echo "$md is kept as yours; this version's differs, and is beside it: diff $md $md.new"
+	elif cmp -s "$md" "$mb"; then
+		# Unlinked first: written as a new file, never into one a hard
+		# link shares with a file outside the plugin's directory.
+		rm -f "$md" && cp -f "$3" "$md" && chmod 644 "$md" && cp -f "$3" "$ms" && rm -f "$mb" || exit 1
+		echo "$md, unedited, is replaced by this version's"
+		MCHANGED=1
+	elif cmp -s "$mb" "$3"; then
+		mv -f "$mb" "$ms" || exit 1
+	else
+		mm=$EXTROOT/.$1.$2.merged
+		if command -v diff3 >/dev/null 2>&1 && diff3 -m -E "$md" "$mb" "$3" > "$mm" 2>/dev/null; then
+			# Yours has this version's change already: nothing to merge, and
+			# this version's is the one it now starts from.
+			if cmp -s "$mm" "$md"; then
+				rm -f "$mm" "$mb" && cp -f "$3" "$ms" || exit 1
+				return 0
+			fi
+			if [ -z "$DESTDIR" ] && [ -t 0 ] && [ -t 1 ]; then
+				echo "$md: you edited it, and this version changes it too."
+				echo "  Your change:"
+				diff "$mb" "$md" | sed -e 's/^/    /'
+				echo "  This version's change:"
+				diff "$mb" "$3" | sed -e 's/^/    /'
+				if offer "  They merge without conflict. Apply both?"; then
+					rm -f "$md.old" && mv -f "$md" "$md.old" && mv -f "$mm" "$md" && chmod 644 "$md" \
+						&& cp -f "$3" "$ms" && rm -f "$mb" || exit 1
+					echo "$md has both changes; yours before is $md.old: remove it once checked"
+					MCHANGED=1
+					return 0
+				fi
+			fi
+			rm -f "$mm"
+			cp -f "$3" "$md.new" && chmod 644 "$md.new" && mv -f "$mb" "$ms" || exit 1
+			echo "$md is kept as yours; this version's, which merges with it without conflict, is beside it: diff $md $md.new"
+		else
+			rm -f "$mm"
+			cp -f "$3" "$md.new" && chmod 644 "$md.new" && mv -f "$mb" "$ms" || exit 1
+			echo "$md is kept as yours; this version's changes the same lines, and is beside it: diff $md $md.new"
+		fi
+	fi
+}
+
+task() {
+	t=$(field "$1" task); [ -n "$t" ] || return 0
+	tf=$EXTROOT/$1/tasks.cfg
+	link=$TASKDIR/$1.cfg
+	ours "$1"
+	mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"
+	old_link "$1"
+	on=
+	this=$EXTROOT/.$1.tasks.cfg.this
+	sed -e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g" "$ROOT/plugins/$1/$t" > "$this" || exit 1
+	if [ -f "$link" ] && [ ! -L "$link" ]; then
+		on=1
+		rm -f "$EXTROOT/.$1.tasks.cfg"
+		mv "$link" "$tf" || exit 1
+		echo "keeping $link, moved to $tf"
+		merge "$1" tasks.cfg "$this"
+	elif [ -f "$EXTROOT/.$1.tasks.cfg" ]; then
+		[ -L "$link" ] && on=1
+		mv "$EXTROOT/.$1.tasks.cfg" "$tf" || exit 1
+		merge "$1" tasks.cfg "$this"
+	else
+		cp -f "$this" "$tf" && chmod 644 "$tf" || exit 1
+		mkdir -p "$EXTROOT/$1/.shipped" && cp -f "$this" "$EXTROOT/$1/.shipped/tasks.cfg" || exit 1
+	fi
+	rm -f "$this" "$EXTROOT/.$1.tasks.cfg.shipped"
+	if grep -q '^[[:space:]]*DISABLED[[:space:]]*$' "$tf"; then
+		on=
+		sed -e '/^[[:space:]]*DISABLED[[:space:]]*$/d' "$tf" > "$tf.new" && mv "$tf.new" "$tf" && chmod 644 "$tf" || exit 1
+		echo "$1's task was DISABLED: it is off from now on, by its link"
+	fi
+	rm -f "$link"
+	if [ -n "$on" ]; then
+		ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$link" || exit 1
+		echo "$1's task is on, as it was"
+	else
+		echo "$1's task is off: XYMONHOME=$XYMONHOME ./xymon-plugin enable --server $1 turns it on"
+	fi
+}
+
+# enable PLUGIN, disable PLUGIN -- its task on or off, by its link.
+enable() {
+	[ -n "$(held "$EXTROOT" "$1" task)" ] || die "$1 has no task to enable"
+	[ -f "$EXTROOT/$1/tasks.cfg" ] || die "$1 is not installed in $EXTROOT"
+	ours "$1"
+	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
+		[ -L "$l" ] || [ ! -d "$l" ] || die "$l is a directory, not $1's task: left alone"
+	done
+	old_link "$1"
+	[ -L "$TASKDIR/$1.cfg" ] && { echo "$1 is on already"; return 0; }
+	# Before the link: a server whose tasks.cfg does not read tasks.d/
+	# would not have the task, whatever is linked there.
+	if ! reads_tasks; then
+		[ -n "$FORCE" ] || die "$XYMONHOME/etc/tasks.cfg does not read tasks.d/, so xymonlaunch would not have $1's task: add the line
+  directory $XYMONHOME/etc/tasks.d
+as Xymon's own tasks.cfg has it; --force makes the link all the same, where the server reads tasks.d/ another way"
+		echo "xymon-plugin: $XYMONHOME/etc/tasks.cfg does not read tasks.d/: $1's link is made all the same, as --force asks, and its task may not start" >&2
+	fi
+	mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"
+	ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$1.cfg" || exit 1
+	echo "$1 is on: xymonlaunch reads it within half a minute and starts it; one that keeps failing it holds for ten minutes after five restarts"
+}
+disable() {
+	[ -n "$(held "$EXTROOT" "$1" task)" ] || die "$1 has no task to disable"
+	ours "$1"
+	is_on "$1" || { echo "$1 is off already"; return 0; }
+	rm -f "$TASKDIR/$1.cfg"
+	[ ! -L "$TASKDIR/$1" ] || rm -f "$TASKDIR/$1"
+	echo "$1 is off: xymonlaunch stops it within half a minute"
+}
+
+# status SIDE ROOT PLUGIN -- one line for the plugin on that side: the
+# version installed, from its VERSION -- a release tag, NAME/vX.Y.Z, read as
+# its X.Y.Z -- or that it is not; on the server, whether its task is on; and
+# the version in this copy -- a checkout or unpacked releases --, with "newer" when it is, or that the
+# checkout has it no more. The side and the task are read from the
+# installed copy of its PLUGIN file. A plugin that has nothing on that
+# side says nothing.
+# other_code PART ROOT PLUGIN -- true when the checkout's code of the
+# plugin is not what its MANIFEST says was installed: the files copied as
+# they are, its PLUGIN, the part's files and manual page, compared by
+# cksum. False with no MANIFEST, which verify says.
+other_code() {
+	[ -f "$2/$3/MANIFEST" ] || return 1
+	T=$(printf '\t')
+	for f in PLUGIN $(field "$3" "$1-files") $(field "$3" "$1-manual"); do
+		c=$(cksum < "$ROOT/plugins/$3/$f" 2>/dev/null) || return 0
+		grep -qxF "file$T$c$T$f" "$2/$3/MANIFEST" || return 0
+	done
+	return 1
+}
+
+status() {
+	[ -n "$(held "$2" "$3" "$1-files")" ] || return 0
+	here=$(field "$3" version)
+	if [ ! -f "$2/$3/VERSION" ]; then
+		echo "$3: not installed; this copy has $here"
+		return 0
+	fi
+	v=$(sed -e 's|^.*/v||' "$2/$3/VERSION")
+	state=
+	if [ "$1" = server ] && [ -n "$(held "$2" "$3" task)" ]; then
+		if is_on "$3"; then state=", on"; else state=", off"; fi
+	fi
+	# A server part whose Python lacks its modules is said, as enable
+	# refuses it.
+	lack=
+	if [ "$1" = server ]; then
+		m=$(missing_modules "$3"); [ -z "$m" ] || lack="; its Python lacks $m"
+	fi
+	if [ -z "$here" ]; then
+		echo "$3: $v installed$state$lack; not in this copy"
+		return 0
+	fi
+	newer=
+	if older "$v" "$here"; then newer=", newer"
+	elif [ "$v" = "$here" ] && other_code "$1" "$2" "$3"; then newer=", with other code: ./xymon-plugin update --$1 $3"
+	fi
+	echo "$3: $v installed$state$lack; this copy has $here$newer"
+}
+
+# installed_tasks -- the plugins named, or every one installed with a task.
+installed_tasks() {
+	for n in $LIST; do
+		if [ -n "$NAMES" ] || { [ -n "$(held "$EXTROOT" "$n" task)" ] && [ -d "$EXTROOT/$n" ]; }; then echo "$n"; fi
+	done
+}
+
+# conf PLUGIN -- its web server snippets, in the plugin's directory, which
+# the web server includes in a way that skips a file that is not there --
+# Apache's IncludeOptional, a wildcard include for nginx -- so that removing
+# ext/PLUGIN takes them with it, and the web server still starts. The one an
+# admin edited is kept: install_server set it aside; one an older version
+# shipped, unedited, takes this version's.
+
+# cfgval NAME -- NAME's value in the server's configuration, as written:
+# the last NAME= line, quotes and comment taken off, of xymonserver.cfg and
+# then of the files in xymonserver.d/, which Xymon reads after it, leaving
+# out what it leaves out: dot-files, editor backups, README and packaging
+# leftovers.
+# ponytail: one level of xymonserver.d/, as the plugins write it; Xymon also
+# reads its subdirectories.
+cfgval() {
+	c=$(inside "$XYMONHOME/etc/xymonserver.cfg") || exit 1
+	d=$(inside "$XYMONHOME/etc/xymonserver.d") || exit 1
+	[ -f "$c" ] || return 0
+	for f in "$c" "$d"/*; do
+		[ -f "$f" ] || continue
+		case ${f##*/} in .*|*~|*,v|README*|*.dpkg-new|*.dpkg-orig|*.rpmsave|*.rpmorig|*.rpmnew) continue ;; esac
+		sed -n -e "s/^[[:space:]]*$1=\"\([^\"]*\)\".*/\1/p" -e "s/^[[:space:]]*$1=\([^\"#[:space:]]*\).*/\1/p" "$f"
+	done | tail -n 1
+}
+
+# rundir -- Xymon's directory for runtime files, where a plugin's sockets
+# go: XYMONRUNDIR, or XYMONSERVERLOGS when it is empty, as Xymon does. Asked
+# of Xymon itself first: xymoncmd loads xymonserver.cfg as xymonlaunch does
+# for the plugins' tasks -- its includes and directories, its variables
+# expanded, Xymon's defaults -- so the snippets name the socket the API
+# makes; with a clean environment, so that nothing of this shell's slips
+# in. Under DESTDIR the stage's xymoncmd is not run, being the installed
+# system's, and where it is missing or fails, the files are read here, as
+# cfgval reads them. Empty when that gives no absolute path -- one that names
+# a variable, read here -- which the install cannot know.
+rundir() {
+	if [ -z "$DESTDIR" ] && [ -x "$XYMONHOME/bin/xymoncmd" ]; then
+		# xymoncmd expands a $ in its own arguments: it runs env, and the
+		# two settings are read from what env prints.
+		e=$(env -i PATH=/usr/bin:/bin "$XYMONHOME/bin/xymoncmd" --env="$XYMONHOME/etc/xymonserver.cfg" env 2>/dev/null) || e=
+		r=$(printf '%s\n' "$e" | sed -n 's/^XYMONRUNDIR=//p' | tail -n 1)
+		[ -n "$r" ] || r=$(printf '%s\n' "$e" | sed -n 's/^XYMONSERVERLOGS=//p' | tail -n 1)
+		case $r in /*\$*) ;; /*) echo "$r"; return 0 ;; esac
+	fi
+	r=$(cfgval XYMONRUNDIR) || exit 1
+	[ -n "$r" ] || r=$(cfgval XYMONSERVERLOGS) || exit 1
+	case $r in /*\$*) ;; /*) echo "$r" ;; esac
+}
+
+# stock PLUGIN SNIPPET -- the snippet as this version ships it, @XYMONHOME@
+# and @XYMONRUNDIR@ filled in, as the task file's is: what it names lies
+# under the server's tree, which only the install knows. @XYMONRUNDIR@ stays
+# where rundir is empty.
+stock() {
+	sed -e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g" ${RUNDIR:+-e "s|@XYMONRUNDIR@|$(sedesc "$RUNDIR")|g"} "$ROOT/plugins/$1/$2"
+}
+
+# shipped PLUGIN SNIPPET FILE -- true when FILE is, byte for byte, the
+# snippet as an older version shipped it: its cksum is among the plugin's
+# conf-stock lines, as it is, or with $XYMONHOME put back as @XYMONHOME@, or
+# $RUNDIR as @XYMONRUNDIR@ and then $XYMONHOME, so that the same snippet
+# installed under any tree gives the same one. As it is first: a snippet
+# without a placeholder is then recognised whatever the tree, though
+# $XYMONHOME may also be part of its text (/xymon in /xymon/api/). Where
+# that putting back cannot tell, the snippet is taken for edited: kept, and
+# said to differ, never overwritten.
+shipped() {
+	list="
+$(field "$1" conf-stock)
+"
+	for way in raw home ${RUNDIR:+run}; do
+		sum=$(awk -v way="$way" -v h="$XYMONHOME" -v r="$RUNDIR" '
+		function back(s, p, name,    out, i) {
+			out = ""
+			while ((i = index(s, p)) > 0) { out = out substr(s, 1, i - 1) name; s = substr(s, i + length(p)) }
+			return out s
+		}
+		{ s = $0
+		  if (way == "run") s = back(s, r, "@XYMONRUNDIR@")
+		  if (way != "raw") s = back(s, h, "@XYMONHOME@")
+		  print s }' "$3" | cksum | cut -d' ' -f1,2)
+		case $list in *"
+$2 $sum
+"*) return 0 ;; esac
+	done
+	return 1
+}
+
+# same PLUGIN SNIPPET FILE -- true when FILE is this version's snippet. The
+# x keeps the last newlines a command substitution drops.
+same() {
+	[ "$(stock "$1" "$2"; echo x)" = "$(cat "$3"; echo x)" ]
+}
+
+conf() {
+	# The snippets name a path under $XYMONHOME and Xymon's runtime
+	# directory; one a web server's configuration cannot take as it is is
+	# said, for the admin to write, and so is a runtime directory the
+	# install cannot know.
+	RUNDIR=$(rundir) || exit 1
+	case $XYMONHOME$RUNDIR in
+		*[!A-Za-z0-9._/+-]*) echo "The web server snippets in $EXTROOT/$1 name $XYMONHOME${RUNDIR:+ and $RUNDIR}, which hold characters a web server's configuration may not take as they are: check the path in the snippet you include." ;;
+	esac
+	[ -n "$RUNDIR" ] || echo "The web server snippets in $EXTROOT/$1 name @XYMONRUNDIR@: $XYMONHOME/etc/xymonserver.cfg gives XYMONRUNDIR, or XYMONSERVERLOGS, as no path the install can read; put Xymon's runtime directory in its place in the snippet you include."
+	# Each snippet as written is kept in .shipped/, beside it in the
+	# plugin's directory, where no include pattern reaches it: the next
+	# install takes a snippet still byte for byte that one for unedited,
+	# whatever it names -- a runtime directory moved since, say.
+	base=$EXTROOT/$1/.shipped
+	changed=${GONE:-}
+	for c in $(field "$1" conf); do
+		dst=$EXTROOT/$1/$c
+		old=$EXTROOT/.$1.$c.shipped
+		mkdir -p "$base" || exit 1
+		if [ -f "$EXTROOT/.$1.$c" ]; then
+			mv "$EXTROOT/.$1.$c" "$dst" || exit 1
+		else
+			stock "$1" "$c" > "$dst" && chmod 644 "$dst" || exit 1
+			cp -f "$dst" "$base/$c" || exit 1
+			rm -f "$old"
+			changed=1
+			continue
+		fi
+		# A kept snippet as an earlier install wrote it, or as an older
+		# version shipped it, unedited, takes this version's; one that
+		# differs from both is the admin's, and kept, said to be.
+		if same "$1" "$c" "$dst"; then
+			cp -f "$dst" "$base/$c" || exit 1
+		elif { [ -f "$old" ] && cmp -s "$old" "$dst"; } || shipped "$1" "$c" "$dst"; then
+			# Unlinked first: written as a new file, never into one a hard
+			# link shares with a file outside the plugin's directory.
+			rm -f "$dst" || exit 1
+			stock "$1" "$c" > "$dst" && chmod 644 "$dst" || exit 1
+			cp -f "$dst" "$base/$c" || exit 1
+			echo "$dst, unedited, is replaced by this version's"
+			changed=1
+		else
+			this=$EXTROOT/.$1.$c.this
+			stock "$1" "$c" > "$this" || exit 1
+			MCHANGED=
+			merge "$1" "$c" "$this"
+			rm -f "$this"
+			[ -z "$MCHANGED" ] || changed=1
+			# Kept, it may name a runtime directory moved since.
+			if [ -n "$RUNDIR" ] && grep -q '@XYMONRUNDIR@' "$ROOT/plugins/$1/$c" && ! grep -qF "$RUNDIR/" "$dst"; then
+				echo "$dst does not name $RUNDIR, Xymon's runtime directory: a socket it names may be one that is no more"
+			fi
+		fi
+		rm -f "$old"
+	done
+	# A web server reads its configuration when it starts or reloads: one
+	# that runs goes on with the snippets it read. Not reloaded from here --
+	# it is not the plugin's to run, nor to choose.
+	[ -z "$changed" ] || [ -n "$DESTDIR" ] || echo "The web server snippets in $EXTROOT/$1 changed: reload the web server that includes them (apachectl graceful, nginx -s reload, or restart lighttpd)."
+}
+
+# selinux PLUGIN -- where SELinux is active, load the plugin's SELinux
+# module, PLUGIN.cil in its installed directory, which semodule takes as it
+# is; what it grants lies behind booleans, off until the admin sets them,
+# as its message says (S23). Named after the plugin, never otherwise, so
+# that an uninstall, which reads the installed PLUGIN copy, removes that
+# module and no other. Under DESTDIR nothing is loaded: it is the installed
+# system's.
+selinux() {
+	m=$(field "$1" selinux); [ -n "$m" ] || return 0
+	[ "$m" = "$1.cil" ] || die "$1: its SELinux module must be $1.cil, not $m"
+	if [ -n "$DESTDIR" ]; then
+		echo "Under DESTDIR no SELinux module is loaded: on the installed system, where SELinux is active, semodule -i $XYMONHOME/ext/$1/$m"
+		return 0
+	fi
+	command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v semodule >/dev/null 2>&1 || return 0
+	if semodule -i "$EXTROOT/$1/$m"; then
+		say "$1" selinux-loaded
+	else
+		echo "Could not load the SELinux module $EXTROOT/$1/$m: semodule -i it as root" >&2
+	fi
+}
+
+# restart PLUGIN -- a process that runs the plugin's program from this
+# install keeps the code it loaded: stop it, and xymonlaunch starts the new.
+# Found by its command line, which names the program by its full path,
+# escaped for pgrep's regular expressions, as a directory may hold a | or a
+# dot. With DESTDIR the path is the staging one, which nothing runs from.
+restart() {
+	prog=$(field "$1" restart); [ -n "$prog" ] || return 0
+	if ! command -v pgrep >/dev/null 2>&1; then
+		echo "pgrep is missing: $1's $prog was not looked for; if it runs, it keeps the code it started with until it is stopped." >&2
+		return 0
+	fi
+	pat=$(printf '%s/%s' "$EXTROOT/$1" "$prog" | sed -e 's/[][\\.*^$|+?(){}]/\\&/g')
+	pids=$(echo $(pgrep -f "$pat" | grep -vx "$$"))
+	[ -n "$pids" ] || return 0
+	case $pids in *" "*) p="PIDs $pids" ;; *) p="PID $pids" ;; esac
+	# What is said is what was done: a signal sent, not waited for; a task
+	# started again only if it is on.
+	if kill $pids 2>/dev/null; then
+		echo "Sent $1's $prog ($p) the signal to stop, so that it runs the code just installed: if its task is on, xymonlaunch starts it again."
+	else
+		echo "Could not send $1's $prog ($p) the signal to stop: it may still run the code it started with; stop it by hand (kill $pids), and if its task is on, xymonlaunch starts it again." >&2
+	fi
+}
+
+# fetch_ok QUESTION -- true when fetching modules from PyPI is allowed:
+# --venv given, or, on a terminal, QUESTION answered y.
+fetch_ok() { [ -n "$VENV_FETCH" ] || offer "$1"; }
+
+# old_modules PYTHON REQUIREMENTS -- the modules PYTHON has in a version
+# older than a "NAME>=X.Y" line of REQUIREMENTS asks, each as
+# "NAME>=X.Y (has V)": a plugin is tested from those versions on, and an
+# older one may start and then fail. A module PYTHON cannot say the
+# version of, a line of another form, a file that is not there and a
+# Python that fails say nothing: this adds to the check that the modules
+# import, and never stands in for it.
+old_modules() {
+	[ -f "$2" ] || return 0
+	"$1" -c 'import re, sys
+try:
+    from importlib.metadata import version
+except Exception:
+    sys.exit(0)
+def t(v): return tuple(int(x) for x in re.findall("[0-9]+", v)[:3])
+old = []
+for line in open(sys.argv[1]):
+    m = re.match("[ \t]*([A-Za-z0-9_.-]+)[ \t]*>=[ \t]*([0-9][0-9.]*)[ \t]*$", line)
+    if not m: continue
+    try: have = version(m.group(1))
+    except Exception: continue
+    if t(have) < t(m.group(2)): old.append("%s>=%s (has %s)" % (m.group(1), m.group(2), have))
+sys.stdout.write(", ".join(old))' "$2" 2>/dev/null || :
+}
+
+# plugin_python ROOT -- the Python a plugin of the part at ROOT runs with
+# (S26): XYMONAPI_PYTHON, else the virtualenv beside the plugins, else
+# python3.
+plugin_python() {
+	if [ -n "${XYMONAPI_PYTHON:-}" ]; then printf '%s\n' "$XYMONAPI_PYTHON"
+	elif [ -x "$1/venv/bin/python3" ]; then printf '%s\n' "$1/venv/bin/python3"
+	else echo python3; fi
+}
+
+# lacking PYTHON MODULE... -- the modules, by their import names, PYTHON
+# cannot import; all of them when it does not run.
+lacking() {
+	lp=$1; shift
+	"$lp" -c 'import importlib.util as u, sys; print(" ".join(m for m in sys.argv[1:] if u.find_spec(m) is None))' "$@" 2>/dev/null || echo "$*"
+}
+
+# missing_modules PLUGIN -- the server modules its PLUGIN copy names that
+# the Python its launcher runs with lacks, and those it has older than the
+# plugin's requirements.txt asks: XYMONAPI_PYTHON, else the virtualenv
+# beside the plugins, else python3. Nothing under DESTDIR, where no Python
+# of the installed system is there to ask.
+missing_modules() {
+	[ -z "$DESTDIR" ] || return 0
+	mods=$(held "$EXTROOT" "$1" server-modules)
+	[ -n "$mods" ] || return 0
+	py=$(plugin_python "$EXTROOT")
+	# shellcheck disable=SC2086
+	lacks=$(lacking "$py" $mods)
+	olds=$(old_modules "$py" "$EXTROOT/$1/requirements.txt")
+	printf '%s\n' "$lacks${lacks:+${olds:+, }}$olds"
+}
+
+# offer QUESTION -- on a terminal, ask it; true on y. Without one, false.
+offer() {
+	[ -t 0 ] && [ -t 1 ] || return 1
+	printf '%s [y/N] ' "$1"
+	read -r yn
+	case $yn in [yY]*) return 0 ;; esac
+	return 1
+}
+
+# venv_auto PLUGIN ROOT MODULES TARGET NOTE -- the last step of installing a
+# plugin that needs the Python modules MODULES (their import names), which
+# downloads nothing unless asked. With no virtualenv at ROOT/venv yet: the
+# newest Python 3.9 or later on this machine that has them already --
+# PYTHON when given, else python3.14 down to python3.9 and python3, on PATH
+# and in Homebrew's and pyenv's directories -- is made the virtualenv's,
+# with --system-site-packages, so that it is only pinned beside the plugins
+# and nothing is copied or fetched; with no such Python, the hint says which
+# ./xymon-plugin venv TARGET would use. A candidate is named by the interpreter it
+# runs (sys.executable), not a shim or link found on PATH. With a virtualenv
+# there, the modules it lacks are named. On a terminal the hint is an offer:
+# on "y", ./xymon-plugin venv TARGET -- --server or --tools -- installs the modules
+# from PyPI there and then. NOTE says in the offer what the modules are for.
+venv_auto() {
+	plugin=$1 root=$2 modules=$3 target=$4 note=$5
+	[ -n "$modules" ] || return 0
+	if [ -n "$DESTDIR" ]; then
+		echo "Under DESTDIR no virtualenv is made or used: on the installed system, ./xymon-plugin update $target --venv makes one for $plugin's modules ($modules)."
+		return 0
+	fi
+	# A virtualenv -- its pyvenv.cfg there -- whose Python does not run goes,
+	# said, and is made as on a first install: from a Python that has the
+	# modules, before any is fetched. Anything else named venv is left.
+	if [ -f "$root/venv/pyvenv.cfg" ] && ! "$root/venv/bin/python3" -c 'import sys' 2>/dev/null; then
+		echo "The virtualenv $root/venv has no Python that runs: it is made anew."
+		rm -rf "$root/venv" || die "could not remove $root/venv"
+	fi
+	if [ "$target" = --server ] && [ -f "$root/venv/pyvenv.cfg" ]; then open_dir "$root/venv"; fi
+	if [ -x "$root/venv/bin/python3" ]; then
+		# shellcheck disable=SC2086
+		missing=$(lacking "$root/venv/bin/python3" $modules)
+		olds=$(old_modules "$root/venv/bin/python3" "$root/$plugin/requirements.txt")
+		missing=$missing${missing:+${olds:+, }}$olds
+		[ -z "$missing" ] && return 0
+		if fetch_ok "The virtualenv $root/venv lacks $missing, which $plugin needs${note:+ ($note)}. Install them into it, from PyPI?"; then
+			venv "$root"
+		else
+			echo "The virtualenv $root/venv lacks $missing, which this plugin needs: ./xymon-plugin update $target --venv installs them."
+		fi
+		return 0
+	fi
+	py= newest=
+	for c in ${PYTHON_GIVEN:-python3.14 python3.13 python3.12 python3.11 python3.10 python3.9 python3}; do
+		for d in "" /opt/homebrew/bin /usr/local/bin /opt/homebrew/opt/python@3.*/bin "$HOME"/.pyenv/versions/*/bin; do
+			case $c in
+				/*) p=$c ;;
+				*) if [ -n "$d" ]; then p=$d/$c; else p=$(command -v "$c" 2>/dev/null); fi ;;
+			esac
+			[ -n "$p" ] && [ -x "$p" ] || continue
+			"$p" -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null || continue
+			# One that prints no interpreter is none, whatever its exit
+			# status: an empty file runs as an empty script, and exits 0.
+			real=$("$p" -c 'import sys; print(sys.executable)' 2>/dev/null)
+			[ -n "$real" ] || continue
+			[ -x "$real" ] && p=$real
+			[ -n "$newest" ] || newest=$p
+			# shellcheck disable=SC2086
+			[ -z "$(lacking "$p" $modules)" ] || continue
+			# One that has them, but older than the plugin is tested
+			# with, is not one that has them.
+			[ -z "$(old_modules "$p" "$root/$plugin/requirements.txt")" ] || continue
+			py=$p; break 2
+		done
+	done
+	if [ -n "$py" ]; then
+		# It has the modules: where it cannot make a virtualenv -- Debian
+		# without python3-venv -- the plugins can still run with it.
+		if ! "$py" -m venv --system-site-packages "$root/venv" || [ ! -x "$root/venv/bin/python3" ]; then
+			echo "Could not make a virtualenv at $root/venv with $py (on Debian and Ubuntu, python3-venv provides what it needs): the plugins run with the python3 on PATH, or XYMONAPI_PYTHON=$py, which has the modules ($modules)."
+			return 0
+		fi
+		# A Python that is itself a virtualenv gives one made from it its
+		# base Python's modules, not its own: none of them, it may be.
+		# shellcheck disable=SC2086
+		if [ -n "$(lacking "$root/venv/bin/python3" $modules)" ]; then
+			rm -rf "$root/venv" || die "could not remove $root/venv"
+			echo "Made no virtualenv at $root/venv from $py: it is itself one, whose modules one made from it does not see; the plugins run with it as it is, XYMONAPI_PYTHON=$py, which has the modules ($modules)."
+			return 0
+		fi
+		echo "Made $root/venv from $py ($("$py" -V 2>&1)), which has the modules this plugin needs ($modules): the plugins there run with it."
+	elif [ -n "$newest" ] && fetch_ok "$plugin needs $modules, which no Python here has${note:+ ($note)}. Make a virtualenv at $root/venv with $newest, and install them from PyPI?"; then
+		was=$PYTHON; PYTHON=$newest; venv "$root"; PYTHON=$was
+	else
+		echo "No virtualenv at $root/venv, and no Python with the modules this plugin needs ($modules): ./xymon-plugin update $target --venv${newest:+ PYTHON=$newest} makes one and installs them; without it, the python3 on PATH must have them."
+	fi
+}
+
+# venv ROOT -- a virtualenv at ROOT/venv, beside the plugins installed in
+# ROOT, with the modules of each, from the requirements.txt installed with
+# it: what every launcher runs with when XYMONAPI_PYTHON names no other. Run
+# again, it adds the modules of a plugin installed since.
+venv() {
+	[ -z "$DESTDIR" ] || return 0
+	# One whose Python does not run -- moved, or the Python it was made
+	# from gone -- is made anew: it is the plugins', beside them (S26).
+	if [ -f "$1/venv/pyvenv.cfg" ] && ! "$1/venv/bin/python3" -c 'import sys' 2>/dev/null; then
+		echo "The virtualenv $1/venv has no Python that runs: it is made anew."
+		rm -rf "$1/venv" || die "could not remove $1/venv"
+	fi
+	if [ ! -x "$1/venv/bin/python3" ]; then
+		"$PYTHON" -m venv "$1/venv" || exit 1
+		[ -x "$1/venv/bin/python3" ] || die "$PYTHON made no virtualenv at $1/venv"
+	fi
+	for r in "$1"/*/requirements.txt; do
+		[ -e "$r" ] || continue
+		echo "installing the modules of $r"
+		"$1/venv/bin/python3" -m pip install -q -r "$r" \
+			|| die "pip could not install the modules of $r into $1/venv: what it said is above"
+	done
+	echo "The plugins in $1 run with $1/venv/bin/python3 ($("$1/venv/bin/python3" -V))."
+}
+
+DONE=
+install_server() {
+	case " $DONE " in *" $1 "*) return 0 ;; esac
+	# Installed already, and not updating: --all, or a plugin needed,
+	# passes over it, said, with a note when this copy's is newer.
+	if [ -z "${UPDATING:-}" ] && v=$(installed "$EXTROOT" "$1"); then
+		here=$(field "$1" version)
+		if [ -n "$here" ] && older "$v" "$here"; then w="; this copy has $here: ./xymon-plugin update"; else w=; fi
+		echo "$1 is installed already ($v): left as it is$w"
+		DONE="$DONE $1"
+		return 0
+	fi
+	self_sources || exit 1
+	ns=$(needs "$1" server) || exit 1
+	for n in $ns; do known "$n"; install_server "$n"; done
+	[ -n "$(field "$1" server-files)" ] || die "$1 has nothing to install on the server"
+	ext=$EXTROOT/$1
+	# A link in the plugin directory's place is not the plugin's: removed,
+	# as fresh would, before anything is read or moved through it.
+	if [ -L "$ext" ]; then rm -f "$ext" || exit 1; fi
+	# What the install in place put outside its directory, by its record,
+	# for what this one no longer does.
+	was_manual=$(held "$EXTROOT" "$1" server-manual)
+	was_task=$(held "$EXTROOT" "$1" task)
+	was_selinux=$(held "$EXTROOT" "$1" selinux)
+	# Refused before anything is replaced, not halfway through.
+	[ -z "$(field "$1" task)" ] || ours "$1"
+	# The task file an admin may have enabled, and the web server snippets
+	# an admin may have edited, outlive the directory.
+	# A link where one is set aside would take it elsewhere: removed first.
+	if [ -L "$EXTROOT/.$1.tasks.cfg" ]; then rm -f "$EXTROOT/.$1.tasks.cfg" || exit 1; fi
+	if [ -f "$ext/tasks.cfg" ]; then mv "$ext/tasks.cfg" "$EXTROOT/.$1.tasks.cfg" || exit 1; fi
+	# And the task file as the install before wrote it, which merge meets
+	# it with: a real directory and a real file only.
+	rm -f "$EXTROOT/.$1.tasks.cfg.shipped" || exit 1
+	if [ -d "$ext/.shipped" ] && [ ! -L "$ext/.shipped" ] && [ -f "$ext/.shipped/tasks.cfg" ] && [ ! -L "$ext/.shipped/tasks.cfg" ]; then
+		mv "$ext/.shipped/tasks.cfg" "$EXTROOT/.$1.tasks.cfg.shipped" || exit 1
+	fi
+	# A snippet the install before wrote that this version has no more goes
+	# with fresh: a change the web server has to reload for, as conf says.
+	GONE=
+	for c in $(held "$EXTROOT" "$1" conf); do
+		case " $(field "$1" conf) " in
+			*" $c "*) ;;
+			*) if [ -f "$ext/$c" ]; then GONE=1; fi ;;
+		esac
+	done
+	for c in $(field "$1" conf); do
+		if [ -L "$EXTROOT/.$1.$c" ]; then rm -f "$EXTROOT/.$1.$c" || exit 1; fi
+		# A real file only: one a link stands for is written anew, never
+		# written through, wherever it points.
+		if [ -f "$ext/$c" ] && [ ! -L "$ext/$c" ]; then mv "$ext/$c" "$EXTROOT/.$1.$c" || exit 1; fi
+		# And what the install before wrote of it, which conf compares the
+		# snippet with: a real directory and a real file only, the plugin's
+		# directory being one the Xymon user may write.
+		rm -f "$EXTROOT/.$1.$c.shipped" || exit 1
+		if [ -d "$ext/.shipped" ] && [ ! -L "$ext/.shipped" ] && [ -f "$ext/.shipped/$c" ] && [ ! -L "$ext/.shipped/$c" ]; then
+			mv "$ext/.shipped/$c" "$EXTROOT/.$1.$c.shipped" || exit 1
+		fi
+	done
+	fresh "$ext" || exit 1
+	open_dir -1 "$EXTROOT"
+	copy "$1" server "$ext"
+	version "$1" "$ext"
+	record "$1" "$ext"
+	dist "$1"
+	[ "$was_manual" = "$(field "$1" server-manual)" ] || drop_manual "$was_manual" "$MANDIR" "$XYMONHOME/ext/$1" ""
+	manual "$1" "$(field "$1" server-manual)" "$ext" "$MANDIR" "$XYMONHOME/ext/$1"
+	[ -z "$was_task" ] || [ -n "$(field "$1" task)" ] || drop_task "$1"
+	task "$1"
+	conf "$1"
+	manifest_server "$1"
+	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
+	echo "$w $1 $(sed -e 's|^.*/v||' "$ext/VERSION") in $XYMONHOME/ext/$1."
+	[ -n "${UPDATING:-}" ] || say "$1" installed
+	restart "$1"
+	# A module the installed version loaded and this one has not goes.
+	if [ -n "$was_selinux" ] && [ -z "$(field "$1" selinux)" ] && [ -z "$DESTDIR" ] && command -v semodule >/dev/null 2>&1; then
+		semodule -r "$1" >/dev/null 2>&1 || :
+	fi
+	selinux "$1"
+	venv_auto "$1" "$EXTROOT" "$(field "$1" server-modules)" --server ""
+	DONE="$DONE $1"
+}
+
+install_tools() {
+	case " $DONE " in *" $1 "*) return 0 ;; esac
+	# Installed already, and not updating: --all, or a plugin needed,
+	# passes over it, said, with a note when this copy's is newer.
+	if [ -z "${UPDATING:-}" ] && v=$(installed "$TOOLSROOT" "$1"); then
+		here=$(field "$1" version)
+		if [ -n "$here" ] && older "$v" "$here"; then w="; this copy has $here: ./xymon-plugin update"; else w=; fi
+		echo "$1 is installed already ($v): left as it is$w"
+		DONE="$DONE $1"
+		return 0
+	fi
+	ns=$(needs "$1" tools) || exit 1
+	for n in $ns; do known "$n"; install_tools "$n"; done
+	[ -n "$(field "$1" tools-files)" ] || die "$1 has nothing to install on your own machine"
+	dir=$TOOLSROOT/$1
+	if [ -L "$dir" ]; then rm -f "$dir" || exit 1; fi
+	was_manual=$(held "$TOOLSROOT" "$1" tools-manual)
+	was_command=$(held "$TOOLSROOT" "$1" command)
+	fresh "$dir" || exit 1
+	mkdir -p "$BIN" "$TOOLSMAN1"
+	copy "$1" tools "$dir"
+	version "$1" "$dir"
+	record "$1" "$dir"
+	set -f
+	# shellcheck disable=SC2086
+	[ "$was_command" = "$(field "$1" command)" ] || drop_command "$1" $was_command
+	set +f
+	[ "$was_manual" = "$(field "$1" tools-manual)" ] \
+		|| drop_manual "$was_manual" "$PREFIX/share/man" "$PREFIX/libexec/xymon-plugins/$1" ""
+	set -- "$1" $(field "$1" command)
+	if [ $# -eq 3 ]; then
+		rm -f "$BIN/$2" || exit 1
+		wrapper "$1" "$3" > "$BIN/$2"
+		chmod 755 "$BIN/$2"
+	fi
+	manual "$1" "$(field "$1" tools-manual)" "$dir" "$PREFIX/share/man" "$PREFIX/libexec/xymon-plugins/$1"
+	manifest_tools "$1"
+	venv_auto "$1" "$TOOLSROOT" "$(echo $(field "$1" tools-modules) $(field "$1" tools-optional-modules))" --tools "$(field "$1" venv-note)"
+	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
+	echo "$w $1 $(sed -e 's|^.*/v||' "$dir/VERSION") in $PREFIX/libexec/xymon-plugins/$1."
+	# Said once, and not under DESTDIR, where PATH is the build machine's.
+	if [ -n "$(field "$1" command)" ] && [ -z "$DESTDIR" ] && [ -z "${PATHSAID:-}" ]; then
+		case ":$PATH:" in *":$PREFIX/bin:"*) ;; *) echo "The commands are in $PREFIX/bin, which is not on PATH: add it, as export PATH=\"$PREFIX/bin:\$PATH\" in your shell's profile."; PATHSAID=1 ;; esac
+	fi
+	[ -n "${UPDATING:-}" ] || say "$1" installed-tools
+	DONE="$DONE $1"
+}
+
+# needed PLUGIN PART DIR -- refuse to remove the plugin's PART part while
+# one installed in DIR needs it beside it: removing it would leave that one
+# broken.
+needed() {
+	for p in "$3"/*; do
+		[ -d "$p" ] || continue
+		ns=$(needs "${p##*/}" "$2" "$3") || exit 1
+		case " $ns " in
+			*" $1 "*) die "$1 is needed by ${p##*/}, installed in $3: ./xymon-plugin remove --$2 ${p##*/} first" ;;
+		esac
+	done
+	return 0
+}
+
+# record PLUGIN DIR -- keep the plugin's PLUGIN file in DIR, its installed
+# directory, as the record held reads.
+record() {
+	cp -f "$ROOT/plugins/$1/PLUGIN" "$2/PLUGIN" && chmod 644 "$2/PLUGIN" || exit 1
+}
+
+# drop_manual NAME MANROOT FINAL LEGACY -- remove the manual page NAME from
+# its section under MANROOT, without DESTDIR, when it is the link an install made into FINAL,
+# the plugin's directory as installed; or, for an install from before the
+# record, LEGACY set, the page copied there, its name the checkout's.
+drop_manual() {
+	[ -n "$1" ] && plain "$1" || return 0
+	m=$(inside "$2/man${1##*.}") || exit 1
+	m=$m/$1
+	if [ -L "$m" ]; then
+		[ "$(readlink "$m")" = "$3/$1" ] && rm -f "$m"
+	elif [ -n "$4" ]; then
+		rm -f "$m"
+	fi
+	return 0
+}
+
+# wrapper PLUGIN SCRIPT -- the command an install writes in $BIN: it runs
+# the script from where it is installed, PREFIX as given, without DESTDIR.
+wrapper() {
+	printf '#!/bin/sh\nexec "%s/libexec/xymon-plugins/%s/%s" "$@"\n' "$PREFIX" "$1" "$2"
+}
+
+# drop_command PLUGIN NAME SCRIPT -- remove $BIN/NAME when it is, byte for
+# byte, the command an install of PLUGIN wrote for SCRIPT, and not a
+# command of someone else's, a wrapper of their own among them.
+drop_command() {
+	[ -n "$2" ] && plain "$2" && plain "$3" && [ -f "$BIN/$2" ] && [ ! -L "$BIN/$2" ] || return 0
+	# The x keeps the trailing newlines a command substitution drops.
+	[ "$(cat "$BIN/$2"; echo x)" = "$(wrapper "$1" "$3"; echo x)" ] && rm -f "$BIN/$2"
+	return 0
+}
+
+# drop_task PLUGIN -- remove tasks.d/PLUGIN.cfg, and the tasks.d/PLUGIN an
+# install before that name made: the link to the plugin's task file, or
+# the file there, a copy an older install made or the task an editor left
+# in the link's place; never a link to something else. And the task file
+# an install set aside.
+drop_task() {
+	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
+		if [ -L "$l" ]; then
+			[ "$(readlink "$l")" = "$XYMONHOME/ext/$1/tasks.cfg" ] && rm -f "$l"
+		elif [ ! -d "$l" ]; then
+			rm -f "$l"
+		fi
+	done
+	rm -f "$EXTROOT/.$1.tasks.cfg"
+}
+
+# with_installed ROOT -- LIST, and the plugins installed under ROOT with a
+# record the checkout no longer has, for an action given no names.
+with_installed() {
+	echo $LIST
+	for d in "$1"/*; do
+		[ -f "$d/PLUGIN" ] && [ ! -L "$d/PLUGIN" ] || continue
+		n=${d##*/}
+		plain "$n" || continue
+		case " $(echo $LIST) " in *" $n "*) ;; *) echo "$n" ;; esac
+	done
+}
+
+uninstall_server() {
+	needed "$1" server "$EXTROOT"
+	needed "$1" server "$DIST/plugins"
+	m=$(held "$EXTROOT" "$1" server-manual)
+	t=$(held "$EXTROOT" "$1" task)
+	se=$(held "$EXTROOT" "$1" selinux)
+	cf=
+	for c in $(held "$EXTROOT" "$1" conf); do
+		if [ -f "$EXTROOT/$1/$c" ]; then cf=1; fi
+	done
+	legacy=; [ -f "$EXTROOT/$1/PLUGIN" ] || legacy=1
+	rm -rf "$EXTROOT/$1" "$DIST/plugins/$1"
+	drop_manual "$m" "$MANDIR" "$XYMONHOME/ext/$1" "$legacy"
+	[ -z "$t" ] || drop_task "$1"
+	# Its SELinux module, the one named after it (S23).
+	if [ -n "$se" ] && [ -z "$DESTDIR" ] && command -v semodule >/dev/null 2>&1; then
+		semodule -r "$1" >/dev/null 2>&1 || :
+	fi
+	if [ -f "$ROOT/plugins/$1/PLUGIN" ]; then say "$1" uninstalled; else echo "Uninstalled $1."; fi
+	[ -z "$cf" ] || [ -n "$DESTDIR" ] || [ -d "$EXTROOT/$1" ] || echo "Its web server snippets went with $EXTROOT/$1: reload the web server that included them (apachectl graceful, nginx -s reload, or restart lighttpd)."
+}
+
+uninstall_tools() {
+	needed "$1" tools "$TOOLSROOT"
+	c=$(held "$TOOLSROOT" "$1" command)
+	m=$(held "$TOOLSROOT" "$1" tools-manual)
+	legacy=; [ -f "$TOOLSROOT/$1/PLUGIN" ] || legacy=1
+	rm -rf "$TOOLSROOT/$1"
+	set -f
+	# shellcheck disable=SC2086
+	drop_command "$1" $c
+	set +f
+	drop_manual "$m" "$PREFIX/share/man" "$PREFIX/libexec/xymon-plugins/$1" "$legacy"
+	if [ -f "$ROOT/plugins/$1/PLUGIN" ]; then say "$1" uninstalled-tools; else echo "Uninstalled $1."; fi
+}
+
+# S30. verify: what differs from what was installed, said one line each,
+# changing nothing. BROKEN and UNTIDY count what was found; edited and ok
+# lines count for neither.
+BROKEN=0 UNTIDY=0
+v_broken() { echo "broken: $1"; BROKEN=$((BROKEN + 1)); }
+v_untidy() { echo "untidy: $1"; UNTIDY=$((UNTIDY + 1)); }
+
+# v_actual PATH -- where PATH, as installed, lies now: under DESTDIR, inside it.
+v_actual() { d=$(inside "${1%/*}") || exit 1; printf '%s/%s\n' "$d" "${1##*/}"; }
+
+# v_runs NAME -- true when a file of that name, not in MANIFEST, can run or
+# be imported.
+v_runs() { case $1 in *.py|*.pyc|*.pth|*.so|*.sh) return 0 ;; esac; [ -x "$2" ]; }
+
+# verify_plugin PART ROOT PLUGIN -- the lines for one plugin installed.
+verify_plugin() {
+	part=$1 root=$2 n=$3 dir=$2/$3 fix="./xymon-plugin update --$1 $3" bad=0 before=$((BROKEN + UNTIDY))
+	if [ ! -f "$dir/MANIFEST" ]; then
+		v_untidy "$n: no MANIFEST, installed before it was kept: $fix"
+	else
+		# The paths MANIFEST names, one a line between newlines.
+		NL='
+'
+		named=$NL
+		while IFS="$(printf '\t')" read -r kind a b c; do
+			case $kind in
+				file)
+					case $b in /*) f=$(v_actual "$b") ;; *) f=$dir/$b; named="$named$b$NL" ;; esac
+					case $b in "$XYMONHOME/ext/xymon-plugins-dist/plugins/$n/"*) named="${named}dist/${b##*/}$NL" ;; esac
+					if [ ! -f "$f" ] || [ -L "$f" ]; then v_broken "$n: $b missing: $fix"
+					elif [ "$(cksum < "$f")" != "$a" ]; then
+						if [ "$c" = admin ]; then echo "edited: $n: $b, the administrator's"
+						else v_broken "$n: $b changed: $fix"; fi
+					fi ;;
+				link)
+					case $a in /*) f=$(v_actual "$a") ;; *) f=$dir/$a; named="$named$a$NL" ;; esac
+					if [ ! -L "$f" ]; then v_broken "$n: the link $a missing: $fix"
+					elif [ "$(readlink "$f")" != "$b" ]; then v_broken "$n: the link $a points to $(readlink "$f"), not $b: $fix"; fi ;;
+			esac
+		done < "$dir/MANIFEST"
+		# What the directory holds that MANIFEST does not name: a
+		# __pycache__, bytecode no install wrote, broken (the launchers
+		# write none); a file that runs or is imported, broken; any other,
+		# untidy.
+		while IFS= read -r f; do
+			[ -n "$f" ] || continue
+			case $named in *"$NL$f$NL"*) continue ;; esac
+			adm=" tasks.cfg $(held "$root" "$n" conf) "
+			case $adm in
+				*" ${f%.new} "*) [ "$f" != "${f%.new}" ] && { v_untidy "$n: $f, this version's beside yours: compare, then remove it"; continue; } ;;
+			esac
+			case $adm in
+				*" ${f%.old} "*) [ "$f" != "${f%.old}" ] && { v_untidy "$n: $f, yours before the merge: compare, then remove it"; continue; } ;;
+			esac
+			case $f in
+				__pycache__|*/__pycache__) v_broken "$n: $f, bytecode no install wrote: $fix" ;;
+				*/__pycache__/*|__pycache__/*) ;;
+				*) if v_runs "${f##*/}" "$dir/$f"; then v_broken "$n: $f, which can run, is not what was installed: $fix"
+				   else v_untidy "$n: $f is not what was installed: $fix"; fi ;;
+			esac
+		done <<EOF
+$(cd "$dir" && find . \( -type f -o -type l -o -type d -name __pycache__ \) ! -name MANIFEST -print | sed -e 's|^\./||' | LC_ALL=C sort)
+EOF
+		# The copy /plugins serves: nothing in it but what was staged.
+		if [ "$part" = server ] && [ -d "$DIST/plugins/$n" ]; then
+			for f in "$DIST/plugins/$n"/* "$DIST/plugins/$n"/.[!.]*; do
+				[ -e "$f" ] || [ -L "$f" ] || continue
+				case $named in *"${NL}dist/${f##*/}$NL"*) continue ;; esac
+				v_broken "$n: $XYMONHOME/ext/xymon-plugins-dist/plugins/$n/${f##*/}, served at /plugins, is not what was staged: $fix"
+			done
+		fi
+	fi
+	if [ "$part" = server ]; then
+		# The task link, a state MANIFEST leaves out (S29): there, it is the
+		# plugin's.
+		for l in "$TASKDIR/$n.cfg" "$TASKDIR/$n"; do
+			[ -L "$l" ] || continue
+			[ "$(readlink "$l")" = "$XYMONHOME/ext/$n/tasks.cfg" ] \
+				|| v_broken "$n: its task link ${l##*/} points to $(readlink "$l"), not its task file: ./xymon-plugin disable --server $n, then enable"
+		done
+		# Its SELinux module, loaded where SELinux is active.
+		if [ -n "$(held "$root" "$n" selinux)" ] && [ -z "$DESTDIR" ] && command -v selinuxenabled >/dev/null 2>&1 \
+			&& selinuxenabled && command -v semodule >/dev/null 2>&1; then
+			loaded=$(semodule -l 2>/dev/null | awk '{print $1}')
+			case " $(echo $loaded) " in *" $n "*) ;; *) v_broken "$n: its SELinux module is not loaded: $fix" ;; esac
+		fi
+	fi
+	# The Python modules it needs: there, and not older than requirements.txt asks.
+	mods=$(held "$root" "$n" "$part-modules")
+	if [ -n "$mods" ] && [ -z "$DESTDIR" ]; then
+		py=$(plugin_python "$root")
+		# shellcheck disable=SC2086
+		lacks=$(lacking "$py" $mods)
+		[ -z "$lacks" ] || v_broken "$n: the Python modules $lacks are missing from $py: ./xymon-plugin update --$part --venv $n"
+	fi
+	# Those it does without: missing, a note, counted for nothing.
+	opt=$(held "$root" "$n" "$part-optional-modules")
+	if [ -n "$opt" ] && [ -z "$DESTDIR" ]; then
+		py=$(plugin_python "$root")
+		# shellcheck disable=SC2086
+		lacks=$(lacking "$py" $opt)
+		vn=$(held "$root" "$n" venv-note)
+		[ -z "$lacks" ] || echo "note: $n: without the Python modules $lacks${vn:+, $vn}: ./xymon-plugin update --$part --venv $n"
+	fi
+	# Any it has, needed or not, older than requirements.txt asks: broken.
+	if [ -n "$mods$opt" ] && [ -z "$DESTDIR" ]; then
+		olds=$(old_modules "$py" "$dir/requirements.txt")
+		[ -z "$olds" ] || v_broken "$n: older Python modules than it is tested with, $olds: ./xymon-plugin update --$part --venv $n"
+	fi
+	[ $((BROKEN + UNTIDY)) -ne "$before" ] || echo "ok: $n"
+}
+
+# left PART -- what is left in the part that no plugin installed owns (S9),
+# one per line, tab-separated: the plugin it was, or * for what the
+# plugins shared; where it lies; its path as installed; what it is; and
+# "proved" when it is provably that plugin's (S20), the only ones clean
+# takes away.
+left() {
+	T=$(printf '\t')
+	if [ "$1" = server ]; then
+		for l in "$TASKDIR"/*; do
+			[ -L "$l" ] || continue
+			case $(readlink "$l") in
+				"$XYMONHOME/ext/"*/tasks.cfg) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%/tasks.cfg}
+					plain "$t" && [ ! -f "$EXTROOT/$t/VERSION" ] \
+						&& echo "$t$T$l$T$XYMONHOME/etc/tasks.d/${l##*/}${T}the task link of $t${T}proved" ;;
+			esac
+		done
+		for l in "$(inside "$MANDIR")"/man[1-9]/*; do
+			[ -L "$l" ] || continue
+			case $(readlink "$l") in
+				"$XYMONHOME/ext/"*/*) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%%/*}
+					sec=${l%/*}
+					plain "$t" && [ ! -f "$EXTROOT/$t/VERSION" ] \
+						&& echo "$t$T$l$T$MANDIR/${sec##*/}/${l##*/}${T}a manual page's link of $t${T}proved" ;;
+			esac
+		done
+		for d in "$DIST/plugins"/*; do
+			[ -d "$d" ] && [ ! -L "$d" ] || continue
+			plain "${d##*/}" && [ ! -f "$EXTROOT/${d##*/}/VERSION" ] \
+				&& echo "${d##*/}$T$d$T$XYMONHOME/ext/xymon-plugins-dist/plugins/${d##*/}${T}the staged copy of ${d##*/}${T}proved"
+		done
+		any=; for d in "$EXTROOT"/*; do [ -f "$d/VERSION" ] && any=1; done
+		if [ -z "$any" ]; then
+			[ ! -d "$DIST" ] || echo "*$T$DIST$T$XYMONHOME/ext/xymon-plugins-dist${T}the stage /plugins serves, with no plugin installed${T}proved"
+			[ ! -d "$EXTROOT/venv" ] || echo "*$T$EXTROOT/venv$T$XYMONHOME/ext/venv${T}the virtualenv, with no plugin installed${T}proved"
+		fi
+	else
+		for c in "$BIN"/*; do
+			[ -f "$c" ] && [ ! -L "$c" ] || continue
+			t=$(sed -n '2s|^exec "'"$(sedesc "$PREFIX")"'/libexec/xymon-plugins/\([^/]*\)/\([^/"]*\)" "\$@"$|\1/\2|p' "$c" 2>/dev/null)
+			[ -n "$t" ] && [ "$(sed -n 1p "$c")" = '#!/bin/sh' ] || continue
+			sc=${t#*/}; t=${t%%/*}
+			plain "$t" && [ ! -f "$TOOLSROOT/$t/VERSION" ] || continue
+			# The x keeps the trailing newlines a command substitution drops.
+			if [ "$(cat "$c"; echo x)" = "$(wrapper "$t" "$sc"; echo x)" ]; then pr=proved; else pr=; fi
+			echo "$t$T$c$T$PREFIX/bin/${c##*/}${T}the command of $t$T$pr"
+		done
+		for l in "$TOOLSMAN1"/*; do
+			[ -L "$l" ] || continue
+			case $(readlink "$l") in
+				"$PREFIX/libexec/xymon-plugins/"*/*) t=$(readlink "$l"); t=${t#"$PREFIX/libexec/xymon-plugins/"}; t=${t%%/*}
+					plain "$t" && [ ! -f "$TOOLSROOT/$t/VERSION" ] \
+						&& echo "$t$T$l$T$PREFIX/share/man/man1/${l##*/}${T}a manual page's link of $t${T}proved" ;;
+			esac
+		done
+		any=; for d in "$TOOLSROOT"/*; do [ -f "$d/VERSION" ] && any=1; done
+		[ -n "$any" ] || [ ! -d "$TOOLSROOT/venv" ] \
+			|| echo "*$T$TOOLSROOT/venv$T$PREFIX/libexec/xymon-plugins/venv${T}the virtualenv, with no plugin installed${T}proved"
+	fi
+}
+
+# verify_left PART -- what is left, untidy, each naming clean.
+verify_left() {
+	while IFS="$(printf '\t')" read -r t at shown what pr; do
+		[ -n "$t" ] || continue
+		if [ "$t" = '*' ]; then v_untidy "$shown, $what: ./xymon-plugin clean --$1 --all"
+		else v_untidy "$shown, $what, which is gone: ./xymon-plugin clean --$1 $t"; fi
+	done <<EOF
+$(left "$1")
+EOF
+}
+
+# clean_part PART -- S31: what is left of the plugins named, or with --all
+# of every one and what they shared, listed, then, confirmed, taken away;
+# only what is proved a plugin's. Exits 0 when nothing is left after it, 4
+# when something is.
+clean_part() {
+	if [ "$1" = tools ]; then echo "Target: your tools, $PREFIX"; fi
+	go= kept=0
+	while IFS="$(printf '\t')" read -r t at shown what pr; do
+		[ -n "$t" ] || continue
+		if [ -z "$ALL" ]; then case " $(echo $NAMES) " in *" $t "*) ;; *) continue ;; esac; fi
+		if [ "$pr" = proved ]; then go="$go$(printf '%s\t%s' "$at" "$shown, $what")
+"
+		else echo "Left: $shown, $what: not, byte for byte, what an install writes, so maybe not its own"; kept=$((kept + 1)); fi
+	done <<EOF
+$(left "$1")
+EOF
+	if [ -z "$go" ]; then
+		[ "$kept" -eq 0 ] || exit 4
+		echo "Nothing is left that no plugin installed owns."
+		exit 0
+	fi
+	echo "To remove:"
+	printf '%s' "$go" | cut -f2 | sed -e 's/^/  /'
+	if [ -z "${YES:-}" ]; then
+		if [ -t 0 ] && [ -t 1 ]; then
+			offer "Proceed?" || { echo "Nothing removed."; exit 4; }
+		else
+			echo "Nothing removed: off a terminal, --yes removes it."
+			exit 4
+		fi
+	fi
+	while IFS="$(printf '\t')" read -r at what; do
+		[ -n "$at" ] || continue
+		rm -rf "$at" || die "could not remove $at"
+		echo "Removed ${what%%, *}."
+	done <<EOF
+$go
+EOF
+	[ "$kept" -eq 0 ] || exit 4
+	exit 0
+}
+
+# verify_part PART ROOT -- every plugin installed in the part, or those
+# named; with none named, what is left too.
+verify_part() {
+	if [ -n "$NAMES" ]; then L=$NAMES; else L=$(for d in "$2"/*; do [ -f "$d/VERSION" ] && echo "${d##*/}"; done); fi
+	for n in $L; do
+		if [ -f "$2/$n/VERSION" ]; then verify_plugin "$1" "$2" "$n"
+		else echo "$n: not installed"; fi
+	done
+	# A part with nothing installed says so, as status does, rather than a
+	# heading with nothing under it.
+	[ -n "$L" ] || echo "no plugin"
+	[ -n "$NAMES" ] || verify_left "$1"
+}
+
+# installed ROOT PLUGIN -- its VERSION there, read as X.Y.Z, or nothing.
+installed() { [ -f "$1/$2/VERSION" ] && sed -e 's|^.*/v||' "$1/$2/VERSION"; }
+
+# dialogue -- with no verb, on a terminal: where things stand, then what
+# applies, nothing by default; the command those answers spell printed,
+# confirmed and run, and nothing else; after an install, enabling offered
+# as a second command, [y/N]; then it stops.
+# findings PART ROOT PLUGIN -- what verify finds broken or untidy in the
+# plugin, its words without the plugin's name and the command, "; "
+# between; REPAIR set when an update puts it right.
+findings() {
+	verify_plugin "$1" "$2" "$3" | sed -n -e "s/^broken: $3: /broken: /p" -e "s/^untidy: $3: /untidy: /p" \
+		| sed -e 's/: \.\/xymon-plugin [^:]*$//' | awk 'NR > 1 { printf "; " } { printf "%s", $0 } END { if (NR) print "" }'
+}
+
+# left_by PART -- what is left in the part, one line per plugin gone, "T	what, what".
+left_by() {
+	left "$1" | awk -F '\t' '{ x = $4; if ($1 != "*") sub(" of " $1 "$", "", x); w[$1] = (($1 in w) ? w[$1] ", " : "") x } END { for (t in w) print t "\t" w[t] }' | LC_ALL=C sort
+}
+
+dialogue() {
+	me=$0
+	if [ -n "$XYMONHOME" ] || [ -n "$(xymon_trees | sed -n 's/^server //p')" ]; then
+		if [ -z "$XYMONHOME" ]; then
+			SOFT=1
+			choose_tree || { XYMONHOME=; echo "No Xymon server chosen: what follows is your tools'."; }
+			SOFT=
+		fi
+		[ -z "$XYMONHOME" ] || server_paths
+	fi
+	echo
+	REPAIR_S= REPAIR_T= LEFT_S=
+	if [ -n "$XYMONHOME" ]; then
+		echo "Xymon server: $XYMONHOME"
+		for n in $(all_plugins); do
+			v=$(installed "$EXTROOT" "$n") || continue
+			st=
+			if [ -n "$(held "$EXTROOT" "$n" task)" ]; then
+				if is_on "$n"; then st=", on"; else st=", off"; fi
+			fi
+			f=$(findings server "$EXTROOT" "$n")
+			echo "  $n $v$st${f:+ -- $f}"
+			[ -z "$f" ] || REPAIR_S="$REPAIR_S $n"
+		done
+		LEFT_S=$(left_by server)
+		printf '%s\n' "$LEFT_S" | while IFS='	' read -r t w; do
+			[ -n "$t" ] || continue
+			if [ "$t" = '*' ]; then echo "  left: $w"; else echo "  left by $t, gone: $w"; fi
+		done
+		show_client "$XYMONHOME"
+	else
+		echo "No Xymon server here."
+	fi
+	echo "Your tools, $PREFIX:"
+	for n in $(all_plugins); do
+		v=$(installed "$TOOLSROOT" "$n") || continue
+		f=$(findings tools "$TOOLSROOT" "$n")
+		echo "  $n $v${f:+ -- $f}"
+		[ -z "$f" ] || REPAIR_T="$REPAIR_T $n"
+	done
+	LEFT_T=$(left_by tools)
+	printf '%s\n' "$LEFT_T" | while IFS='	' read -r t w; do
+		[ -n "$t" ] || continue
+		if [ "$t" = '*' ]; then echo "  left: $w"; else echo "  left by $t, gone: $w"; fi
+	done
+	# What applies, one line each, its command after a tab.
+	opts=
+	add() { opts="$opts$1	$2
+"; }
+	# The installation, in the command printed, by --xymon-home; quoted
+	# where a shell would split it.
+	hx=
+	if [ -n "$XYMONHOME" ]; then
+		case $XYMONHOME in *[!A-Za-z0-9._/+-]*) hx=" --xymon-home '$XYMONHOME'" ;; *) hx=" --xymon-home $XYMONHOME" ;; esac
+	fi
+	# The plugins, those others need first.
+	ordered() { for p in $(all_plugins); do echo "$(depth "$p" "$1" "") $p"; done | sort -n | cut -d' ' -f2; }
+	short() { v=$(field "$1" "$2-short"); [ -n "$v" ] || v=$(field "$1" summary); printf '%s\n' "$v"; }
+	if [ -n "$XYMONHOME" ]; then
+		for n in $(ordered server); do
+			[ -n "$(field "$n" server-files)" ] || continue
+			installed "$EXTROOT" "$n" >/dev/null && continue
+			w=; for d in $(needs "$n" server 2>/dev/null); do installed "$EXTROOT" "$d" >/dev/null || w="$w $d"; done
+			add "install $n on the server${w:+, with$w}: $(short "$n" server)" "$me install --server$hx $n"
+		done
+		any=
+		for n in $(all_plugins); do
+			installed "$EXTROOT" "$n" >/dev/null || continue
+			any=1
+			[ -n "$(held "$EXTROOT" "$n" task)" ] || continue
+			if is_on "$n"; then add "turn $n off" "$me disable --server$hx $n"
+			else add "turn $n on" "$me enable --server$hx $n"; fi
+		done
+		[ -z "$any" ] || add "update the server's plugins${REPAIR_S:+, which repairs$REPAIR_S}" "$me update --server$hx"
+		for n in $(all_plugins); do
+			installed "$EXTROOT" "$n" >/dev/null || continue
+			by=
+			for p in $(all_plugins); do
+				installed "$EXTROOT" "$p" >/dev/null || continue
+				case " $(needs "$p" server "$EXTROOT" 2>/dev/null) " in *" $n "*) by="$by $p" ;; esac
+			done
+			[ -z "$by" ] || continue
+			add "remove $n from the server" "$me remove --server$hx $n"
+		done
+		ga=
+		for t in $(printf '%s\n' "$LEFT_S" | cut -f1); do
+			if [ "$t" = '*' ]; then ga=1; else add "take away what $t left on the server" "$me clean --server$hx --yes $t"; fi
+		done
+		[ -z "$ga" ] || add "take away what no plugin uses on the server" "$me clean --server$hx --all --yes"
+	fi
+	tany=
+	for n in $(ordered tools); do
+		[ -n "$(field "$n" tools-files)" ] || continue
+		if installed "$TOOLSROOT" "$n" >/dev/null; then tany=1; continue; fi
+		add "install $n for you: $(short "$n" tools)" "$me install --tools $n"
+	done
+	[ -z "$tany" ] || add "update your tools${REPAIR_T:+, which repairs$REPAIR_T}" "$me update --tools"
+	ga=
+	for t in $(printf '%s\n' "$LEFT_T" | cut -f1); do
+		if [ "$t" = '*' ]; then ga=1; else add "take away what $t left in your tools" "$me clean --tools --yes $t"; fi
+	done
+	[ -z "$ga" ] || add "take away what no plugin uses in your tools" "$me clean --tools --all --yes"
+	echo
+	echo "What do you want to do?"
+	echo "  0) nothing"
+	i=0
+	printf '%s' "$opts" | while IFS='	' read -r label cmd; do
+		i=$((i + 1)); echo "  $i) $label"
+	done
+	n=$(printf '%s' "$opts" | grep -c .)
+	printf 'What do you want to do? [0] '
+	read -r ans || ans=
+	case $ans in ''|0) echo "Nothing done."; return 0 ;; *[!0-9]*) die "no such choice: $ans" ;; esac
+	[ "$ans" -le "$n" ] || die "no such choice: $ans"
+	cmd=$(printf '%s' "$opts" | sed -n "${ans}p" | cut -f2)
+	echo "I will run:  $cmd"
+	printf 'Proceed? [Y/n] '
+	read -r yn || yn=n
+	case $yn in [Nn]*) echo "Nothing done."; return 0 ;; esac
+	eval "$cmd" || exit $?
+	# After an install of a part with a task: enabling, a second command,
+	# Enter declining it.
+	case $cmd in
+		*" install --server "*)
+			n=${cmd##* }
+			if [ -n "$(field "$n" task)" ]; then
+				ecmd="$me enable --server$hx $n"
+				echo "Turn it on now?"
+				echo "I will run:  $ecmd"
+				if offer "Proceed?"; then eval "$ecmd" || exit $?; else echo "$n stays off: $ecmd turns it on."; fi
+			fi ;;
+	esac
+}
+
+if [ "$VERB" = dialogue ]; then dialogue; exit 0; fi
+
+# The part acted on: named, or, on a terminal, the server part, said; off a
+# terminal a verb that changes something needs it named; status covers both.
+if [ -n "$SEL_TOOLS" ] && [ -n "$SEL_SERVER" ]; then
+	case $VERB in status|verify|outdated) die "--tools goes alone: ./xymon-plugin $VERB, with neither, covers both" ;; esac
+	rest=$(echo $NAMES)${ALL:+ --all}
+	die "--tools goes alone, as the tools are the person's and the server part its tree's owner's: run
+  ./xymon-plugin $VERB --server${rest:+ $rest}
+  ./xymon-plugin $VERB --tools${rest:+ $rest}"
+fi
+if [ -n "$SEL_TOOLS" ]; then PART=tools
+elif [ -n "$SEL_SERVER" ]; then PART=server
+elif [ "$VERB" = status ] || [ "$VERB" = verify ] || [ "$VERB" = outdated ]; then PART=both
+elif [ -t 0 ] && [ -t 1 ]; then PART=server; echo "Part: server, the one Xymon part a plugin has here."
+else die "$VERB names no part, and there is no terminal to say it: --server, or --tools"
+fi
+case $VERB in enable|disable) [ "$PART" != tools ] || die "the tools have no task to turn on or off" ;; esac
+if [ "$PART" = tools ] && [ -n "$ROOTUSER" ] && [ "$VERB" != status ] && [ "$VERB" != verify ] && [ "$VERB" != outdated ] && [ -z "$DESTDIR" ] && [ -z "$PREFIX_GIVEN" ]; then
+	die "the tools go in a person's own directory, not root's: run this without sudo, or give PREFIX= or DESTDIR="
+fi
+# What needs no installation is checked before one is asked for: the names,
+# --all, and, for install and update, which take the code from this
+# checkout, a plugin of it.
+for n in $NAMES; do plain "$n" || die "not a plugin name: '$n'"; done
+[ -z "$NAMES" ] || [ -z "$ALL" ] || die "--all, or plugins named: not both"
+case $VERB in
+	install|remove|clean)
+		[ -n "$NAMES" ] || [ -n "$ALL" ] \
+			|| die "name the plugins to $VERB, or --all: the plugins are $(echo $(all_plugins))" ;;
+esac
+case $VERB in
+	install|update)
+		for n in $NAMES; do
+			[ -f "$ROOT/plugins/$n/PLUGIN" ] || die "no plugin $n here: the plugins are $(echo $(all_plugins))"
+		done ;;
+esac
+# The installation, named or chosen, once, before anything is looked at in
+# it; status reads it apart.
+if [ "$PART" = server ] && [ "$VERB" != status ] && [ "$VERB" != verify ] && [ "$VERB" != outdated ]; then need_home; fi
+if [ "$PART" = server ]; then PARTROOT=$EXTROOT; else PARTROOT=$TOOLSROOT; fi
+
+# The plugins named, each checked; or, for install and remove, --all, which
+# they need when none is named; for an uninstall, the deepest first, so that
+# none is removed while one installed needs it.
+# clean names plugins gone, which may be in no checkout: a plain name is enough.
+[ "$VERB" = clean ] || for n in $NAMES; do known "$n"; done
+if [ -n "$NAMES" ]; then LIST=$NAMES; else LIST=$(all_plugins); fi
+deepest_first() {
+	for n in $LIST; do echo "$(depth "$n" "$2" "$1") $n"; done | sort -rn | cut -d' ' -f2
+}
+
+case $VERB in
+	install)
+		for n in $LIST; do [ ! -f "$ROOT/plugins/$n/PLUGIN" ] || declared_ok "$n"; done
+		# A plugin named that is installed already is refused, before
+		# anything changes; --all and what one needs pass over them.
+		for n in $NAMES; do
+			v=$(installed "$PARTROOT" "$n") || continue
+			die "$n is installed already ($v): ./xymon-plugin update --$PART $n"
+		done
+		if [ "$PART" = server ]; then
+			for n in $LIST; do [ -n "$(field "$n" server-files)" ] || [ -n "$NAMES" ] || continue; xymon_ok "$n"; done
+			reads_d
+			for n in $LIST; do [ -n "$(field "$n" server-files)" ] || [ -n "$NAMES" ] || continue; install_server "$n"; done
+		else
+			for n in $LIST; do [ -n "$(field "$n" tools-files)" ] || [ -n "$NAMES" ] || continue; install_tools "$n"; done
+		fi ;;
+	update)
+		UPDATING=1
+		for n in $LIST $NAMES; do [ ! -f "$ROOT/plugins/$n/PLUGIN" ] || declared_ok "$n"; done
+		for n in $NAMES; do
+			installed "$PARTROOT" "$n" >/dev/null || die "$n is not installed: ./xymon-plugin install --$PART $n"
+		done
+		if [ -z "$NAMES" ]; then
+			LIST=$(for n in $(with_installed "$PARTROOT"); do [ -f "$PARTROOT/$n/VERSION" ] && echo "$n"; done)
+			[ -n "$LIST" ] || die "nothing is installed in $PARTROOT to update"
+		fi
+		if [ "$PART" = server ]; then
+			for n in $LIST; do xymon_ok "$n"; done
+			reads_d
+			for n in $LIST; do install_server "$n"; done
+		else
+			for n in $LIST; do install_tools "$n"; done
+		fi ;;
+	enable|disable)
+		# A plugin named with no task is refused; with none named, those
+		# with no task are passed over.
+		for n in $NAMES; do
+			[ -n "$(held "$EXTROOT" "$n" task)" ] || die "$n has no task to turn on or off"
+		done
+		[ -n "$NAMES" ] || LIST=$(with_installed "$EXTROOT")
+		# enable refuses a plugin whose Python lacks the modules it needs,
+		# before any is turned on.
+		if [ "$VERB" = enable ]; then
+			for n in $(installed_tasks); do
+				m=$(missing_modules "$n")
+				[ -z "$m" ] || die "$n needs the Python modules $m, which the Python it runs with lacks: ./xymon-plugin update --server --venv $n makes them, or XYMONAPI_PYTHON names a Python that has them"
+			done
+		fi
+		for n in $(installed_tasks); do "$VERB" "$n"; done ;;
+	status)
+		# None named: every installation found is listed, and nothing is
+		# asked, on a terminal as off one.
+		if [ "$PART" != tools ] && [ -z "$XYMONHOME" ] && [ -z "$DESTDIR" ]; then
+			while IFS= read -r t; do
+				[ -n "$t" ] || continue
+				echo "Xymon server $t:"
+				XYMONHOME=$t; server_paths
+				L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
+				for n in $L; do l=$(status server "$EXTROOT" "$n"); [ -z "$l" ] || echo "  $l"; done
+				show_client "$t"
+			done <<EOF
+$(xymon_trees | sed -n 's/^server //p')
+EOF
+			XYMONHOME=
+		elif [ "$PART" != tools ]; then
+			need_home
+			echo "Xymon server $XYMONHOME:"
+			L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
+			for n in $L; do l=$(status server "$EXTROOT" "$n"); [ -z "$l" ] || echo "  $l"; done
+			[ -n "$DESTDIR" ] || show_client "$XYMONHOME"
+		fi
+		if [ "$PART" != server ]; then
+			L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$TOOLSROOT")
+			[ "$PART" = tools ] || echo "Your tools, $PREFIX:"
+			for n in $L; do
+				l=$(status tools "$TOOLSROOT" "$n")
+				if [ -z "$l" ]; then :; elif [ "$PART" = tools ]; then echo "$l"; else echo "  $l"; fi
+			done
+		fi ;;
+	outdated)
+		# Read-only, as status: what is installed, against the latest
+		# release of each plugin. A newer one released ends with status 6.
+		NEWER=
+		RELEASES=$(releases) || exit 1
+		if [ "$PART" != tools ] && [ -z "$XYMONHOME" ] && [ -z "$DESTDIR" ]; then
+			while IFS= read -r t; do
+				[ -n "$t" ] || continue
+				echo "Xymon server $t:"
+				XYMONHOME=$t; server_paths
+				L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
+				for n in $L; do
+					l=$(outdated_line server "$EXTROOT" "$n") || exit 1; [ -n "$l" ] || continue
+					echo "  $l"; case $l in *" released: "*) NEWER=1 ;; esac
+				done
+			done <<EOF
+$(xymon_trees | sed -n 's/^server //p')
+EOF
+			XYMONHOME=
+		elif [ "$PART" != tools ]; then
+			need_home
+			echo "Xymon server $XYMONHOME:"
+			L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
+			for n in $L; do
+				l=$(outdated_line server "$EXTROOT" "$n") || exit 1; [ -n "$l" ] || continue
+				echo "  $l"; case $l in *" released: "*) NEWER=1 ;; esac
+			done
+		fi
+		if [ "$PART" != server ]; then
+			L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$TOOLSROOT")
+			[ "$PART" = tools ] || echo "Your tools, $PREFIX:"
+			for n in $L; do
+				l=$(outdated_line tools "$TOOLSROOT" "$n") || exit 1; [ -n "$l" ] || continue
+				case $l in *" released: "*) NEWER=1 ;; esac
+				if [ "$PART" = tools ]; then echo "$l"; else echo "  $l"; fi
+			done
+		fi
+		[ -z "${NEWER:-}" ] || exit 6 ;;
+	verify)
+		# None named: every installation found, as status lists them.
+		if [ "$PART" != tools ] && [ -z "$XYMONHOME" ] && [ -z "$DESTDIR" ]; then
+			while IFS= read -r t; do
+				[ -n "$t" ] || continue
+				echo "Xymon server: $t"
+				XYMONHOME=$t; server_paths
+				verify_part server "$EXTROOT"
+			done <<EOF
+$(xymon_trees | sed -n 's/^server //p')
+EOF
+			XYMONHOME=
+		elif [ "$PART" != tools ]; then
+			need_home
+			echo "Xymon server: $XYMONHOME"
+			verify_part server "$EXTROOT"
+		fi
+		if [ "$PART" != server ]; then
+			echo "Your tools: $PREFIX"
+			verify_part tools "$TOOLSROOT"
+		fi
+		[ "$BROKEN" -eq 0 ] || exit 3
+		[ "$UNTIDY" -eq 0 ] || exit 4
+		exit 0 ;;
+	clean)
+		# A name given is a plugin gone: one installed is removed, not cleaned.
+		for n in $NAMES; do
+			[ ! -f "$PARTROOT/$n/VERSION" ] || die "$n is installed: ./xymon-plugin remove --$PART $n"
+		done
+		clean_part "$PART" ;;
+	remove)
+		if [ "$PART" = server ]; then
+			# The stage served at /plugins, pruned first, as an install
+			# does: a link there would take the removal elsewhere.
+			prune_dist
+			[ -n "$NAMES" ] || LIST=$(with_installed "$EXTROOT")
+			for n in $(deepest_first "$EXTROOT" server); do uninstall_server "$n"; done
+			# With the last plugin, what they shared: the virtualenv (S8).
+			last=1; for d in "$EXTROOT"/*; do [ -f "$d/VERSION" ] && last=; done
+			[ -z "$last" ] || [ ! -d "$EXTROOT/venv" ] || { rm -rf "$EXTROOT/venv" && echo "Removed the virtualenv, which no plugin uses now."; }
+			# The stage served at /plugins, with no plugin left in it, goes.
+			if [ -d "$DIST" ] && [ ! -L "$DIST" ] && [ -z "$(ls -A "$DIST/plugins" 2>/dev/null)" ]; then
+				rm -rf "$DIST" || exit 1
+				echo "Removed the stage /plugins serves, which no plugin uses now."
+			fi
+		else
+			[ -n "$NAMES" ] || LIST=$(with_installed "$TOOLSROOT")
+			for n in $(deepest_first "$TOOLSROOT" tools); do uninstall_tools "$n"; done
+			last=1; for d in "$TOOLSROOT"/*; do [ -f "$d/VERSION" ] && last=; done
+			if [ -n "$last" ]; then
+				[ ! -d "$TOOLSROOT/venv" ] || { rm -rf "$TOOLSROOT/venv" && echo "Removed the virtualenv, which no plugin uses now."; }
+				rmdir "$TOOLSROOT" 2>/dev/null || true
+			fi
+		fi ;;
+esac

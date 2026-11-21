@@ -3,10 +3,10 @@
 #
 # tests/compat/plugin-generic.sh
 #
-# A plugin no code knows -- a directory and its PLUGIN file, alone in a copy
-# of the checkout -- is found by --all, installed, reported and removed as
-# any other: the command reads each plugin from its PLUGIN file, with no
-# list and no branch for a name.
+# A plugin no code knows -- a directory and its PLUGIN file, in a copy of
+# the checkout beside only the installer, itself a plugin -- is found by
+# --all, installed, reported and removed as any other: the command reads
+# each plugin from its PLUGIN file, with no list and no branch for a name.
 #
 # Run from a copy of the checkout, in a scratch directory.
 
@@ -18,7 +18,9 @@ ROOT=$(find_root)
 work=$(mktempdir)
 repo=$work/repo
 mkdir -p "$repo/plugins/zz-demo"
+mkdir -p "$repo/plugins/xymon-plugin"
 cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$repo/"
+cp -R "$ROOT/plugins/xymon-plugin/." "$repo/plugins/xymon-plugin/"
 grep -qw zz-demo "$repo/xymon-plugin" && fail "[S1] the installer names zz-demo: pick another name for this test"
 d=$repo/plugins/zz-demo
 printf '%s\n' 'name: zz-demo' 'version: 1.2.3' 'summary: a plugin no code knows' \
