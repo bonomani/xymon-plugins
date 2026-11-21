@@ -45,6 +45,7 @@ case $max in ''|*[!0-9]*) max=21600 ;; esac
 r=$(od -An -N2 -tu2 /dev/urandom 2>/dev/null | tr -d ' ')
 case $r in ''|*[!0-9]*) r=$(printf '%s %s %s' "$MACHINEDOTS" "$$" "$(date)" | cksum | cut -d' ' -f1) ;; esac
 wait_s=$((r % (max + 1)))
+waited=
 case ${XYMON_PLUGINS_WAITED:-} in ''|*[!0-9]*) ;; *) wait_s=$XYMON_PLUGINS_WAITED waited=1 ;; esac
 # Stopped while waiting -- xymonlaunch's MAXTIME, a reload, disable --
 # its own sleep goes with it, not left running: the PID $! gave, of a
