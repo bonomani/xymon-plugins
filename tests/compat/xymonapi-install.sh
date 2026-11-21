@@ -81,7 +81,7 @@ mode=$(ls -lL "$task" | cut -c1-10)
 assert_equal "-rw-r--r--" "$mode" "the task file's mode under umask 077"
 # And every directory it made, readable and searchable by every user, as
 # the Xymon user reads PLUGIN and VERSION and the web server /plugins.
-closed=$(find "$home/ext" -type d ! -perm -0055)
+closed=$(find "$home/ext" "$work/man" -type d ! -perm -0055)
 assert_equal "" "$closed" "the directories made under umask 077 are readable by every user"
 
 # An update replaces each plugin's directory: a file the new version no
@@ -101,32 +101,47 @@ ln -s "$work/private" "$home/ext/venv/lib/outside"
 # setgid directory, as a group-shared tree has, closed like the rest.
 ln "$work/private" "$home/ext/venv/lib/hard"
 mkdir -p "$home/ext/venv/shared"; chmod 2700 "$home/ext/venv/shared"
+# And what its owner may not use itself, or that is no file: left as it is.
+mkdir -p "$home/ext/venv/odd/d0400"; chmod u=r,go= "$home/ext/venv/odd/d0400"
+: > "$home/ext/venv/odd/f0010"; chmod u=,g=x,o= "$home/ext/venv/odd/f0010"
+mkfifo "$home/ext/venv/odd/fifo"; chmod 600 "$home/ext/venv/odd/fifo"
 chmod 700 "$home/ext/xymonapi" "$home/ext/xymon-plugins-dist" "$home/ext/xymon-plugins-dist/plugins" \
 	"$home/ext/venv/lib" "$home/ext/venv/bin" "$home/ext/venv" "$home/ext" "$home/etc/tasks.d"
 "$ROOT/xymon-plugin" update --server XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
 	|| fail "installing over an install failed: $(tail -n 5 "$work/update.log")"
 [ -d "$home/ext/venv/lib" ] || fail "the virtualenv, whose Python runs, was not kept: $(cat "$work/update.log")"
-closed=$(find "$home/ext" "$home/etc/tasks.d" -type d ! -perm -0055)
+closed=$(find "$home/ext" "$home/etc/tasks.d" -type d ! -perm -0055 ! -path "$home/ext/venv/odd/d0400")
 assert_equal "" "$closed" "an update opens what an install under umask 077 left closed"
+odd=$(find "$home/ext/venv/odd/d0400" "$home/ext/venv/odd/f0010" "$home/ext/venv/odd/fifo" -prune \( -perm -0004 -o -perm -0001 \))
+assert_equal "" "$odd" "what its owner may not use itself, and a fifo, are left closed"
 [ -n "$(find "$work/private" -perm 0600)" ] || fail "a link in the virtualenv was followed or changed: $work/private is no longer 600"
 [ -n "$(find "$home/ext/venv/shared" -prune -perm -2055)" ] || fail "a setgid directory was left closed"
 
 # Where a chmod would fail -- what another user owns -- an open tree is not
-# touched, so nothing is said; a closed one is said, with the command. A
-# chmod that refuses go+rX alone stands for that other owner.
-mkdir -p "$work/stub"
-real_chmod=$(command -v chmod)
-printf '#!/bin/sh\ncase " $* " in *" go+rX "*) exit 1 ;; esac\nexec %s "$@"\n' "$real_chmod" > "$work/stub/chmod"
-"$real_chmod" 755 "$work/stub/chmod"
-PATH="$work/stub:$PATH" "$ROOT/xymon-plugin" update --server XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
-	|| fail "an update with chmod refusing go+rX failed: $(tail -n 5 "$work/update.log")"
-assert_not_contains "could not open" "$(cat "$work/update.log")" "an open tree that could not be changed is left, and nothing said"
-chmod 700 "$home/ext/xymon-plugins-dist/plugins"
-PATH="$work/stub:$PATH" "$ROOT/xymon-plugin" update --server XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
-	|| fail "an update with chmod refusing go+rX failed: $(tail -n 5 "$work/update.log")"
-assert_contains "could not open $home/ext/xymon-plugins-dist to every user: as its owner, or with sudo, chmod -R go+rX '$home/ext/xymon-plugins-dist'" \
-	"$(cat "$work/update.log")" "a closed one that could not be opened is said, with the command"
-chmod 755 "$home/ext/xymon-plugins-dist/plugins"
+# touched, so nothing is said; a closed one is said, with its owner. A
+# chmod that refuses go+r and go+rx alone stands for that other owner.
+# BusyBox's find runs its own chmod, not the one first on PATH: there this
+# part cannot run.
+findhelp=$(find --help 2>&1 || true)
+case $findhelp in
+*BusyBox*) ;;
+*)
+	mkdir -p "$work/stub"
+	real_chmod=$(command -v chmod)
+	printf '#!/bin/sh\ncase " $* " in *" go+r"*) exit 1 ;; esac\nexec %s "$@"\n' "$real_chmod" > "$work/stub/chmod"
+	"$real_chmod" 755 "$work/stub/chmod"
+	PATH="$work/stub:$PATH" "$ROOT/xymon-plugin" update --server XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
+		|| fail "an update with chmod refusing go+r failed: $(tail -n 5 "$work/update.log")"
+	assert_not_contains "could not open" "$(cat "$work/update.log")" "an open tree that could not be changed is left, and nothing said"
+	chmod 700 "$home/ext/xymon-plugins-dist/plugins"
+	PATH="$work/stub:$PATH" "$ROOT/xymon-plugin" update --server XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
+		|| fail "an update with chmod refusing go+r failed: $(tail -n 5 "$work/update.log")"
+	assert_contains "could not open all of $home/ext/xymon-plugins-dist to every user: run the update as its owner, $(id -un), to open it" \
+		"$(cat "$work/update.log")" "a closed one that could not be opened is said, with its owner"
+	[ -n "$(find "$home/ext/xymon-plugins-dist/plugins" -prune -perm 0700)" ] || fail "the stage was opened though chmod refused"
+	chmod 755 "$home/ext/xymon-plugins-dist/plugins"
+	;;
+esac
 rm -rf "$home/ext/venv"
 [ -e "$home/ext/xymonapi/gone.py" ] && fail "[S7] a file no longer shipped stayed in ext/xymonapi after an update"
 [ -e "$home/ext/xymonapi-rag/gone.py" ] && fail "a file no longer shipped stayed in ext/xymonapi-rag after an update"
