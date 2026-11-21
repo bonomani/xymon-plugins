@@ -1,86 +1,71 @@
 # xymonapi-rag
 
 It finds the passages of Xymon's manual pages and history that a question is
-about, by what they mean rather than the words they share. Every command and
-setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
+about, by what they mean rather than the words they share.
 
-- **On the Xymon server**: the daily index task. It reads the pages and
-  xymond's history files where they are, needs no credential, and the
-  [API](../xymonapi/README.md) serves what it writes at `/search`. No
-  language model is involved.
-- **On your own machine**: `xymonapi-rag search`, the same search through
-  the API, and `ask`, which hands the passages found to a language model you
-  run.
+## Install
+
+| part | command |
+|---|---|
+| server | `XYMONHOME=/usr/lib/xymon/server ./xymon-plugin install --server xymonapi-rag` |
+| tools | `./xymon-plugin install --tools xymonapi-rag` |
+
+The server task is installed off; turning it on is in
+[On the Xymon server](#on-the-xymon-server).
+
+## Use
+
+| to | run |
+|---|---|
+| search, from a shell on the server | `xymoncmd /usr/lib/xymon/server/ext/xymonapi-rag/xymonapi-rag.sh search "what does purple mean"` |
+| search, from your machine | `xymonapi-rag search "what does purple mean"` |
+| ask a language model about the passages found | `xymonapi-rag ask "has /boot filled up before, and where?"` |
+| search through the API | its `/search` |
+
+Every command and setting is in [`xymonapi-rag.1`](xymonapi-rag.1).
 
 ## Needs
 
-- **[`xymonapi`](../xymonapi/README.md)**: on the server, the API, which
-  serves the index at `/search` and whose code the index task reads the
-  history with; elsewhere, its client library. Either install here brings
-  the one it needs.
-- Python 3.9 or later. The modules in [`requirements.txt`](requirements.txt)
-  are needed on the server, and on a machine that keeps an index of its own;
-  how the install finds or makes a Python with them is in [`xymon-plugin`'s
-  README](../xymon-plugin/README.md#python).
+- **[`xymonapi`](../xymonapi/README.md)**: on the server, the API; elsewhere,
+  its client library. Either install here brings the one it needs.
+- Python 3.9 or later; the modules in [`requirements.txt`](requirements.txt)
+  on the server and on a machine that keeps an index of its own.
 
-## On the Xymon server
+## Reference
 
-```sh
-XYMONHOME=/usr/lib/xymon/server ./xymon-plugin install --server xymonapi-rag
-```
+Every command, setting and file: [`xymonapi-rag.1`](xymonapi-rag.1).
 
-It installs the daily index task, off. To turn it on, put
-`XYMONAPI_RAG_DOCS` -- a directory with Xymon's manual pages;
-`/usr/share/man` will do -- in a file under `xymonserver.d/`, then run
-`XYMONHOME=... ./xymon-plugin enable --server xymonapi-rag`. The API's own task
-must run too, for the search to be served.
+- On the server, the index task reads the history with `xymonapi`'s code.
 
-The task reads the history from xymond's own files, as the API does, and
-needs no credential. Its first run downloads a 65 MB embedding model and
-takes about a minute; the next ones embed only what is new and take
-seconds. `XYMONAPI_RAG_OFFLINE` forbids the download once the cache is
-seeded. The index holds the last 30 days of history, the newest 5000
-changes at most, and the API serves it as soon as it is written.
+### On the Xymon server
 
-From a shell on the server, the installed launcher searches with no
-setting and no token when run through `xymoncmd`, which gives it Xymon's
-settings: as the Xymon user it reads the index where the task wrote it,
-and otherwise asks the API through its socket, `$XYMONRUNDIR/xymonapi/local/api.sock`
-(`xymonapi.8`, `XYMONAPI_SOCKET`):
+- Turn the task on as [`xymonapi-rag.1`](xymonapi-rag.1) says (`index`);
+  the API's own task must run too, for the search to be served.
+- The first index run takes about a minute; later runs take seconds.
+- `./xymon-plugin remove --server xymonapi-rag` keeps the index.
+- As the Xymon user, `search` reads the task's index; otherwise it asks the
+  API through `$XYMONRUNDIR/xymonapi/local/api.sock`. Without `xymoncmd`,
+  set `XYMONAPI_URL=unix:` followed by that path.
+
+### On your own machine
 
 ```sh
-xymoncmd /usr/lib/xymon/server/ext/xymonapi-rag/xymonapi-rag.sh search "what does purple mean"
-```
-
-Without `xymoncmd`, set `XYMONAPI_URL=unix:` followed by the socket's path.
-
-`./xymon-plugin remove --server xymonapi-rag` keeps the index, `$XYMONAPI_RAG_INDEX`.
-
-## On your own machine
-
-```sh
-cd xymon-plugins                             # the code: top README, Getting the code
-./xymon-plugin install --tools xymonapi-rag     # under ~/.local; PREFIX=... for elsewhere
 set -a; eval "$(xymonapi-connect https://xymon.example.ch)"; set +a
-xymonapi-rag search "what does purple mean"
-xymonapi-rag ask "has /boot filled up before, and where?"
 ```
 
-The URL is the API's as this machine reaches it, port included when it is
-not 443, as [`xymonapi`'s
-README](../xymonapi/README.md#reaching-it-from-another-machine) gives it.
-`xymonapi-connect`, installed with the API's client library, gets this machine its token
-with your password once, as [`xymonapi`'s
-README](../xymonapi/README.md#on-your-own-machine) says, and prints the
-settings `xymonapi-rag` reads; the `eval` puts them in the shell.
+- `xymonapi-connect`, installed with the API's client library, prints the
+  settings `xymonapi-rag` reads; the `eval` puts them in the shell.
+- The URL is the API's as this machine reaches it, port included when not
+  443 ([`xymonapi`'s README](../xymonapi/README.md#reaching-it-from-another-machine)).
+- It gets this machine its token with your password once
+  ([`xymonapi`'s README](../xymonapi/README.md#on-your-own-machine)).
+- `./xymon-plugin remove --tools xymonapi-rag` keeps any index here.
 
-`search` uses the server's index when there is none here. `ask` hands the
-passages to a language model speaking the OpenAI-compatible API -- a local
-Ollama by default, LM Studio with two settings. Pick the model with care: a
-small one such as `llama3.2` answers in a second but makes things up, where a
-larger one says when the passages do not hold the answer.
+### `ask` and `eval`
 
-`./xymon-plugin remove --tools xymonapi-rag` keeps any index here, `$XYMONAPI_RAG_INDEX`.
-
-`eval` scores the search against a file of questions;
-[`tests/eval/docs.json`](../../tests/eval/docs.json) is the one CI runs.
+- LM Studio works with two settings.
+- Pick the model with care: a small one such as `llama3.2` answers in a
+  second but makes things up; a larger one says when the passages do not
+  hold the answer.
+- [`tests/eval/docs.json`](../../tests/eval/docs.json) is the question file
+  CI runs.

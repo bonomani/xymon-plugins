@@ -1,71 +1,61 @@
 # xymonapi-mcp
 
-An MCP server: it gives an AI tool that speaks the Model Context Protocol
--- Claude Code, Claude Desktop, Codex, opencode and others -- read-only tools
-over the [Xymon API](../xymonapi/README.md): `health`, `alarms`, `alarm`,
-`hosts`, `series`, and two searches, `search_docs` and
-`search_history`, which ask the API's `/search`.
-Every tool and setting is in [`xymonapi-mcp.1`](xymonapi-mcp.1).
+An MCP server: read-only tools over the [Xymon API](../xymonapi/README.md)
+for an AI tool that speaks the Model Context Protocol -- Claude Code,
+Claude Desktop, Codex, opencode and others. The model is the AI tool's own;
+this plugin has none.
 
-- **On the Xymon server**: nothing runs; the plugin is staged for `/plugins`.
-- **On your own machine**: the MCP server, which your AI tool starts and
-  talks to over stdin and stdout. It is a server in MCP's vocabulary and a
-  command in this tree's: it runs where the AI tool runs, the Xymon server
-  included, and reads the API as any API client does. The model is the AI
-  tool's own; this plugin has none.
+## Installing it
 
-## Needs
+| part | where, as whom | command |
+|---|---|---|
+| tools | where the AI tool runs, as yourself | `./xymon-plugin install --tools xymonapi-mcp` |
+| server | the Xymon server, as its owner | `XYMONHOME=... ./xymon-plugin install --server xymonapi-mcp` |
 
-- **A running [`xymonapi`](../xymonapi/README.md)** on the Xymon server,
-  reached through its socket from that machine and over the network from
-  any other. `./xymon-plugin install --tools xymonapi-mcp` installs `xymonapi`'s client library beside
-  this plugin; the API itself is installed and enabled on the server, by its
-  own README or by this plugin's server install there.
-- Python 3.9 or later, and nothing else: it speaks the protocol with the
-  standard library.
-
-## On your own machine, where the AI tool runs
+Then, once, on the machine where the AI tool runs:
 
 ```sh
-cd xymon-plugins                             # the code: top README, Getting the code
-./xymon-plugin install --tools xymonapi-mcp     # under ~/.local; PREFIX=... for elsewhere
 xymonapi-mcp register https://xymon.example.ch
 ```
 
-The URL is the API's as this machine reaches it, port included when it is
-not 443 -- [`xymonapi`'s
-README](../xymonapi/README.md#reaching-it-from-another-machine) gives it for
-each way of reaching it. `register` connects this machine to the API with
-`xymonapi-connect` -- your password once, for a token of its own, as
-[`xymonapi`'s README](../xymonapi/README.md#on-your-own-machine) says -- then
-registers the server with Claude Code and Codex as `xymon`. Then ask your AI
-tool "which hosts are red?". `register URL xymon-lab` names a second
-server; an AI tool that is neither of those two is [registered by
-hand](#registering-it-by-hand).
+## Using it
 
-On the Xymon server itself, give `register` the API's socket instead of a
-URL, the one `install --server xymonapi` printed: `unix:/run/xymon/xymonapi/local/api.sock`
-where Xymon's runtime directory, `XYMONRUNDIR` in `xymonserver.cfg`, is
-`/run/xymon`. Nothing is asked and no token is
-kept, since the socket's permissions already say who may read the API
-(`xymonapi.8`, `XYMONAPI_SOCKET`).
+- Ask your AI tool, for instance "which hosts are red?".
+- Tools: `health`, `alarms`, `alarm`, `hosts`, `series`, and two searches,
+  `search_docs` and `search_history`.
+- On the Xymon server, `register` takes the API's socket instead of a URL:
+  `unix:/run/xymon/xymonapi/local/api.sock`.
+- An AI tool other than Claude Code and Codex: [register it by
+  hand](#registering-it-by-hand).
+- Every tool and setting: [`xymonapi-mcp.1`](xymonapi-mcp.1).
 
-`./xymon-plugin remove --tools xymonapi-mcp` removes this plugin and says what `register` did
-besides, to undo by hand: the registrations in Claude Code and Codex, and
-this machine's token.
+## Needs
 
-## On the Xymon server
+- A running [`xymonapi`](../xymonapi/README.md) on the Xymon server.
+- Python 3.9 or later, and nothing else.
 
-`XYMONHOME=... ./xymon-plugin install --server xymonapi-mcp` installs the API first, when it is not there,
-and stages this plugin in what the API serves at `/plugins`, for the
-machines above to install it from, at the server's version. It installs no
-command on the server: an MCP server runs where the AI tool runs.
+## Reference
 
-An AI tool that runs on the server machine itself is one of those
-machines: run `./xymon-plugin install --tools xymonapi-mcp` there as well, as yourself, and
-`register` with the API's socket, as above.
+Every tool, setting, message and exit status, and how `register` works:
+[`xymonapi-mcp.1`](xymonapi-mcp.1).
 
-## Registering it by hand
+### Installing and removing
+
+- `install --tools` puts it under `~/.local` (`PREFIX=...` for elsewhere),
+  with `xymonapi`'s client library beside it.
+- [`xymonapi`'s README](../xymonapi/README.md#reaching-it-from-another-machine)
+  gives the URL for each way of reaching the API.
+- `install --server` installs the API first when it is not there, then
+  stages this plugin, at the server's version, in what the API serves at
+  `/plugins`; it installs no command on the server.
+- On the server, the socket is the one `install --server xymonapi` printed;
+  the path above holds where `XYMONRUNDIR` is `/run/xymon`. Its permissions
+  decide who may read the API.
+- `./xymon-plugin remove --tools xymonapi-mcp` removes it, and says what
+  `register` did besides, to undo by hand: the registrations in Claude Code
+  and Codex, and this machine's token.
+
+### Registering it by hand
 
 For Claude Code, once, at user scope so every project has it:
 
@@ -79,10 +69,15 @@ claude mcp add --scope user xymon \
 For Codex, the same with `--env` for `-e` and no scope:
 `codex mcp add xymon --env ... -- ~/.local/bin/xymonapi-mcp`.
 
-Most other AI tools read this JSON: Claude Desktop in
-`claude_desktop_config.json`, Gemini CLI in `~/.gemini/settings.json`,
-Cursor in `~/.cursor/mcp.json`; VS Code reads `.vscode/mcp.json`, with
-`servers` for `mcpServers`. JSON expands nothing, so write the paths in full:
+Most other AI tools read the JSON below. JSON expands nothing, so write the
+paths in full.
+
+| AI tool | file |
+|---|---|
+| Claude Desktop | `claude_desktop_config.json` |
+| Gemini CLI | `~/.gemini/settings.json` |
+| Cursor | `~/.cursor/mcp.json` |
+| VS Code | `.vscode/mcp.json`, with `servers` for `mcpServers` |
 
 ```json
 {
@@ -98,25 +93,21 @@ Cursor in `~/.cursor/mcp.json`; VS Code reads `.vscode/mcp.json`, with
 }
 ```
 
-opencode reads its own form, in `~/.config/opencode/opencode.json` or a
-project's `opencode.json`: under `mcp`, with `"type": "local"`, the command
-as a list, and `environment` for `env`.
-
+- opencode reads its own form, in `~/.config/opencode/opencode.json` or a
+  project's `opencode.json`: under `mcp`, with `"type": "local"`, the command
+  as a list, and `environment` for `env`.
 - The token file holds what `POST /tokens` answers to one of the API's
-  [users](../xymonapi/README.md#users), alone, mode 600; it is the only
-  credential sent. Leave it out when the API asks for no password.
-- Add `XYMONAPI_CA` when the server's certificate is its own, and
-  `XYMONAPI_PYTHON` when the `python3` on `PATH` is older than 3.9 and no
-  virtualenv sits beside the plugins (`./xymon-plugin update --tools --venv` makes one).
+  [users](../xymonapi/README.md#users), alone, mode 600.
+- Leave the token file out when the API asks for no password.
 - For two Xymon servers, register twice, as `xymon-prod` and `xymon-lab`,
   each with its own URL and token file.
 
-## What it cannot do
+### What it cannot do
 
 - An AI tool in a web browser -- claude.ai, ChatGPT -- cannot use it: it
   reaches an MCP server from its provider's cloud, so the server would have
   to be open to the internet. Claude Desktop runs on your machine instead.
-- An online AI tool sends what the tools return to its provider. With a
+- An online AI tool sends what the tools return to its provider; with a
   local model -- opencode with LM Studio or Ollama, for instance -- nothing
-  leaves your network; a model too small reads the answers wrong.
-- The two searches answer an error until the server has an index.
+  leaves your network.
+- A model too small reads the answers wrong.
