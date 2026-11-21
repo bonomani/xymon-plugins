@@ -94,8 +94,7 @@ fi
 relay=${XYMONAPI_RELAY_SOCKET-${run:+$run/xymonapi/relay.sock}}
 
 cd "$here" || exit 1
-# By its full path, as the task names it: a restart finds the API by its
-# directory in the command line, pkill -f "$XYMONHOME/ext/xymonapi/", which
-# a bare app.py would not show.
+# By its full path, as the task names it: ps then shows which installation
+# runs, which a bare app.py would not.
 # shellcheck disable=SC2086 # tls is two options and their files, or nothing
 exec "$PYTHON" "`pwd`/app.py" --host "$host" --port "$port" ${sock:+--socket "$sock"} ${relay:+--relay-socket "$relay"} $tls

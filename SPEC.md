@@ -207,7 +207,8 @@ and the server's `tasks.cfg` reads `tasks.d/`, and off when the link is
 absent: xymonlaunch has the task exactly then. `enable` makes the link,
 `disable` removes it, and each says so when there is nothing to do.
 An install or update keeps the link and the file it names in place
-throughout -- the file replaced by a rename, never removed first -- so
+throughout -- the file replaced by a rename, never removed first; one that
+is itself a link, not the install's, is set aside and written anew -- so
 that xymonlaunch, reading `tasks.d/` meanwhile, never drops the task.
 Before it makes the link, `enable` looks for the line by which the
 server's `tasks.cfg` reads `tasks.d/`, a `directory` line naming it, as
@@ -534,8 +535,9 @@ for a script or a Xymon task to read.
 **S33. The plugins column says it on the server.**
 The `xymon-plugin` plugin installs, off as every task (S5), a task that the
 administrator turns on with `enable` (S13): once a day, after a wait drawn
-at random up to 6 hours -- after which it runs again from its file, in the
-same process, so that an update meanwhile has its code send --, it runs the
+at random up to 6 hours -- after which, when it waited, it runs again from
+its file, in the same process, so that an update meanwhile has its code
+send --, it runs the
 installer installed beside it,
 `outdated --server` (S32) without `gh` (`XYMON_PLUGINS_NO_GH`), which no
 time bounds -- xymonlaunch's `MAXTIME` stops the task, not what it started
@@ -556,8 +558,10 @@ rest itself.**
 A plugin's task names in `NEEDS` only a task its launcher knows when it
 reads the task: on the server, one of Xymon's own `tasks.cfg`, defined
 before the line that reads `tasks.d/`, as `xymond` -- never another
-plugin's, which xymonlaunch may read after it and then ignore, saying
-"unknown dependency" at each reload; a task of another part, when one
+plugin's: xymonlaunch resolves `NEEDS` while it reads, so a task read after
+is unknown at the first load and whenever its plugin is off -- the
+dependency then dropped, "unknown dependency" logged --, and, resolved, a
+task that stops by itself at each update (S7) would stop the one needing it; a task of another part, when one
 comes, one of that part's launcher (`clientlaunch.cfg`'s `client` on a
 client), or none where its launcher has no such thing (cron, launchd).
 What no launcher can wait for -- a server or an API elsewhere, files that

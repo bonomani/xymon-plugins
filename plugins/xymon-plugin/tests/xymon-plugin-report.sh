@@ -149,6 +149,20 @@ report "$work/odd/xymon-plugin-report.sh"
 assert_contains "1 of 6 plugins whose VERSION cannot be compared: f; 2 with a newer release published: b, d" "$(first_line "$(sent)")" "[S33] both said"
 assert_contains "  &yellow f: " "$(sent)" "its line yellow"
 
+# A directory outdated cannot read hides its plugins: the summary says it,
+# the line yellow, rather than counting none.
+cat > "$work/odd/xymon-plugin" <<'SH'
+#!/bin/sh
+echo "Xymon server /x:"
+echo "  cannot read the plugins in /x/ext: /x/ext is mode 700, owned by xymon. To fix: chmod 755 '/x/ext'"
+exit 7
+SH
+report "$work/odd/xymon-plugin-report.sh"
+assert_contains "yellow " "$(first_line "$(sent)")" "[S33] an unreadable ext/: yellow"
+assert_contains "cannot read the plugins in /x/ext" "$(first_line "$(sent)")" "[S33] the summary says why, not 0 of 0"
+assert_not_contains "0 of 0" "$(first_line "$(sent)")" "[S33] and counts nothing it could not read"
+assert_contains "  &yellow cannot read the plugins in /x/ext" "$(sent)" "[S33] its line yellow"
+
 XYMONFAIL=1 report
 assert_equal 1 "$RC" "[S33] a status that could not be sent ends the reporter with 1"
 assert_contains "could not send green to 0.0.0.0" "$(cat "$work/log")" "and the log says so"
@@ -237,6 +251,16 @@ PATH="$watch:$PATH" LINK="$link" WORK="$work" "$ROOT/xymon-plugin" update --serv
 [ -s "$work/dangling" ] && fail "[S13] during the update, tasks.d/'s link pointed nowhere: $(head -n 3 "$work/dangling")"
 [ "$(readlink "$link")" = "$home/ext/xymon-plugin/tasks.cfg" ] || fail "[S13] the update did not leave the task on"
 assert_contains "task is on, as it was" "$(cat "$work/update.log")" "[S13] and says so"
+# A name the update writes aside, planted as a hard link to a file outside
+# the plugin's directory, is not written through: the file outside keeps
+# what it holds.
+printf 'outside\n' > "$work/outside"
+ln "$work/outside" "$home/ext/.xymon-plugin.tasks.cfg"
+ln "$work/outside" "$ext/tasks.cfg.tmp"
+"$ROOT/xymon-plugin" update --server xymon-plugin XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
+	|| fail "update --server xymon-plugin failed: $(tail -n 5 "$work/update.log")"
+assert_equal "outside" "$(cat "$work/outside")" "the update wrote through a hard link planted beside the task file"
+
 # The same when this version's task file differs from the one installed,
 # unedited: it replaces it.
 for f in "$ext/tasks.cfg" "$ext/.shipped/tasks.cfg"; do printf '# an older version\n' >> "$f"; done

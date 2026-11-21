@@ -12,7 +12,8 @@ stop it: from 9.1.0 the API watches its `MANIFEST` and stops once an
 update rewrites it, and xymonlaunch starts the new code (S7). An API older
 than 9.1.0, running when you update it, does not watch: it keeps the code
 it started with until stopped. Once, after updating it to 9.1.0 or later,
-turn its task off and on, half a minute apart:
+turn its task off and on, 45 seconds apart -- xymonlaunch reads tasks.d/
+every 30 to 35 seconds, and must see the task gone --:
 `./xymon-plugin disable --server xymonapi`, then `enable`; or restart Xymon.
 
 ## The board is /alarms, one alarm per test, from xymonapi 9.0.0
