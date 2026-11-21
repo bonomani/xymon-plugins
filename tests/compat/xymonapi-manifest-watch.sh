@@ -69,4 +69,19 @@ rc=0; wait "$API_PID" || rc=$?
 API_PID=""
 assert_equal 0 "$rc" "[S7] and stops with 0"
 
-pass "the API installed stops by itself, with 0 and its socket taken away, once its MANIFEST is written again, and not while it is gone; started while it is gone, once it comes"
+# xymonapi-rag's MANIFEST, whose code /search imports: one that comes --
+# xymonapi-rag installed beside it -- stops the API too.
+start_api
+sleep 7
+kill -0 "$API_PID" 2>/dev/null || fail "[S7] the API stopped with nothing changed: $(tail -n 3 "$work/api.log")"
+mkdir -p "$work/inst/ext/xymonapi-rag"
+printf 'file\t1 1\txymonrag.py\n' > "$work/inst/ext/xymonapi-rag/MANIFEST"
+deadline=$(( $(date +%s) + 20 ))
+while kill -0 "$API_PID" 2>/dev/null && [ "$(date +%s)" -lt "$deadline" ]; do sleep 0.5; done
+kill -0 "$API_PID" 2>/dev/null && fail "[S7] the API still runs 20 seconds after xymonapi-rag's MANIFEST came"
+rc=0; wait "$API_PID" || rc=$?
+API_PID=""
+assert_equal 0 "$rc" "[S7] and stops with 0"
+assert_contains "xymonapi-rag/MANIFEST changed, an update" "$(cat "$work/api.log")" "[S7] saying which"
+
+pass "the API installed stops by itself, with 0 and its socket taken away, once its MANIFEST is written again, and not while it is gone; started while it is gone, once it comes; and once xymonapi-rag's comes"

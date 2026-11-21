@@ -159,11 +159,12 @@ from, the file stays as it is and this version's is written beside it as
 `NAME.new`, said with the `diff` to run. `verify` says a `.new` or `.old`
 left (S30).
 A long-running plugin takes up the update by itself: the API watches its
-`MANIFEST`, the update's last step (S29), and once it is written anew stops
+`MANIFEST` and xymonapi-rag's, whose code its `/search` loads, the update
+command's last step (S29), and once one is written anew stops
 as on SIGTERM, ending with 0, for xymonlaunch to start the new code if its
-task is on; while `MANIFEST` is gone, as during an update, and in a
-checkout, which has none, it goes on; started while it was gone, it stops
-once it is there.
+task is on; while one is gone, as during an update, and in a checkout,
+which has none, it goes on; started while one was gone, it stops once it
+is there.
 
 **S8. Removing takes away the plugin and its links.**
 The removal takes away the plugin's directory, its task link and its manual
@@ -421,7 +422,8 @@ it runs is declared here, and checked by its own tests with a scratch
 home.
 
 **S29. An install records what it wrote.**
-The last step of an install or an update writes `MANIFEST` in the
+The last step of an install or an update command -- once every plugin it
+installs, and the virtualenv they share, are in place -- writes `MANIFEST` in each
 plugin's directory, beside `VERSION` and `PLUGIN`: one line for each file
 and link it wrote, its fields separated by tabs. A file is
 `file⇥CKSUM SIZE⇥PATH`, `CKSUM SIZE` what `cksum` gives, with `⇥admin`

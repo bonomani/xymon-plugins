@@ -937,7 +937,8 @@ mf_dir() {
 }
 
 # manifest DIR -- write what the lines on standard input say into
-# DIR/MANIFEST, the install's last step: a new file, moved in place.
+# DIR/MANIFEST, the command's last step (manifests): a new file, moved in
+# place.
 manifest() {
 	cat > "$1/.MANIFEST.new" && chmod 644 "$1/.MANIFEST.new" && mv -f "$1/.MANIFEST.new" "$1/MANIFEST" || exit 1
 }
@@ -1715,6 +1716,14 @@ venv() {
 }
 
 DONE=
+# The plugins this command installed, whose MANIFEST it writes at its end.
+MANIFESTS=
+# manifests -- write them, the command's last step (S29).
+manifests() {
+	for n in $MANIFESTS; do
+		if [ "$PART" = server ]; then manifest_server "$n"; else manifest_tools "$n"; fi
+	done
+}
 install_server() {
 	case " $DONE " in *" $1 "*) return 0 ;; esac
 	# Installed already, and not updating: --all, or a plugin needed,
@@ -1806,11 +1815,11 @@ install_server() {
 	fi
 	selinux "$1"
 	venv_auto "$1" "$EXTROOT" "$(field "$1" server-modules)" --server ""
-	# The last step (S29), once the modules are there: what watches
-	# MANIFEST to take up new code -- the API stops, and xymonlaunch starts
-	# it again (S7) -- then finds what that code needs. No process is
-	# looked for.
-	manifest_server "$1"
+	# MANIFEST is written once the whole command is done (S29): what
+	# watches it to take up new code -- the API stops, and xymonlaunch
+	# starts it again (S7) -- then finds every plugin of the command and
+	# the virtualenv they share in place. No process is looked for.
+	MANIFESTS="$MANIFESTS $1"
 	DONE="$DONE $1"
 }
 
@@ -1852,7 +1861,7 @@ install_tools() {
 	manual "$1" "$(field "$1" tools-manual)" "$dir" "$PREFIX/share/man" "$PREFIX/libexec/xymon-plugins/$1"
 	version "$1" "$dir"
 	venv_auto "$1" "$TOOLSROOT" "$(echo $(field "$1" tools-modules) $(field "$1" tools-optional-modules))" --tools "$(field "$1" venv-note)"
-	manifest_tools "$1"
+	MANIFESTS="$MANIFESTS $1"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$dir/VERSION") in $PREFIX/libexec/xymon-plugins/$1."
 	# Said once, and not under DESTDIR, where PATH is the build machine's.
@@ -2439,7 +2448,8 @@ case $VERB in
 			for n in $LIST; do [ -n "$(field "$n" server-files)" ] || [ -n "$NAMES" ] || continue; install_server "$n"; done
 		else
 			for n in $LIST; do [ -n "$(field "$n" tools-files)" ] || [ -n "$NAMES" ] || continue; install_tools "$n"; done
-		fi ;;
+		fi
+		manifests ;;
 	update)
 		UPDATING=1
 		for n in $LIST $NAMES; do [ ! -f "$ROOT/plugins/$n/PLUGIN" ] || declared_ok "$n"; done
@@ -2456,7 +2466,8 @@ case $VERB in
 			for n in $LIST; do install_server "$n"; done
 		else
 			for n in $LIST; do install_tools "$n"; done
-		fi ;;
+		fi
+		manifests ;;
 	enable|disable)
 		# A plugin named with no task is refused; with none named, those
 		# with no task are passed over.
