@@ -21,7 +21,7 @@ and setting.
 | [`xymonapi-mcp`](xymonapi-mcp/README.md) | an MCP server that gives an AI tool read-only tools over the API |
 | [`xymonapi-rag`](xymonapi-rag/README.md) | a search of Xymon's manual pages and history by meaning: the index on the server, `search` and `ask` anywhere |
 | [`xymonapi-agent`](xymonapi-agent/README.md) | one command that asks an AI CLI a question about Xymon, with the MCP server as its only tool; on the server, the API's `/ask` |
-| [`xymon-plugin`](xymon-plugin/README.md) | the installer itself, `./xymon-plugin` at the top being a link to it: installed on the server, its version is known like the others' |
+| [`xymon-plugin`](xymon-plugin/README.md) | the installer itself, `./xymon-plugin` at the top being a link to it: installed on the server, its version is known like the others', and its task sends the `plugins` column |
 
 ## Getting the code from the server
 

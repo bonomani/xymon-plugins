@@ -46,6 +46,36 @@ Every verb and setting is described in the repository's
 .I README.md
 and
 .IR plugins/README.md .
+.SH THE PLUGINS COLUMN
+Installed on a server, it brings a task, off until
+.B "./xymon-plugin enable --server xymon-plugin"
+turns it on. Once a day, after a wait drawn at random up to 6 hours, its
+reporter,
+.IR xymon-plugin-report.sh ,
+runs the installer installed beside it,
+.BR "outdated --server" ,
+and sends this host's status
+.BR plugins ,
+valid 31 hours, with
+.BR outdated 's
+lines: green when no newer release of a plugin installed is published;
+yellow when one is, a plugin's
+.I VERSION
+cannot be compared, or
+.B outdated
+ends otherwise; nothing when GitHub is not reached, so that the status goes
+purple once 31 hours have passed since the last one, as when a restart of
+xymond stops the task while it waits. It reads GitHub with
+.BR curl ,
+bounded in time, not
+.BR gh .
+Its log is
+.IR xymon-plugin.log ,
+in Xymon's log directory. Yellow and purple alert as any column:
+.B EXSERVICE=plugins
+in
+.I alerts.cfg
+keeps it out of a rule.
 .SH OPTIONS
 .TP
 .B --version
@@ -54,6 +84,24 @@ The installer's version: its
 file's, beside it when installed, under
 .I plugins/xymon-plugin/
 in a checkout or an archive.
+.SH ENVIRONMENT
+.TP
+.B https_proxy, GH_TOKEN
+Read by the task where a file under
+.I xymonserver.d/
+sets them: the proxy to reach GitHub, and a token, which
+.B curl
+is given on its standard input.
+.TP
+.B XYMON_PLUGINS_WAIT, XYMON_PLUGINS_TIMEOUT
+The reporter's longest wait, and the bound of each request
+.B curl
+or GNU
+.B wget
+makes, in seconds: for the tests.
+.B gh
+has none; the task leaves it out
+.RB ( XYMON_PLUGINS_NO_GH ).
 .SH EXIT STATUS
 0 on success, 1 on an error, 2 for a usage error;
 .B verify
@@ -68,5 +116,11 @@ says.
 .TP
 .I $XYMONHOME/ext/xymon-plugin/
 The installer, installed on a server.
+.TP
+.I $XYMONHOME/ext/xymon-plugin/tasks.cfg
+Its task, which
+.B enable
+links into
+.IR tasks.d/ .
 .SH SEE ALSO
 .BR xymonapi (8)
