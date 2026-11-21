@@ -15,7 +15,7 @@
 # under PREFIX, with two commands in bin that run them from there, and
 # xymonapi's client alone beside them, not the API. Installing
 # again replaces each plugin's directory, so a file no longer shipped is
-# gone, and says to restart the API; the client's virtualenv beside the
+# gone; the client's virtualenv beside the
 # plugins is kept. A plugin installed alone brings the plugins it needs
 # beside it: xymonapi-rag on the server, the API with its client. The
 # uninstall refuses a plugin another installed one needs, removes each
@@ -87,7 +87,7 @@ closed=$(find "$home/ext" "$work/man" -type d ! -perm -0055)
 assert_equal "" "$closed" "the directories made under umask 077 are readable by every user"
 
 # An update replaces each plugin's directory: a file the new version no
-# longer ships does not stay behind, and the install says to restart the API.
+# longer ships does not stay behind.
 echo 'stale' > "$home/ext/xymonapi/gone.py"
 echo 'stale' > "$home/ext/xymonapi-rag/gone.py"
 # What an install made under umask 077 by an older installer left closed --
@@ -329,5 +329,20 @@ for f in bin/xymonapi-mcp bin/xymonapi-rag share/man/man1/xymonapi-mcp.1 share/m
 	[ -e "$prefix/$f" ] && fail "xymon-plugin remove --tools left $f"
 done
 assert_contains "claude mcp remove" "$(cat "$work/unclient.log")" "uninstall-tools says what register did besides"
+
+# An install looks for no process (S7): one whose command line names the
+# API's program, as the API's does, gets no signal: it notes a SIGTERM. It
+# is this test's own child, stopped after with SIGKILL, which it cannot
+# note, by the PID the shell gave it.
+"${XYMONAPI_PYTHON:-python3}" -c 'import signal, sys, time
+signal.signal(signal.SIGTERM, lambda *a: (open(sys.argv[1], "w").close(), sys.exit(0)))
+time.sleep(300)' "$work/decoy.term" "$home/ext/xymonapi/app.py" &
+decoy=$!
+"$ROOT/xymon-plugin" install --server xymonapi XYMONHOME="$home" MANDIR="$work/man" >"$work/update2.log" 2>&1 \
+	|| { kill -9 "$decoy"; fail "the install failed: $(tail -n 5 "$work/update2.log")"; }
+sleep 1
+kill -9 "$decoy" 2>/dev/null || :; wait "$decoy" 2>/dev/null || :
+[ -e "$work/decoy.term" ] && fail "[S7] the install sent SIGTERM to a process that names the API's program"
+assert_not_contains "signal to stop" "$(cat "$work/update2.log")" "[S7] and says it sent no signal"
 
 pass "./xymon-plugin install --server puts the server plugins in ext/ with tasks off and its web server snippets, keeps what the admin edited, takes odd directory names, replaces each plugin's directory on update; install-tools lays out the client side; uninstall removes them, refusing one another needs"

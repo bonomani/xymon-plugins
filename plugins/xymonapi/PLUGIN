@@ -25,9 +25,8 @@ manual: xymonapi.8
 # (SPEC, S28).
 # xymon is the lowest Xymon its server side works with.
 # executable lists the files made 755, the others 644; command is the
-# tools' command in $PREFIX/bin and the script it runs; task, conf and
-# restart are the server's xymonlaunch task, web server snippets kept once
-# written, and the program whose running process an install stops;
+# tools' command in $PREFIX/bin and the script it runs; task and conf are
+# the server's xymonlaunch task and web server snippets kept once written;
 # conf-stock a snippet as an earlier version shipped it, by its cksum, which
 # an install that finds it unedited replaces by this version's; selinux the
 # plugin's SELinux module, NAME.cil among the server's files, loaded where
@@ -47,7 +46,6 @@ conf-stock: xymonapi-lighttpd.conf 1373871735 694
 conf-stock: xymonapi-apache.conf 2713648629 1136
 conf-stock: xymonapi-nginx.conf 3093070464 658
 conf-stock: xymonapi-lighttpd.conf 1394800773 787
-restart: app.py
 selinux: xymonapi.cil
 installed: Installed. For other machines, include @XYMONHOME@/ext/xymonapi/xymonapi-{apache,nginx,lighttpd}.conf in the web server,
 installed:   so that it is skipped once gone -- IncludeOptional on Apache, a wildcard (xymonapi-nginx*.conf, xymonapi-lighttpd*.conf) on nginx and lighttpd --

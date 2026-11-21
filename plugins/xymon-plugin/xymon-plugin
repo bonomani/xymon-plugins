@@ -1532,30 +1532,6 @@ selinux() {
 	fi
 }
 
-# restart PLUGIN -- a process that runs the plugin's program from this
-# install keeps the code it loaded: stop it, and xymonlaunch starts the new.
-# Found by its command line, which names the program by its full path,
-# escaped for pgrep's regular expressions, as a directory may hold a | or a
-# dot. With DESTDIR the path is the staging one, which nothing runs from.
-restart() {
-	prog=$(field "$1" restart); [ -n "$prog" ] || return 0
-	if ! command -v pgrep >/dev/null 2>&1; then
-		echo "pgrep is missing: $1's $prog was not looked for; if it runs, it keeps the code it started with until it is stopped." >&2
-		return 0
-	fi
-	pat=$(printf '%s/%s' "$EXTROOT/$1" "$prog" | sed -e 's/[][\\.*^$|+?(){}]/\\&/g')
-	pids=$(echo $(pgrep -f "$pat" | grep -vx "$$"))
-	[ -n "$pids" ] || return 0
-	case $pids in *" "*) p="PIDs $pids" ;; *) p="PID $pids" ;; esac
-	# What is said is what was done: a signal sent, not waited for; a task
-	# started again only if it is on.
-	if kill $pids 2>/dev/null; then
-		echo "Sent $1's $prog ($p) the signal to stop, so that it runs the code just installed: if its task is on, xymonlaunch starts it again."
-	else
-		echo "Could not send $1's $prog ($p) the signal to stop: it may still run the code it started with; stop it by hand (kill $pids), and if its task is on, xymonlaunch starts it again." >&2
-	fi
-}
-
 # fetch_ok QUESTION -- true when fetching modules from PyPI is allowed:
 # --venv given, or, on a terminal, QUESTION answered y.
 fetch_ok() { [ -n "$VENV_FETCH" ] || offer "$1"; }
@@ -1831,9 +1807,10 @@ install_server() {
 	selinux "$1"
 	venv_auto "$1" "$EXTROOT" "$(field "$1" server-modules)" --server ""
 	# The last step (S29), once the modules are there: what watches
-	# MANIFEST to take up new code then finds what that code needs.
+	# MANIFEST to take up new code -- the API stops, and xymonlaunch starts
+	# it again (S7) -- then finds what that code needs. No process is
+	# looked for.
 	manifest_server "$1"
-	restart "$1"
 	DONE="$DONE $1"
 }
 
