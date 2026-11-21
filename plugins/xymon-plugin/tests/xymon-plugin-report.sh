@@ -48,7 +48,14 @@ bin=$work/bin; mkdir -p "$bin"
 cat > "$bin/xymon" <<'SH'
 #!/bin/sh
 [ -n "${XYMONFAIL:-}" ] && { echo "Could not connect to Xymon daemon@$1" >&2; exit 5; }
-printf '%s\n' "$2" > "$WORK/sent"
+case $2 in
+xymondboard*)
+	# What xymond kept: the colour sent, unless XYMONDROP says it kept
+	# nothing, as for a host hosts.cfg does not name.
+	printf '%s\n' "$2" >> "$WORK/asked"
+	[ -n "${XYMONDROP:-}" ] || sed -n '1s/^status+[^ ]* [^ ]* \([a-z]*\) .*/\1/p' "$WORK/sent" ;;
+*) printf '%s\n' "$2" > "$WORK/sent" ;;
+esac
 SH
 cat > "$bin/gh" <<'SH'
 #!/bin/sh
@@ -112,10 +119,20 @@ XYMONFAIL=1 report
 assert_equal 1 "$RC" "[S33] a status that could not be sent ends the reporter with 1"
 assert_contains "could not send green to 0.0.0.0" "$(cat "$work/log")" "and the log says so"
 
-# MACHINE, as xymonlaunch gives it, is the host's name.
-RC=0; PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=srv.example.com MACHINE=other,host \
+# MACHINEDOTS names the host, the server's name in xymonserver.cfg, the one
+# hosts.cfg knows: not MACHINE, which may be the system's name instead, as
+# with Homebrew's Xymon (localhost against bcs-Mac-mini,local).
+RC=0; PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=localhost MACHINE=bcs-Mac-mini,local \
 	XYMON_PLUGINS_WAIT=0 "$ext/xymon-plugin-report.sh" >"$work/log" 2>&1 || RC=$?
-assert_contains "status+31h other,host.plugins green " "$(first_line "$(sent)")" "[S33] MACHINE names the host when given"
+assert_contains "status+31h localhost.plugins green " "$(first_line "$(sent)")" "[S33] MACHINEDOTS names the host, not MACHINE"
+assert_contains "xymondboard host=localhost test=plugins" "$(cat "$work/asked")" "[S33] and the status is read back for it"
+
+# A status xymond does not keep -- a host hosts.cfg does not name -- is
+# said, and ends the reporter with 1: xymon itself ends with 0 then.
+XYMONDROP=1 report
+assert_equal 1 "$RC" "[S33] a status xymond did not keep ends the reporter with 1"
+assert_contains "which xymond did not keep: is srv.example.com in hosts.cfg?" "$(cat "$work/log")" "[S33] and the log says so"
+assert_equal 0 "$(grep -c '; sent green$' "$work/log" || true)" "and does not say it was sent"
 
 # The wait: drawn up to XYMON_PLUGINS_WAIT seconds, each run.
 rm -f "$work/slept"

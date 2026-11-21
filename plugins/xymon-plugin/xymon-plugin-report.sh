@@ -16,9 +16,11 @@
 #      passed since it was sent
 #   any other: yellow, saying so
 #
-# outdated's lines follow the first line of the status. It needs the Xymon
-# server's environment xymonlaunch gives (ENVFILE xymonserver.cfg): XYMON,
-# XYMSRV, XYMONHOME, MACHINEDOTS. What it does goes to its log, one line a
+# outdated's lines follow the first line of the status, which is for
+# MACHINEDOTS, the server's name in xymonserver.cfg; read back, a status
+# xymond did not keep is said. It needs the Xymon server's environment
+# xymonlaunch gives (ENVFILE xymonserver.cfg): XYMON, XYMSRV, XYMONHOME,
+# MACHINEDOTS. What it does goes to its log, one line a
 # run. XYMON_PLUGINS_WAIT, the longest wait in seconds, for the tests.
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -28,7 +30,11 @@ for v in XYMON XYMSRV XYMONHOME MACHINEDOTS; do
 	eval "val=\${$v:-}"
 	if [ -z "$val" ]; then log "$v is not set: run as the task, with ENVFILE xymonserver.cfg"; exit 1; fi
 done
-host=${MACHINE:-$(printf '%s' "$MACHINEDOTS" | tr . ,)}
+# The server's name as xymonserver.cfg gives it, MACHINEDOTS -- the one
+# hosts.cfg knows it by, and its own columns go under -- not MACHINE,
+# which may be the system's name instead (Homebrew's Xymon: localhost
+# against bcs-Mac-mini,local), under which xymond would keep nothing.
+host=$(printf '%s' "$MACHINEDOTS" | tr . ,)
 
 # The wait: 0 to max seconds, from /dev/urandom where it is, else from the
 # host, the PID and the time.
@@ -62,12 +68,21 @@ case $rc in
 		exit 0 ;;
 	*) color=yellow summary="outdated ended with $rc" ;;
 esac
-if "$XYMON" "$XYMSRV" "status+31h $host.plugins $color $(date) $summary
+if ! "$XYMON" "$XYMSRV" "status+31h $host.plugins $color $(date) $summary
 
 $out"; then
-	log "waited ${wait_s}s; outdated ended with $rc; sent $color"
-else
 	log "waited ${wait_s}s; outdated ended with $rc; could not send $color to $XYMSRV"
 	exit 1
 fi
+# xymon ends with 0 even where xymond keeps nothing -- a host hosts.cfg
+# does not name: read it back.
+if ! kept=$("$XYMON" "$XYMSRV" "xymondboard host=$MACHINEDOTS test=plugins fields=color" 2>&1); then
+	log "waited ${wait_s}s; outdated ended with $rc; sent $color, which could not be read back: $kept"
+	exit 0
+fi
+if [ "$kept" != "$color" ]; then
+	log "waited ${wait_s}s; outdated ended with $rc; sent $color for $MACHINEDOTS, which xymond did not keep: is $MACHINEDOTS in hosts.cfg?"
+	exit 1
+fi
+log "waited ${wait_s}s; outdated ended with $rc; sent $color"
 exit 0
