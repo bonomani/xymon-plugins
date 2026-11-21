@@ -42,13 +42,15 @@ SH
 cat > "$bin/curl" <<'SH'
 #!/bin/sh
 [ "${CURL:-}" = fail ] && { echo "curl: (6) Could not resolve host: api.github.com" >&2; exit 6; }
+printf '%s\n' "$*" > "$WORK/curl.args"
+[ "${CURL:-}" = timeout ] && { echo "curl: (28) Operation timed out after 1000 milliseconds" >&2; exit 28; }
 # Never more than 70 calls in a run: a loop that does not stop fails, not
 # hangs.
 echo x >> "$WORK/curl.calls"
 [ "$(wc -l < "$WORK/curl.calls")" -le 70 ] || { echo "curl: called more than 70 times" >&2; exit 99; }
 for a; do u=$a; done
 n=${u##*page=}
-if [ -f "$WORK/pageall.json" ]; then cat "$WORK/pageall.json"
+if [ -f "$WORK/pageall.json" ] && [ "$n" -le "${PAGES:-999}" ]; then cat "$WORK/pageall.json"
 elif [ -f "$WORK/page$n.json" ]; then cat "$WORK/page$n.json"; else echo '[]'; fi
 SH
 chmod 755 "$bin/gh" "$bin/curl"
@@ -119,8 +121,11 @@ page all $filler
 GH=fail run
 assert_equal 1 "$RC" "past 6000 releases: 1"
 assert_contains "more than the 6000 releases outdated reads without gh" "$(cat "$work/err")" "and says so"
-assert_equal 60 "$(wc -l < "$work/curl.calls" | tr -d ' ')" "after 60 pages read"
+assert_equal 61 "$(wc -l < "$work/curl.calls" | tr -d ' ')" "the 61st page read, and found full"
 assert_not_contains "installed" "$(out)" "listing nothing"
+# 6000 exactly, sixty full pages and an empty one: read, not refused.
+PAGES=60 GH=fail run
+assert_equal 0 "$RC" "6000 releases exactly, the 61st page empty: read ($(cat "$work/err"))"
 rm -f "$work/pageall.json"
 
 # Neither reaching GitHub: said, 1, nothing listed.
@@ -144,6 +149,15 @@ run
 assert_contains "xymonapi-rag: its VERSION holds no version" "$(out)" "another plugin's tag is no version of this one"
 cp "$work/VERSION.kept" "$v"
 
+# Each request curl makes is bounded in time; one that runs out of it is
+# GitHub not reached.
+tags "xymonapi/v$api"; page 1 "xymonapi/v$api"
+GH=fail XYMON_PLUGINS_TIMEOUT=1 run
+assert_contains "--max-time 1" "$(cat "$work/curl.args")" "[S32] curl is given its bound"
+CURL=timeout GH=fail run
+assert_equal 1 "$RC" "[S32] a curl that runs out of time is GitHub not reached: 1"
+assert_contains "Operation timed out" "$(cat "$work/err")" "and says so"
+rm -f "$work/page1.json"
 # It changes nothing: the install is as it was.
 "$ROOT/xymon-plugin" verify --tools PREFIX="$prefix" >"$work/verify.log" 2>&1 || fail "[S32] verify after outdated: $(tail -n 5 "$work/verify.log")"
 

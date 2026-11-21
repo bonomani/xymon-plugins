@@ -506,7 +506,10 @@ released; none released; or, its `VERSION` holding no version, that
 with `gh` when it answers, drafts left out as an anonymous reader does not
 see them; otherwise GitHub's API, anonymously, through `curl` or `wget`, at
 most 60 pages of a hundred, as many as GitHub answers, from one address, in
-an hour. It ends with 1, saying why, when none reaches GitHub, when there are
+an hour; each request of `curl`, and of GNU `wget`, bounded in time, one
+that runs out of it being GitHub not reached -- `gh` has no such bound, the
+task that runs `outdated` being bounded by xymonlaunch. It ends with 1,
+saying why, when none reaches GitHub, when there are
 more releases than that, or when a `VERSION` cannot be read. Otherwise it
 ends with 6 when it said of a plugin that a newer release exists, and with
 0 when it said of none -- for a script or a Xymon task to read.

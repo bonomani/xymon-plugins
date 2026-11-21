@@ -505,6 +505,13 @@ client_home() {
 
 # The repository the plugins are released from.
 REPO="xymon-monitoring/xymon-plugins"
+# How long one request to GitHub may take, in seconds, where curl or GNU
+# wget can bound it: a network that answers nothing must not hold outdated
+# forever. gh has no such bound; the plugins column's task is bounded by
+# xymonlaunch's MAXTIME, and outdated run by hand by an interrupt.
+# XYMON_PLUGINS_TIMEOUT, for the tests.
+NET_T=${XYMON_PLUGINS_TIMEOUT:-30}
+case $NET_T in ''|*[!0-9]*|0) NET_T=30 ;; esac
 
 # releases -- the plugins' published releases, "NAME X.Y.Z" a line, from
 # GitHub: with gh when it answers, drafts left out as an anonymous reader
@@ -536,9 +543,14 @@ anon_releases() {
 	while :; do
 		u="https://api.github.com/repos/$REPO/releases?per_page=100&page=$page"
 		if command -v curl >/dev/null 2>&1; then
-			j=$(curl -fsSL -H 'Accept: application/vnd.github+json' "$u" 2>&1) || die "cannot read $u: $j"
+			j=$(curl -fsSL --connect-timeout 10 --max-time "$NET_T" -H 'Accept: application/vnd.github+json' "$u" 2>&1) \
+				|| die "cannot read $u: $j"
 		elif command -v wget >/dev/null 2>&1; then
-			j=$(wget -q -O - "$u") || die "cannot read $u: wget failed (exit status $?)"
+			# GNU wget's -T; busybox's has none.
+			wv=$(wget --version 2>/dev/null) || wv=
+			case $wv in *"GNU Wget"*) wt="-T $NET_T -t 1" ;; *) wt= ;; esac
+			# shellcheck disable=SC2086 # wt is options or nothing
+			j=$(wget -q $wt -O - "$u") || die "cannot read $u: wget failed (exit status $?)"
 		elif [ -n "${GHFAILED:-}" ]; then
 			die "gh could not read the releases from GitHub, and neither curl nor wget is here to read them"
 		else
@@ -547,13 +559,14 @@ anon_releases() {
 		t=$(printf '%s\n' "$j" | tr ',' '\n' \
 			| sed -n 's/^[][{[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*$/\1/p')
 		[ -n "$t" ] || break
+		# ponytail: 60 pages, as many as GitHub answers, from one address,
+		# in an hour; a 61st with releases on it is said rather than a
+		# partial list -- an empty one, 6000 exactly, is not.
+		[ "$page" -le 60 ] || die "github.com/$REPO has more than the 6000 releases outdated reads without gh: read them with gh, logged in"
 		all="$all$t
 "
 		# A page short of a hundred is the last.
 		[ "$(printf '%s\n' "$t" | wc -l)" -ge 100 ] || break
-		# ponytail: 60 pages, as many as GitHub answers, from one address,
-		# in an hour; past them, said rather than a partial list.
-		[ "$page" -lt 60 ] || die "github.com/$REPO has more than the 6000 releases outdated reads without gh: read them with gh, logged in"
 		page=$((page + 1))
 	done
 	printf '%s' "$all"
