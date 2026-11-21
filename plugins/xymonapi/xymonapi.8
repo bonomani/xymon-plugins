@@ -17,6 +17,10 @@ from the task file \fBext/xymonapi/tasks.cfg\fR, once
 \fB./xymon-plugin enable --server xymonapi\fR has linked it from
 \fBtasks.d/xymonapi.cfg\fR beside tasks.cfg; its installation makes no link.
 xymonlaunch starts it once xymond is running, and restarts it if it stops.
+An update takes effect by itself: the API checks every five seconds whether
+\fBext/xymonapi/MANIFEST\fR, an install's last step, was written anew, and
+then stops, ending with 0, for xymonlaunch to start the new code; one
+started while it was gone stops once it is there.
 
 It needs Xymon 4.3.31 or later: its settings go in xymonserver.d/, which
 Xymon reads from 4.3.31. On 4.3.30 a file there is ignored, password
@@ -53,7 +57,7 @@ each path's answers, are openapi.yaml's, installed beside the API.
 Each version under what it is the version of:
 {"api":{"version":"7.0.0"},"xymond":{"alive":true,"version":"4.3.32-dev","answer":"xymond 4.3.32-dev"},...}.
 api.version is the version of the code this process runs, read when it
-started -- an install it was not restarted for does not change it -- as
+started -- it stops for an install, which xymonlaunch then starts -- as
 X.Y.Z, a release tag xymonapi/vX.Y.Z given as its X.Y.Z; null when the API
 was not installed. xymonapi-connect(1) compares it with the client's own.
 xymond.alive says whether xymond answered a ping, xymond.answer what it

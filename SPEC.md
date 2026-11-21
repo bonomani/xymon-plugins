@@ -158,6 +158,12 @@ under `DESTDIR`, on a conflict, or without `diff3` or a version to start
 from, the file stays as it is and this version's is written beside it as
 `NAME.new`, said with the `diff` to run. `verify` says a `.new` or `.old`
 left (S30).
+A long-running plugin takes up the update by itself: the API watches its
+`MANIFEST`, the update's last step (S29), and once it is written anew stops
+as on SIGTERM, ending with 0, for xymonlaunch to start the new code if its
+task is on; while `MANIFEST` is gone, as during an update, and in a
+checkout, which has none, it goes on; started while it was gone, it stops
+once it is there.
 
 **S8. Removing takes away the plugin and its links.**
 The removal takes away the plugin's directory, its task link and its manual
