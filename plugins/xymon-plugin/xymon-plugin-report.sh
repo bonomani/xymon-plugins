@@ -68,10 +68,30 @@ fi
 # when it is set.
 out=$(XYMON_PLUGINS_NO_GH=1 "$here/xymon-plugin" outdated --server 2>&1)
 rc=$?
+# Each plugin's line, "  NAME: ...", gets the colour it gives, which the
+# status page shows as an icon: green up to date, newer than its latest
+# release, or with none published; yellow with a newer one released, or
+# with a VERSION that cannot be compared. The summary counts them.
+marked=$(printf '%s\n' "$out" | awk '
+	/^  [^ ]+: / {
+		c = "yellow"
+		if ($0 ~ /; up to date$/ || $0 ~ /; newer than its latest release, / || $0 ~ /; no release of it is published$/) c = "green"
+		print "  &" c " " substr($0, 3); next
+	}
+	{ print }')
+# names RE -- the yellow lines' plugins whose text after "NAME:" matches RE,
+# one per line.
+names() { printf '%s\n' "$marked" | sed -n "s/^  &yellow \([^ :]*\):$1.*/\1/p"; }
+# joined LINES -- them on one line, separated by ", ".
+joined() { printf '%s\n' "$1" | awk 'NF { printf "%s%s", (n++ ? ", " : ""), $0 }'; }
+n=$(printf '%s\n' "$marked" | grep -c '^  &') || :
+newer=$(names '.* released: '); k=$(printf '%s' "$newer" | grep -c .) || :; newer=$(joined "$newer")
+bad=$(names ' [^0-9]'); m=$(printf '%s' "$bad" | grep -c .) || :; bad=$(joined "$bad")
+if [ "$n" = 1 ]; then of="1 plugin"; else of="$n plugins"; fi
 case $rc in
-	0) color=green summary="no newer release is published" ;;
-	6) color=yellow summary="a newer release is published" ;;
-	7) color=yellow summary="a plugin's VERSION cannot be compared" ;;
+	0) color=green summary="$of: no newer release is published" ;;
+	6) color=yellow summary="$k of $of with a newer release published: $newer" ;;
+	7) color=yellow summary="$m of $of whose VERSION cannot be compared: $bad${newer:+; $k with a newer release published: $newer}" ;;
 	1)
 		log "waited ${wait_s}s; outdated ended with 1, nothing sent: $(printf '%s' "$out" | tr '\n' ' ')"
 		exit 0 ;;
@@ -79,7 +99,7 @@ case $rc in
 esac
 if ! "$XYMON" "$XYMSRV" "status+31h $host.plugins $color $(date) $summary
 
-$out"; then
+$marked"; then
 	log "waited ${wait_s}s; outdated ended with $rc; could not send $color to $XYMSRV"
 	exit 1
 fi

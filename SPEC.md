@@ -541,7 +541,9 @@ installer installed beside it,
 time bounds -- xymonlaunch's `MAXTIME` stops the task, not what it started
 -- and sends the server's status `plugins` -- for `MACHINEDOTS`, its name
 in `xymonserver.cfg` and `hosts.cfg`, not `MACHINE`, which may be the
-system's -- valid 31 hours, with `outdated`'s lines: green for 0, no newer
+system's -- valid 31 hours, with `outdated`'s lines, each plugin's with
+its colour's icon (`&green`, `&yellow`), and a first line counting the
+plugins and naming those behind: green for 0, no newer
 release published; yellow for 6, 7 or any other status, saying which;
 nothing for 1 -- GitHub not reached, or `outdated` unable to run -- so that
 the status there stays, and goes purple once 31 hours have passed since it
