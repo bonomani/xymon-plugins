@@ -5,6 +5,16 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## The API takes up an update by itself, from xymonapi 9.1.0
+
+`./xymon-plugin update --server` no longer looks for the API's process to
+stop it: from 9.1.0 the API watches its `MANIFEST` and stops once an
+update rewrites it, and xymonlaunch starts the new code (S7). An API older
+than 9.1.0, running when you update it, does not watch: it keeps the code
+it started with until stopped. Once, after updating it to 9.1.0 or later,
+turn its task off and on, half a minute apart:
+`./xymon-plugin disable --server xymonapi`, then `enable`; or restart Xymon.
+
 ## The board is /alarms, one alarm per test, from xymonapi 9.0.0
 
 **One resource.** The board is `/alarms`, as TMF642 has `/alarm` and
