@@ -138,6 +138,18 @@ assert_contains 'web.example.com http' \
 	"$("$ROOT/plugins/xymonapi-rag/xymonapi-rag.sh" search -k 1 --kind history 'HTTP 500 on the login page' 2>/dev/null)" \
 	"and the history read through the late API is in it"
 
+# 1b. On the server, the history is xymond's files (S34): a XYMONHISTDIR
+#     that is no directory is said, with what the index needs, and ends the
+#     run with 1, no traceback, no index left.
+rc=0
+XYMONHISTDIR="$work/no-such-dir" XYMONHISTLOGS="$work/histlogs" XYMONAPI_RAG_INDEX="$work/index3.npz" \
+	"$ROOT/plugins/xymonapi-rag/xymonapi-rag.sh" index > /dev/null 2> "$work/rag.err" || rc=$?
+assert_equal 1 "$rc" "[S34] history not there: index ends with 1"
+assert_contains "cannot read the history" "$(cat "$work/rag.err")" "[S34] and says so"
+assert_contains "xymond's files in XYMONHISTDIR=$work/no-such-dir" "$(cat "$work/rag.err")" "[S34] with what it needs"
+assert_not_contains "Traceback" "$(cat "$work/rag.err")" "[S34] not as a traceback"
+[ -e "$work/index3.npz" ] && fail "[S34] a failed indexing left an index behind"
+
 # 2. An API that answers, with a 401, is not waited for.
 command -v htpasswd >/dev/null 2>&1 || { pass_partial "index waits for an API that is not up yet (the 401 part needs htpasswd)"; }
 htpasswd -cbB "$work/passwd" alice secret > /dev/null 2>&1 || fail "htpasswd could not write $work/passwd"
@@ -151,6 +163,8 @@ XYMONAPI_RAG_INDEX="$work/index2.npz" "$ROOT/plugins/xymonapi-rag/xymonapi-rag.s
 took=$(( $(date +%s) - began ))
 [ "$rc" -ne 0 ] || fail "index succeeded against an API that answered 401"
 assert_contains 'answered 401' "$(cat "$work/rag.err")" "a 401 is reported"
+assert_contains "the API, XYMONAPI_URL, answering" "$(cat "$work/rag.err")" "[S34] with what the index needs"
+assert_not_contains "Traceback" "$(cat "$work/rag.err")" "[S34] not as a traceback"
 [ "$took" -lt 10 ] || fail "and should be reported at once, not after $took seconds of retries"
 [ -e "$work/index2.npz" ] && fail "a failed indexing left an index behind"
 
