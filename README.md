@@ -101,7 +101,8 @@ without `sh`, which a ZIP may have left unable to run.
 
 `--all` in place of `NAME`, every plugin of that part; `update` updates what is installed. What each command puts where,
 Python and the virtualenv, enabling, updating and uninstalling are in
-[`plugins/README.md`](plugins/README.md#installing-a-plugin); each plugin's
+[`plugins/README.md`](plugins/README.md#installing-a-plugin) and, in full,
+[`xymon-plugin`'s README](plugins/xymon-plugin/README.md#reference); each plugin's
 README says only what is particular to it.
 
 ## Contributing and licence
