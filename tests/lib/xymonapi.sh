@@ -81,7 +81,10 @@ start_api() {
 		# The index /search reads: the test's own, never the one in this
 		# user's cache, which a developer's machine may well have.
 		# No relay socket unless a test asks for one, or for the launcher's
-		# own, with API_RELAY_DEFAULT.
+		# own, with API_RELAY_DEFAULT. The log is emptied here, in the parent:
+		# the redirection below empties it only in the child, which a retry's
+		# grep may run before.
+		: > "$work/api.log"
 		( [ -n "${API_RELAY_DEFAULT:-}" ] || export XYMONAPI_RELAY_SOCKET="${XYMONAPI_RELAY_SOCKET:-}"
 		  XYMONAPI_LISTEN="127.0.0.1:$API_PORT" XYMONAPI_RAG_INDEX="${XYMONAPI_RAG_INDEX:-$work/no-index.npz}" \
 			exec "${API_ROOT:-$ROOT/plugins/xymonapi}/xymonapi.sh" ) > "$work/api.log" 2>&1 &
