@@ -9,7 +9,10 @@
 # installed gives its version; status and outdated report it as any
 # plugin; remove takes it away. The installer /plugins serves knows its
 # version too, where only another plugin is installed, and installs from
-# that stage. The network is never reached: gh is a stand-in first on PATH.
+# that stage. Where links are not kept, ./xymon-plugin being a text file,
+# the script run as plugins/xymon-plugin/xymon-plugin installs as well,
+# and the stage gets the script, not the text. The network is never
+# reached: gh is a stand-in first on PATH.
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
@@ -89,5 +92,23 @@ server_tree "$home5"
 	|| fail "an install from a stage without xymon-plugin.PLUGIN failed: $(tail -n 5 "$work/install5.log")"
 assert_contains "the installer /plugins serves will not know its version" "$(cat "$work/install5.log")" \
 	"[S19] a stage without the installer's PLUGIN file is said"
+
+# Where links are not kept -- Git for Windows, a ZIP unpacked on Windows --
+# ./xymon-plugin is a text file naming its target: the script, run as
+# plugins/xymon-plugin/xymon-plugin, finds the tree's top two levels up.
+tree=$work/nolinks
+mkdir -p "$tree"
+cp -R "$ROOT/plugins" "$ROOT/LICENSE" "$tree/"
+printf 'plugins/xymon-plugin/xymon-plugin' > "$tree/xymon-plugin"
+assert_equal "xymon-plugin $want" "$(sh "$tree/plugins/xymon-plugin/xymon-plugin" --version)" "[S1] run as its own path, it gives its version"
+home3=$work/server3
+server_tree "$home3"
+sh "$tree/plugins/xymon-plugin/xymon-plugin" install --server xymon-plugin XYMONHOME="$home3" MANDIR="$work/man3" >"$work/install3.log" 2>&1 \
+	|| fail "[S1] install run as plugins/xymon-plugin/xymon-plugin failed: $(tail -n 5 "$work/install3.log")"
+assert_equal "$want" "$(cat "$home3/ext/xymon-plugin/VERSION")" "[S1] and installs from the tree"
+assert_contains "xymon-plugin: $want installed; this copy has $want" \
+	"$(sh "$tree/plugins/xymon-plugin/xymon-plugin" status --server XYMONHOME="$home3" 2>&1)" "[S1] whose plugins status compares"
+assert_equal "#!/bin/sh" "$(first_line "$(cat "$home3/ext/xymon-plugins-dist/xymon-plugin")")" "[S19] the stage gets the script, not the text file"
+assert_equal "xymon-plugin $want" "$("$home3/ext/xymon-plugins-dist/xymon-plugin" --version 2>&1)" "[S19] which gives its version"
 
 pass "the installer installs itself as a plugin, gives its version installed, is reported by status and outdated, and is removed"

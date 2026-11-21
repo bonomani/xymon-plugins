@@ -51,6 +51,22 @@
 ROOT=$(cd "$(dirname "$0")" && pwd)
 # The name it runs as: its own, as a plugin, plugins/$self/ (S1).
 self=${0##*/}
+# Run as plugins/$self/$self of a checkout or an archive, rather than
+# through the link at its top -- where links are not kept: Git for
+# Windows, a ZIP unpacked on Windows -- the tree's top is two levels up.
+# Only where that top holds this very directory with its own PLUGIN file:
+# the copy installed in ext/$self/ has none above it, and stays as it is.
+case $ROOT in
+*/plugins/"$self")
+	root_top=$(cd "$ROOT/../.." && pwd) || root_top=
+	root_dir=
+	[ -z "$root_top" ] || root_dir=$(cd "$root_top/plugins/$self" 2>/dev/null && pwd) || root_dir=
+	if [ -n "$root_dir" ] && [ "$root_dir" = "$ROOT" ] && [ -f "$root_dir/PLUGIN" ] \
+		&& [ "$(sed -n 's/^name: *//p' "$root_dir/PLUGIN")" = "$self" ]; then
+		ROOT=$root_top
+	fi
+	;;
+esac
 
 die() { printf 'xymon-plugin: %s\n' "$*" >&2; exit 1; }
 

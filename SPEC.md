@@ -67,8 +67,9 @@ to come.
 `plugins/NAME/` holds the `PLUGIN` file, a README, a manual page per side,
 tests and the code. `xymon-plugin` installs every plugin from its `PLUGIN`
 file, and names none but its own: it is one of them, `plugins/xymon-plugin/`,
-which `./xymon-plugin` at the repository's top links to, installed as any
-other; a plugin no code knows is installed, reported and removed alike.
+which `./xymon-plugin` at the repository's top links to and which also runs
+as itself, its tree's top two levels up, installed as any other; a plugin
+no code knows is installed, reported and removed alike.
 
 **S2. A plugin carries its version.**
 The `version:` line, `X.Y.Z`, moves as `CONTRIBUTING.md` (Versions) says. The
