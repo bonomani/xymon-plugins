@@ -8,7 +8,8 @@
 # portable tool flags and regular expressions, no early-exit pipes under
 # pipefail, and the rest of what Xymon's BSD and macOS lanes taught it. The
 # rules are Xymon's own, read from XYMON_SRC at each run, not a copy kept
-# here: Xymon's tests/buildsystem/test-suite-portability.sh is run over a
+# here: Xymon's tests/buildsystem/test-suite-lint.sh (named
+# test-suite-portability.sh before Xymon 4.3.32) is run over a
 # temporary tree laid out as it expects -- its script and assert.sh beside
 # this repository's tests/ and each plugins/NAME/tests/, under
 # tests/plugins/NAME/ -- since it checks the tree it sits in.
@@ -19,15 +20,16 @@
 # librrd rather than the rrdtool command: the API runs that command itself,
 # so the plugins need it, and their tests with it (below).
 #
-# Skips where XYMON_SRC holds no portability check. Needs XYMON_SRC.
+# Skips where XYMON_SRC holds neither. Needs XYMON_SRC.
 
 set -euo pipefail
 # shellcheck source=tests/lib/xymonapi.sh
 . "$(dirname "$0")/../lib/xymonapi.sh"
 
 ROOT=$(find_root)
-check=$XYMON_SRC/tests/buildsystem/test-suite-portability.sh
-[ -f "$check" ] || skip "XYMON_SRC has no tests/buildsystem/test-suite-portability.sh"
+check=$XYMON_SRC/tests/buildsystem/test-suite-lint.sh
+[ -f "$check" ] || check=$XYMON_SRC/tests/buildsystem/test-suite-portability.sh
+[ -f "$check" ] || skip "XYMON_SRC has no tests/buildsystem/test-suite-lint.sh, nor its older name test-suite-portability.sh"
 
 work=$(mktempdir)
 tree=$work/tree
