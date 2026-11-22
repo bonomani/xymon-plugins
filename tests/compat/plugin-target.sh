@@ -54,7 +54,7 @@ term 'Which one? [1] ' 2 install --server xymonapi-rag
 [ "$rc" -eq 0 ] || fail "[S25] choosing 2 of several failed: $out"
 assert_contains "1) $a" "$out" "[S25] several are listed"
 assert_file_exists "$b/ext/xymonapi-rag/VERSION"
-assert_equal "$b" "$(cat "$work/cfg/xymon-plugin/installation-used-last")" "[S25] the one chosen is remembered as the one used last"
+assert_equal "$b" "$(cat "$work/cfg/xymon-plugin/installation-used-last-server")" "[S25] the one chosen is remembered as the server used last"
 term 'Which one? [2] ' '' update --server xymonapi-rag
 [ "$rc" -eq 0 ] || fail "[S25] Enter on the one used last failed: $out"
 assert_contains "Target: $b (detected, confirmed)" "$out" "[S25] the one used last is the default"

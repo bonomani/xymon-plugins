@@ -46,7 +46,7 @@ allowed() {
 		"$work/man/man"[1-8]|"$work/man/man"[1-8]/*) return 0 ;;
 		"$home/ext/venv"|"$home/ext/venv/"*|"$home/ext/xymon-plugins-dist"|"$home/ext/xymon-plugins-dist/"*) return 0 ;;
 		"$PREFIX/libexec/xymon-plugins"|"$PREFIX/libexec/xymon-plugins/"*) return 0 ;;
-		"$person/.config/xymon-plugin/installation-used-last") return 0 ;;
+		"$person/.config/xymon-plugin/installation-used-last-"*) return 0 ;;
 	esac
 	for n in $plugins; do
 		case $p in
@@ -80,7 +80,7 @@ x remove --tools --all;    check "remove --tools"
 x remove --server --all;   check "remove --server"
 # After the removals, only directories and the installation used last stay.
 comm -13 "$work/snap-before" "$work/snap-remove --server" | while IFS= read -r p; do
-	[ -d "$p" ] || [ "$p" = "$person/.config/xymon-plugin/installation-used-last" ] \
+	[ -d "$p" ] || [ "$p" = "$person/.config/xymon-plugin/installation-used-last-server" ] \
 		|| fail "[S28] a removal left $p"
 done
 

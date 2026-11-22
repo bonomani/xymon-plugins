@@ -157,6 +157,6 @@ x remove --tools xymonapi-rag
 # A part with both selectors is refused.
 rc=0; out=$("$ROOT/xymon-plugin" verify --server --tools </dev/null 2>&1) || rc=$?
 [ "$rc" -ne 0 ] || fail "verify --server --tools was taken"
-assert_contains "with neither, covers both" "$out" "[S30] --server --tools is refused, saying verify covers both"
+assert_contains "with none, covers the server part and the tools" "$out" "[S30] --server --tools is refused, saying what verify covers with none"
 
 pass "verify says, one line each, what differs from what was installed -- broken (exit 3), untidy (exit 4), the administrator's edited and ok (exit 0) -- naming update or clean; the launchers write no bytecode"

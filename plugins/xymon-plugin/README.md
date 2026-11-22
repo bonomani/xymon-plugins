@@ -53,9 +53,15 @@ go, the `plugins` column, the environment and exit statuses:
 
 ### Choosing the part and the installation
 
-- A verb, then `--server` or `--tools`, which goes alone. Without one, on a
-  terminal, the server part is meant, and said; in a script, name it.
-- `--client` is refused: no plugin has a part on a monitored host yet.
+- A verb, then `--server`, `--client` or `--tools`, one at a time. Without
+  one, on a terminal, the server part is meant, and said, but a client's
+  tree is refused, the command given with `--client`; in a script, name it.
+- `--client` installs, updates and removes a plugin's client part in a
+  standalone Xymon client's tree, run by whoever owns its `ext/`. A
+  client tree that is, or may be, a server's own is refused; `enable`,
+  `disable`, `status`, `verify`, `outdated` and `clean` do not take it yet.
+  A directory in `ext/` no install completed -- one cut short has no
+  `MANIFEST` -- is left as it is: remove it by hand.
 - The Xymon installation is `XYMONHOME`, or `--xymon-home PATH`, which wins.
   On a terminal it may be left out: the server found is proposed, or, with
   several, the one used last.
@@ -70,6 +76,7 @@ go, the `plugins` column, the environment and exit statuses:
 | part | puts, besides the code |
 |---|---|
 | server | its task in `ext/NAME/tasks.cfg`, off; its manual page under `MANDIR` (`/usr/share/man`, or Homebrew's `share/man` for a Xymon it installed); a copy for the API to serve at `/plugins` |
+| client | its manual page under `MANDIR`, when that can be written; nothing else |
 | tools | its command in `$PREFIX/bin`; its manual page in `$PREFIX/share/man/man1`. `PREFIX` is `~/.local` |
 
 - A plugin needing a newer Xymon than the server's (its `PLUGIN`'s `xymon:`
