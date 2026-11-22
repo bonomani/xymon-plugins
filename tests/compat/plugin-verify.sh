@@ -51,6 +51,14 @@ v 0 --server XYMONHOME="$home"
 assert_contains "ok: xymonapi" "$out" "[S30] a plugin as installed is ok, exit 0"
 v 0 --tools
 assert_contains "ok: xymonapi-mcp" "$out" "[S30] and the tools too"
+# A tools part with no MANIFEST, a PLUGIN copy beside: told to update,
+# which it takes (S20 is the server's and the client's).
+tx=$PREFIX/libexec/xymon-plugins/xymonapi-mcp
+mv "$tx/MANIFEST" "$work/tools-MANIFEST.kept"
+v 4 --tools
+assert_contains "untidy: xymonapi-mcp: no MANIFEST, installed before it was kept: ./xymon-plugin update --tools xymonapi-mcp" "$out" "[S30] a tools part with no MANIFEST is told to update"
+x update --tools xymonapi-mcp
+v 0 --tools
 v 0
 assert_contains "Xymon server: $home" "$out" "[S30] with no part named, every installation found"
 assert_contains "Your tools: $PREFIX" "$out" "[S30] and the tools"
@@ -106,6 +114,21 @@ mv "$ext/MANIFEST" "$work/MANIFEST.kept"
 v 4 --server XYMONHOME="$home"
 assert_contains "untidy: xymonapi: no MANIFEST, installed before it was kept: ./xymon-plugin update --server xymonapi" "$out" "[S30] a plugin with no MANIFEST is untidy"
 fix
+# One from before the PLUGIN copy, VERSION alone: update still puts it right.
+mv "$ext/MANIFEST" "$work/MANIFEST.kept"; mv "$ext/PLUGIN" "$work/PLUGIN.kept"
+v 4 --server XYMONHOME="$home"
+assert_contains "untidy: xymonapi: no MANIFEST, installed before it was kept: ./xymon-plugin update --server xymonapi" "$out" "[S30] a plugin from before the PLUGIN copy is untidy, naming update"
+fix
+# One no install left, its PLUGIN naming another: broken, the removal by
+# hand said, not an update, which refuses it (S20).
+cp "$ext/PLUGIN" "$work/PLUGIN.kept"
+sed -e 's/^name: .*/name: other/' "$work/PLUGIN.kept" > "$ext/PLUGIN"
+v 3 --server XYMONHOME="$home"
+assert_contains "broken: xymonapi: $ext is not xymonapi's server part as an install leaves it" "$out" "[S20] verify says a directory no install left is none"
+assert_contains "if it is an install cut short, remove it by hand: rm -rf $ext" "$out" "[S20] and how to remove it by hand"
+assert_not_contains "update --server xymonapi" "$out" "[S20] and offers no update, which would be refused"
+cp "$work/PLUGIN.kept" "$ext/PLUGIN"
+v 0 --server XYMONHOME="$home"
 
 # The administrator's file, edited: said, and counted for nothing.
 echo "# mine" >> "$ext/tasks.cfg"

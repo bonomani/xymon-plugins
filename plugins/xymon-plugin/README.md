@@ -60,8 +60,12 @@ go, the `plugins` column, the environment and exit statuses:
   standalone Xymon client's tree, run by whoever owns its `ext/`. A
   client tree that is, or may be, a server's own is refused; `enable`,
   `disable`, `status`, `verify`, `outdated` and `clean` do not take it yet.
-  A directory in `ext/` no install completed -- one cut short has no
-  `MANIFEST` -- is left as it is: remove it by hand.
+- In `ext/`, of the server or a client, a directory no install left --
+  a link, with no `VERSION`, or a `PLUGIN` that is a link or names another
+  plugin or part -- is left as it is: remove it by hand. On the server,
+  one with `VERSION` and no `PLUGIN`, from before the copy, of a plugin
+  this checkout has, is still an install; `MANIFEST` is not needed, so
+  an update cut short is resumed.
 - The Xymon installation is `XYMONHOME`, or `--xymon-home PATH`, which wins.
   On a terminal it may be left out: the server found is proposed, or, with
   several, the one used last.
