@@ -614,6 +614,37 @@ brings its test.
   server part keeps its runtime files in `XYMONRUNDIR` (S22) and its logs
   in Xymon's log directory. The checks under `checks/`, copied into place by hand today, each
   move under `plugins/` as a client part when they get a `PLUGIN` file.
+- **A standalone client's part, the first client step.** `--client`
+  installs, updates and removes a plugin's client part, its `client-*`
+  lines, in a standalone Xymon client's tree; a server's own client tree,
+  and a client part's task, come after. Once built, with its tests:
+  - the tree is `XYMONHOME` or `--xymon-home`, as for a server, and the
+    part `--client`, which needs a client's marks (S18) and an `ext/`
+    directory; `XYMONCLIENTHOME` is never read, as a server's environment
+    sets it too;
+  - its files go under `ext/NAME/`, with `VERSION`, its `PLUGIN` copy and
+    its `MANIFEST`; its manual page, `client-manual:`, is linked from
+    `MANDIR` when that can be written, and otherwise not, the command
+    saying so. Nothing else is written: no task, no copy in the stage
+    `/plugins` serves, no virtualenv (`--venv` with `--client` refused),
+    no web server snippet, no SELinux module. A client part's needs,
+    `client-needs:`, are client parts;
+  - a client tree that may be a server's own -- a `../server` beside it
+    with a server's marks naming another tree, or a `xymonserver.cfg` in
+    its `etc/` -- is refused, saying which, until the command can ask;
+  - no part named on a client's tree is refused, on a terminal too, giving
+    the command with `--client`;
+  - the run is refused before anything changes unless the person running
+    it owns the tree's `ext/`, root as any other, naming the owner, so
+    that whoever writes a part's files also updates and removes them;
+  - detection offers, for `--client`, the standalone client trees found,
+    and the one used last while its marks hold; the installation used
+    last is remembered in one file per part;
+  - `enable` and `disable` refuse the client part, which has no task yet;
+    `status`, `verify`, `outdated` and `clean` cover a client's tree as a
+    server's; two parts named together are refused;
+  - the `PLUGIN` line `task:` becomes `server-task:`, as the server's other
+    lines; a client part's task will be `client-task:`.
 - **One command, read as a sentence.** `xymon-plugin` (S24) takes a verb
   and the plugins it acts on; still to come is `connect`:
 
@@ -660,8 +691,9 @@ brings its test.
   on a terminal, the command asks which parts, offering those the
   installation a run targets (below) takes and the plugin has: on a
   server's tree, its server part, and its client part into the server's
-  own client tree; on a standalone client's tree, its client part. When
-  only one applies, it says which, and does not ask. Off a
+  own client tree; on a standalone client's tree, the command is refused,
+  giving it with `--client` (above). When only one applies, it says
+  which, and does not ask. Off a
   terminal, a verb that changes a Xymon part needs them; `status` without
   them covers every part, on a terminal as off one, every installation
   found listed unless one is named; `status` never asks for one. A part the plugin does not
