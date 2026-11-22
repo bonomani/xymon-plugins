@@ -1,8 +1,8 @@
-.TH XYMON-PLUGIN 8 "November 21, 2026" "xymon-plugins"
+.TH XYMON-PLUGIN 8 "November 22, 2026" "xymon-plugins"
 .SH NAME
 xymon-plugin \- install, update and check the Xymon plugins, itself among them
 .SH SYNOPSIS
-.B "xymon-plugin install|update|enable|disable|remove|status|verify|outdated|clean [--server|--tools] [--all] [PLUGIN...] [NAME=value...]"
+.B "xymon-plugin install|update|enable|disable|remove|status|verify|outdated|clean [--server|--client|--tools] [--all] [PLUGIN...] [NAME=value...]"
 .br
 .B "xymon-plugin --version"
 .SH DESCRIPTION
@@ -31,7 +31,11 @@ files, so that
 .B status
 and
 .B outdated
-report its own version beside the others'. The copy installed gives its
+report its own version beside the others'. On a monitored host,
+.B "./xymon-plugin install --client xymon-plugin"
+installs it the same way into a standalone Xymon client's
+.IR ext/xymon-plugin/ ,
+with no task. The copy installed gives its
 version, and runs
 .BR status ,
 .B verify

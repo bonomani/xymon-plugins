@@ -219,11 +219,11 @@ needs_case "xymonapi-mcp:nopart" nopart
 assert_contains "is no part" "$(cat "$work/needs-nopart.log")" "[S3] and the refusal says so"
 
 # xymon-plugin's verbs. An old action is refused, naming the new form; a
-# client action, as no plugin has a client part yet. Off a terminal, a verb
+# client part on a server's tree, naming --server. Off a terminal, a verb
 # that changes something needs its part named; install and remove need a
 # plugin named, or --all; install refuses a plugin installed, update one
-# that is not; enable refuses the tools, which have no task; --tools goes
-# alone. Nothing is installed by any of these.
+# that is not; enable refuses the tools, which have no task; one part at a
+# time. Nothing is installed by any of these.
 refused() { # WANT ARG... -- xymon-plugin ARG... fails, saying WANT
 	w=$1; shift
 	rc=0; "$ROOT/xymon-plugin" "$@" XYMONHOME="$home" PREFIX="$work/refused" MANDIR="$work/refused" </dev/null >"$work/refused.log" 2>&1 || rc=$?
@@ -233,17 +233,17 @@ refused() { # WANT ARG... -- xymon-plugin ARG... fails, saying WANT
 r() { refused "$@"; }
 r "install-server is now: ./xymon-plugin install --server" install-server xymonapi
 r "uninstall-tools is now: ./xymon-plugin remove --tools" uninstall-tools xymonapi
-r "no plugin has a client part yet" install-client xymonapi
-r "no plugin has a client part yet" install --client xymonapi
+r "install-client is now: ./xymon-plugin install --client" install-client xymonapi
+r "a server's tree takes the server part, --server" install --client xymon-plugin
 r "names no part" install xymonapi
 r "name the plugins to install, or --all" install --server
 r "name the plugins to remove, or --all" remove --tools
 r "is installed already" install --server xymonapi
 r "is not installed: ./xymon-plugin install --tools xymonapi-agent" update --tools xymonapi-agent
 r "the tools have no task" enable --tools xymonapi
-r "--tools goes alone" install --server --tools xymonapi
+r "one part at a time" install --server --tools xymonapi
 r "./xymon-plugin install --tools xymonapi" install --server --tools xymonapi
-r "status, with neither, covers both" status --server --tools
+r "status, with none, covers the server part and the tools" status --server --tools
 r "--all, or plugins named: not both" install --server --all xymonapi
 [ -e "$work/refused" ] && fail "[S24] a refused verb installed something"
 # Run as root, the tools are refused without PREFIX or DESTDIR: they would

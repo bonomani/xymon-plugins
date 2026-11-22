@@ -61,9 +61,8 @@ move and how a change is made is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 - **`xymon-plugin`'s verbs** -- `install`, `update`, `enable`, `disable`,
   `remove`, `status`, `verify`, `outdated`, `clean` -- take the part they act on:
-  `--server` on the Xymon server, `--tools` on your own machine, alone. `--client` is refused
-  until a plugin has a client part: a client is Xymon's, on a monitored
-  host, and that part arrives with the first check that installs there.
+  `--server` on the Xymon server, `--client` in a monitored host's
+  standalone Xymon client, `--tools` on your own machine, one at a time.
 - **Manual pages.** Section 8 for what runs on the server, section 1 for the
   commands; every behaviour and setting is in the page, the README says how
   to install and use.

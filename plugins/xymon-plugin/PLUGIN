@@ -3,7 +3,7 @@
 # ./xymon-plugin at the repository's top -- a link to this directory's
 # xymon-plugin -- installs it from the lines below, as any other.
 name: xymon-plugin
-version: 0.2.3
+version: 0.2.4
 summary: the installer of these plugins, installed beside them as one of them, so that what is installed and its version are known on the server
 manual: xymon-plugin.8
 
@@ -14,3 +14,8 @@ server-files: xymon-plugin xymon-plugin-report.sh
 server-manual: xymon-plugin.8
 task: xymon-plugin.tasks.DIST
 executable: xymon-plugin xymon-plugin-report.sh
+# On a monitored host's Xymon client, the installer alone, beside the
+# plugins it installs there.
+client-short: the installer, kept in the client's tree beside its plugins
+client-files: xymon-plugin
+client-manual: xymon-plugin.8
