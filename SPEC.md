@@ -116,7 +116,11 @@ manual page; S35) and your own machine (`tools-*` lines: files under
 `$PREFIX/libexec/xymon-plugins/NAME/`, commands in `$PREFIX/bin`, a
 section 1 manual page). A plugin has one side, two or all three. The
 server and client sides need `XYMONHOME`, and without it install nothing
-and say so.
+and say so. A command is written in `$PREFIX/bin` where its name is free
+or holds, byte for byte, the command an install of that plugin wrote:
+anything else there -- a command of the person's, a link, a directory --
+is left as it is and said, with the path that runs the plugin's command,
+the install going on.
 
 **S18. A part acts only on its own kind of tree.**
 The tree `XYMONHOME` names is read for Xymon's marks, a whole pair counting
@@ -537,9 +541,10 @@ and link it wrote, its fields separated by tabs. A file is
 after the task file and the web server snippets, the administrator's to
 edit (S7); a link is `link⇥PATH⇥TARGET`. A path in the plugin's directory
 is given from it, `app.py`; one outside, as installed, without `DESTDIR`:
-each file of the copy `/plugins` serves (S19), the command (S4), the
-manual page's link (S20). The task link is not in it: it is a state, on
-or off, that `enable` and `disable` change after the install (S13); nor a
+each file of the copy `/plugins` serves (S19), the command (S4) and the
+manual page's link (S20), each only when the install wrote it. The task
+link is not in it: it is a state, on or off, that `enable` and `disable`
+change after the install (S13); nor a
 SELinux module loaded, a state of the system's policy, its `.cil` file
 being one of the directory's (S23). `MANIFEST` lies in the plugin's
 directory, so removing that directory removes it; and in a directory the
