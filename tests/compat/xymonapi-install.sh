@@ -114,7 +114,9 @@ chmod 700 "$home/ext/xymonapi" "$home/ext/xymon-plugins-dist" "$home/ext/xymon-p
 "$ROOT/xymon-plugin" update --server XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
 	|| fail "installing over an install failed: $(tail -n 5 "$work/update.log")"
 [ -d "$home/ext/venv/lib" ] || fail "the virtualenv, whose Python runs, was not kept: $(cat "$work/update.log")"
-closed=$(find "$home/ext" "$home/etc/tasks.d" -type d ! -perm -0055 ! -path "$home/ext/venv/odd/d0400")
+# d0400 pruned, not only left out of the list: BSD find, unlike GNU's,
+# enters a directory it lists, and that one its owner cannot search.
+closed=$(find "$home/ext" "$home/etc/tasks.d" -path "$home/ext/venv/odd/d0400" -prune -o -type d ! -perm -0055 -print)
 assert_equal "" "$closed" "an update opens what an install under umask 077 left closed"
 odd=$(find "$home/ext/venv/odd/d0400" "$home/ext/venv/odd/f0010" "$home/ext/venv/odd/fifo" -prune \( -perm -0004 -o -perm -0001 \))
 assert_equal "" "$odd" "what its owner may not use itself, and a fifo, are left closed"
