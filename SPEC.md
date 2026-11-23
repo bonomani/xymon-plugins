@@ -560,7 +560,10 @@ being one of the directory's (S23). `MANIFEST` lies in the plugin's
 directory, so removing that directory removes it; and in a directory the
 Xymon user can write, so it decides nothing alone: a removal takes away
 what S20 allows, no more. A plugin installed before it existed has none
-until it is updated. The `data:` and `writes:` lines of the `PLUGIN` copy
+until it is updated. One whose lines would be the same, no virtualenv made,
+removed or filled by the command, is left as it is: the code is the same,
+and what watches the file (xymonapi, xymonapi-mcp) does not restart for
+nothing. The `data:` and `writes:` lines of the `PLUGIN` copy
 say what the plugin's own commands may have written since (S28).
 
 **S30. `verify` says what differs from what was installed.**

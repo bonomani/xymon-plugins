@@ -64,6 +64,38 @@ assert_contains "${TAB}tasks.cfg${TAB}admin" "$(cat "$home/ext/xymonapi/MANIFEST
 assert_not_contains "tasks.d" "$(cat "$home/ext/xymonapi/MANIFEST")" "[S29] the task link, a state, is not in it"
 [ -L "$home/etc/tasks.d/xymonapi.cfg" ] || fail "the task was not on"
 
+# The same code updated again: MANIFEST, the same lines, is left as it is,
+# so that what watches it -- the API, by its inode -- goes on (S29). From
+# a copy whose app.py differs, it is written anew.
+ino() { ls -i "$1" | awk '{ print $1 }'; }
+before=$(ino "$home/ext/xymonapi/MANIFEST")
+x update --server xymonapi XYMONHOME="$home"
+[ "$(ino "$home/ext/xymonapi/MANIFEST")" = "$before" ] || fail "[S29] an update to the same code wrote MANIFEST anew: what watches it restarts for nothing"
+alt=$work/alt; mkdir "$alt"
+cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$alt/"
+echo "# changed" >> "$alt/plugins/xymonapi/app.py"
+"$alt/xymon-plugin" update --server xymonapi XYMONHOME="$home" </dev/null >"$work/x.log" 2>&1 || fail "the update from the copy failed: $(tail -n 5 "$work/x.log")"
+[ "$(ino "$home/ext/xymonapi/MANIFEST")" != "$before" ] || fail "[S29] an update to other code left MANIFEST as it was: what watches it runs the old code"
+assert_contains "$(cksum < "$alt/plugins/xymonapi/app.py")${TAB}app.py" "$(cat "$home/ext/xymonapi/MANIFEST")" "[S29] and it records the new app.py"
+x update --server xymonapi XYMONHOME="$home"
+# A virtualenv made by the update: the lines are the same, the modules may
+# not be, so MANIFEST is written anew. A stand-in Python, with every module,
+# that makes one.
+cat > "$work/mkpy" <<'SH'
+#!/bin/sh
+case $* in
+*sys.executable*) echo "$0" ;;
+"-m venv --system-site-packages "*) mkdir -p "$4/bin" && cp "$0" "$4/bin/python3" && : > "$4/pyvenv.cfg" ;;
+esac
+exit 0
+SH
+chmod 755 "$work/mkpy"
+before=$(ino "$home/ext/xymonapi/MANIFEST")
+x update --server xymonapi XYMONHOME="$home" PYTHON="$work/mkpy"
+[ -x "$home/ext/venv/bin/python3" ] || fail "the stand-in Python made no virtualenv: $(tail -n 5 "$work/x.log")"
+[ "$(ino "$home/ext/xymonapi/MANIFEST")" != "$before" ] || fail "[S29] an update that made a virtualenv left MANIFEST as it was: what watches it runs the old modules"
+rm -rf "$home/ext/venv"
+
 # Your tools: xymonapi-mcp, with a command and a manual page.
 for step in install update; do
 	x "$step" --tools xymonapi-mcp
@@ -75,6 +107,11 @@ for step in install update; do
 	want+=("$(printf 'link\t%s\t%s' "$PREFIX/share/man/man1/xymonapi-mcp.1" "$dir/xymonapi-mcp.1")")
 	expect "$dir" "${want[@]}"
 done
+
+# xymonapi-mcp watches its MANIFEST too: the same code, left as it is.
+before=$(ino "$dir/MANIFEST")
+x update --tools xymonapi-mcp
+[ "$(ino "$dir/MANIFEST")" = "$before" ] || fail "[S29] an update of the tools to the same code wrote MANIFEST anew"
 
 # Under DESTDIR: the paths are the installed system's, not the stage's.
 stage=$work/stage
@@ -110,4 +147,4 @@ SH
 	assert_file_exists "$home2/ext/xymonapi-rag/MANIFEST"
 fi
 
-pass "an install and an update write MANIFEST: each file of the plugin's directory with its cksum, the task file and snippets marked admin, and outside it the staged copy, the command and the manual page's link, as installed; no task link"
+pass "an install and an update write MANIFEST, left as it is when its lines are the same: each file of the plugin's directory with its cksum, the task file and snippets marked admin, and outside it the staged copy, the command and the manual page's link, as installed; no task link"
