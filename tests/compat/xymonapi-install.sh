@@ -94,6 +94,8 @@ echo 'stale' > "$home/ext/xymonapi-rag/gone.py"
 # ext/ and tasks.d/, a plugin's directory, /plugins' stage, a virtualenv --
 # is opened again; a link in the virtualenv is not followed out of it. The
 # virtualenv is one whose Python runs, so that the install keeps it.
+# Anew: where a Python has the modules, an earlier step made a real one.
+rm -rf "$home/ext/venv"
 mkdir -p "$home/ext/venv/bin" "$home/ext/venv/lib"
 : > "$home/ext/venv/pyvenv.cfg"
 ln -s "$(command -v "${XYMONAPI_PYTHON:-python3}")" "$home/ext/venv/bin/python3"
@@ -112,9 +114,14 @@ chmod 700 "$home/ext/xymonapi" "$home/ext/xymon-plugins-dist" "$home/ext/xymon-p
 "$ROOT/xymon-plugin" update --server XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
 	|| fail "installing over an install failed: $(tail -n 5 "$work/update.log")"
 [ -d "$home/ext/venv/lib" ] || fail "the virtualenv, whose Python runs, was not kept: $(cat "$work/update.log")"
-closed=$(find "$home/ext" "$home/etc/tasks.d" -type d ! -perm -0055 ! -path "$home/ext/venv/odd/d0400")
+# d0400 pruned, not only left out of the list: BSD find, unlike GNU's,
+# enters a directory it lists, and that one its owner cannot search.
+closed=$(find "$home/ext" "$home/etc/tasks.d" -path "$home/ext/venv/odd/d0400" -prune -o -type d ! -perm -0055 -print)
 assert_equal "" "$closed" "an update opens what an install under umask 077 left closed"
-odd=$(find "$home/ext/venv/odd/d0400" "$home/ext/venv/odd/f0010" "$home/ext/venv/odd/fifo" -prune \( -perm -0004 -o -perm -0001 \))
+# From the parent, each entry tested then pruned: BSD find opens a
+# directory named as an operand before -prune acts, and d0400 cannot be
+# searched.
+odd=$(find "$home/ext/venv/odd" ! -path "$home/ext/venv/odd" \( \( -perm -0004 -o -perm -0001 \) -print -o -prune \))
 assert_equal "" "$odd" "what its owner may not use itself, and a fifo, are left closed"
 [ -n "$(find "$work/private" -perm 0600)" ] || fail "a link in the virtualenv was followed or changed: $work/private is no longer 600"
 [ -n "$(find "$home/ext/venv/shared" -prune -perm -2055)" ] || fail "a setgid directory was left closed"

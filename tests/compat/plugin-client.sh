@@ -36,6 +36,9 @@ set -euo pipefail
 
 ROOT=$(find_root)
 work=$(mktempdir)
+# Resolved: the installer names trees by their resolved path, and on macOS
+# the temporary directory lies under /var, a link to /private/var.
+work=$(cd "$work" && pwd -P)
 py=${XYMONAPI_PYTHON:-python3}
 # HOME too: a write to the person's home, outside the scratch area, would
 # go unseen.
