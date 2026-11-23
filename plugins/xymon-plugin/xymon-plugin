@@ -1634,7 +1634,9 @@ enable() {
 		[ -L "$l" ] || [ ! -d "$l" ] || die "$l is a directory, not $1's task: left alone"
 	done
 	old_link "$1"
-	[ -L "$TASKDIR/$1.cfg" ] && { echo "$1 is on already"; return 0; }
+	# On already: for xymon-plugin, the way to have the column sent now,
+	# a release published since its last run among what it says (S33).
+	[ -L "$TASKDIR/$1.cfg" ] && { echo "$1 is on already"; [ "$1" != "$self" ] || COLUMN=1; return 0; }
 	# Before the link: a server whose tasks.cfg does not read tasks.d/
 	# would not have the task, whatever is linked there.
 	if ! reads_tasks; then
@@ -1646,6 +1648,7 @@ as Xymon's own tasks.cfg has it; --force makes the link all the same, where the 
 	mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"
 	ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$1.cfg" || exit 1
 	echo "$1 is on: xymonlaunch reads it within half a minute and starts it; one that keeps failing it holds for ten minutes after five restarts"
+	[ "$1" != "$self" ] || COLUMN=1
 }
 disable() {
 	[ -n "$(held "$EXTROOT" "$1" task)" ] || die "$1 has no task to disable"
@@ -1654,6 +1657,21 @@ disable() {
 	rm -f "$TASKDIR/$1.cfg"
 	[ ! -L "$TASKDIR/$1" ] || rm -f "$TASKDIR/$1"
 	echo "$1 is off: xymonlaunch stops it within half a minute"
+}
+
+# column -- the plugins column sent at once, its task on, after a run that
+# changed the server's part, or enable of this plugin (S33): not up to 30
+# hours later. The installed reporter, with no wait, under the server's
+# environment, says what it sent or why not; never the command's result.
+COLUMN=
+column() {
+	[ -n "$COLUMN" ] && [ -z "$DESTDIR" ] && [ -L "$TASKDIR/$self.cfg" ] || return 0
+	r=$EXTROOT/$self/$self-report.sh
+	[ -f "$r" ] || { echo "The plugins column is not sent: $r is gone"; return 0; }
+	[ -x "$XYMONHOME/bin/xymoncmd" ] || { echo "The plugins column is not sent: no $XYMONHOME/bin/xymoncmd to give it the server's environment"; return 0; }
+	echo "The plugins column, sent now:"
+	XYMON_PLUGINS_WAIT=0 "$XYMONHOME/bin/xymoncmd" --env="$XYMONHOME/etc/xymonserver.cfg" /bin/sh "$r" </dev/null 2>&1 | sed -e 's/^/  /'
+	return 0
 }
 
 # status SIDE ROOT PLUGIN -- one line for the plugin on that side: the
@@ -3377,5 +3395,12 @@ EOF
 			fi
 		fi ;;
 esac
+# The server's part changed: install and update by a MANIFEST to write,
+# remove by a directory gone.
+case $PART$VERB in
+	serverinstall|serverupdate) [ -z "$MANIFESTS" ] || COLUMN=1 ;;
+	serverremove) [ -z "$REMOVED" ] || COLUMN=1 ;;
+esac
+column
 # The installation a run changed, remembered now that it is done (S25).
 [ -z "$REMEMBER" ] || remember_tree "$REMEMBER"

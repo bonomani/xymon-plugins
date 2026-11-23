@@ -665,6 +665,20 @@ the status there stays, and goes purple once 31 hours have passed since it
 was sent, as it also does when xymond's restart stops the task while it
 waits. What it does goes to its log, `xymon-plugin.log`; a status it could
 not send, or that xymond did not keep, read back, ends it with 1.
+After an `install`, `update` or `remove` of a server part that changed an
+installation -- a plugin installed, updated or removed, not a refusal nor
+one passed over or not there --, and after an `enable` of
+`xymon-plugin`, on already or not -- the way to have the column sent now,
+a release published since its last run among what it says --, the command sends the column at once while that
+task is on, its link in `tasks.d` there: once, at its end, it runs the
+installed task's script with no wait, under the server's environment
+(`xymoncmd`, which reads `xymonserver.cfg`), and says what it sent. When it
+cannot -- GitHub not reached, the script gone, `xymoncmd` missing, the
+status not kept -- it says so and goes on: the column is refreshed, the
+command's own result does not depend on it. Under `DESTDIR`, with the task
+off, after a run that changed nothing, after `enable` of another plugin or
+`disable`, or once `xymon-plugin` itself is removed, nothing is sent; the
+column then goes purple once 31 hours have passed, as before.
 
 **S34. A task says what it needs to what can wait for it, and checks the
 rest itself.**

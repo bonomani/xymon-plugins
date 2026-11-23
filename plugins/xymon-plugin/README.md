@@ -46,6 +46,11 @@ go, the `plugins` column, the environment and exit statuses:
 
 ### The plugins column
 
+- With its task on, an `install`, `update` or `remove --server` that changed
+  a plugin, and `enable --server xymon-plugin`, send it at once, through the
+  server's `xymoncmd`, rather than at the task's next run. To have it sent
+  now, a release published since its last run, say: `enable --server
+  xymon-plugin`, on already or not.
 - A yellow status says what to run.
 - Besides `EXSERVICE=plugins` in `alerts.cfg`, a rule of its own can send it
   elsewhere.
