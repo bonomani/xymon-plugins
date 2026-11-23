@@ -1,0 +1,182 @@
+# Plan
+
+What is still open, in one place. An item leaves this file when it is done;
+one that is refused keeps a line with the reason. The issue or pull request
+named holds the detail.
+
+## Rules of work
+
+- **Releases.** Plugins are installed and updated on the test machines only
+  from release archives, never from a checkout. A release is tagged on
+  `stable`, its draft checked (sha256, attestation, content) before it is
+  published. A tag is pushed only when asked.
+- **Tests before pushing** (here with `-j 16`; CI stays at `-j4`, its runners
+  have 4 cores, and runs everything): the installer changed ->
+  `tests/compat` and `plugins/xymon-plugin/tests`; a plugin changed -> its
+  tests, those of the plugins whose `needs:` name it, and `tests/compat`;
+  the SPEC changed -> `tests/compat/spec-rules.sh`. Measured: `-j 16` 74 s,
+  `-j 32` 73 s (the longest tests, about 60 s, set the floor).
+- **macOS before merging a change to the installer.** The compat suite runs
+  on a Mac (bash 3.2 as `/bin/sh`, BSD userland): in a fresh `mktemp -d`,
+  clone the branch and Xymon `main`, build Xymon with `./configure --server`
+  (the CI's non-interactive variables, every path under the temp dir,
+  `XYMONUSER=$(id -un)`, `HTTPDGID=_www`) and `make` -- never `make
+  install`, no sudo, nothing outside the temp dir -- then `XYMON_SRC=<xymon>
+  tests/run.sh -j <cores> tests/compat < /dev/null`. CI's `macos-sh` only
+  parses the scripts (`sh -n`).
+- **Real trees.** A copy of a real Xymon tree for a test is made with `cp
+  -RL`: Homebrew's `$XYMONHOME/ext` is a link to `/opt/homebrew/var/xymon/ext`,
+  and `cp -RP` keeps it, so the copy writes into the real tree.
+
+## The client part, next steps
+
+`--client` installs, updates and removes a client part (#165); `status` and
+`verify` read a client's tree (#172). For a `plugins` column of a client
+host on its Xymon server, in this order:
+
+1. `outdated --client` (and `clean --client`, `verify` then saying what a
+   removed client plugin left).
+2. `task:` renamed `server-task:`; a client part's task, `client-task:`
+   (decided 2026-11-22).
+3. `enable`/`disable --client` through the client's `clientlaunch.d` (SPEC
+   first: how the link is made, and a client whose `clientlaunch.cfg` does
+   not read the directory).
+4. xymon-plugin's client task sending the client's `plugins` column. To
+   decide then: whether each client asks GitHub, or asks its server (with
+   "the code comes from a source", below).
+
+Later for the client: a server's own client tree; asking instead of refusing
+a tree in doubt; the dialogue offering client trees; a client's
+authentication (#29); `declared()` staging `client-files:` for `/plugins`;
+an `ext/` owned but not writable (a raw `mkdir` error today).
+
+## Decided, to build
+
+- **One manual page per part** (2026-11-23): tools in section 1 (their
+  commands), the server `NAME.8`, the client `NAME-client.8`, each with SEE
+  ALSO to the others; each part installs and removes its own page only.
+  xymon-plugin's client page is a short one pointing to `xymon-plugin.8`.
+  SPEC first.
+- **`ext/` as a full inventory** (2026-11-23): every entry is a plugin's
+  install or listed as the site's own in a file the administrator writes
+  (proposed `etc/xymon-plugin.d/local.cfg`, a name or simple pattern a
+  line, read and never written by the installer); anything else is
+  `untidy` in `verify`, with the advice to list it. install, update and
+  remove touch neither. A client's tree alike. SPEC first. Until then only
+  entries that look like a plugin's are read.
+- **An alarm of five levels** -- RFC #113, version 2 (2026-11-18, after Stef
+  Coene's reading): host, domain, test, instance, metric, in two stages --
+  what the API can say on Xymon 4.3.31 (the renaming, the flags `stale`,
+  `unreachable`, `suppressed` beside the last severity measured, a label,
+  the instance where Xymon names it), and a state per instance as the
+  direction of a Xymon 5.0.0. Asked, in order: the words, then the API
+  before 5.0.0, then 5.0.0's goal. #114 stays a draft for reference.
+
+## Waiting on an answer
+
+- **The code comes from a source**: `install` and `update` taking a
+  plugin's code from the Xymon server, GitHub releases or `--source`;
+  whether the checkout accepted with `y` counts as named, so trusted.
+- **`connect`** (one token, hooks, menu): where a ticked plugin not
+  installed comes from; `connect` given a URL on a server; a second
+  `connect:`. `--tools` and `connect --tools` proposing the installation
+  (decision 55) come with it.
+- **`trust`** and its four guards: how each is turned off; the command that
+  sets `trust` and the emergency stop; the block list's form.
+
+## Later
+
+- **Going back to an earlier version**: today by hand only (the older
+  release's archive, then `update` from it), with no warning that it goes
+  down. With "the code comes from a source": `install`/`update --version
+  X.Y.Z` (attestation checked), "go back to the previous version" in the
+  dialogue, any downgrade said, `[y/N]` on a terminal, `--force` off one.
+  The warning alone can come first. Until then every change keeps the
+  manual way working: an older archive's `update` installs it, recognises
+  the newer version's unedited files and keeps the edited ones.
+- **Two concurrent runs by two users** on one plugin are caught only by the
+  set-aside directory's owner check: a lock.
+- **`verify` of the `/plugins` stage depends on the tree's place**: a copy
+  of a tree at another path reports every staged file as not what was
+  staged, though the files are identical. Find why; a moved tree would see
+  the same.
+- **A server tree whose `ext/` is a link** (Homebrew): no test builds one.
+- A bash 3.2 built on a Linux runner would check what `macos-sh` checks
+  with no wait for a macOS machine (`stable` waits for it).
+- `plugin-resume.sh` (54 s): keep the cuts that matter, one by signal; the
+  full cut matrix stays a tool to run by hand before a release.
+- The dialogue `eval`s a printed command (quoted by `hx`; `set --` would be
+  safer); `xymon_trees` splits fields on spaces, so a tree path with one is
+  not detected; a `MANDIR` changed between install and remove leaves the
+  old manual link (MANIFEST records it, unused); an installed `PLUGIN` with
+  malformed needs makes every removal stop in `needed`/`depth`.
+- Plugin manual pages: facts the shortened READMEs kept (xymonapi's family
+  table, the language model section, Apache/lighttpd minimums,
+  `XYMONAPI_LISTEN`, removal keeping the token files) are candidates for the
+  manual pages.
+- After an update, optionally: wait for `/health`'s version; `update --auto`
+  with #135's safeguards (#161); xymon#505's two additions.
+- The prose credit warning of xymon#863: copy its `::warning` step into
+  `.github/workflows/attribution.yml`.
+- `xymon-setup`, a tool of its own to install Xymon itself (server or
+  client, from packages, Homebrew or a build), then calling `xymon-plugin`.
+  Nothing to prepare now.
+- The fork: close bonomani/xymon-plugins#19 (it changes the gone
+  `install.sh`) and bring its `main` to upstream's. Asked first.
+
+## Waiting on others
+
+- **Xymon**: #128 tracks what the plugins wait for (#911, #920, #921, #160,
+  4.3.32) and the Homebrew tap (#44, #47); `expect.warn`/`reject.warn`
+  (xymon#505), `interval=` (xymon#932), holidays outside alerts (xymon#933),
+  KILLGROUP (xymon#960), NEEDS after the whole configuration (xymon#961).
+- **Stef's pull requests** #45 (`/pages`) and #33 (`/graphs` through
+  `showgraph.cgi`): one review each, kept up to date.
+- **Debian's runtime directory** -- xymon#160 sets `XYMONRUNDIR=/run/xymon`,
+  which makes the relay work on Ubuntu with nothing to set (#53, #67).
+- **checks/interface in Python** -- #3, awaiting a decision.
+
+## Open questions
+
+- **The side a plugin is installed for** -- #39: what an install records;
+  whether a server's tree is running (`xymonlaunch`); a client's
+  `XYMONSERVERS` and `CLIENTHOSTNAME`; on a client, `XYMONTMP` in place of
+  `XYMONRUNDIR` for runtime files.
+- **Debian and Ubuntu's packaged Xymon and Python** -- #47: the stable
+  archives ship Xymon 4.3.30, below the floor; xymon-apt backports 4.3.31.
+- **The Xymon floor** -- #68: revisit 4.3.31 once 4.3.32 is released.
+- **API first** -- #51: the contract stays, the implementation is
+  replaceable; whether `/graphs` stays a PNG.
+- **A repository plugin** -- #29.
+
+## Known limits, left for now
+
+- The relay check reads owner and mode bits, not ACLs (#53).
+- The SELinux module (#69) lets the web server connect to every Xymon
+  daemon's sockets once its boolean is on. A Xymon built from source on RHEL
+  has no `/run/xymon` label unless the admin gives it.
+- The local socket's path is checked only together with the relay's (#53).
+- `cfgval`, the fallback when `xymoncmd` cannot be run, reads one level of
+  `xymonserver.d/` (marked `ponytail:` in the installer).
+
+## Refused
+
+- **CI running only the tests a change touches**: a test would not run on
+  every lane (2026-11-21); CI went from about 7 to 2 minutes with every test
+  on every lane.
+- **A macOS job running the suite in CI**: the suite runs on a Mac by hand
+  before merging a change to the installer (2026-11-23).
+- **Requiring Xymon 4.3.32 now**: not released; it would leave out every
+  released Xymon and would not fix the Ubuntu case (#68).
+- **Python as a plugin `needs:`**: a system requirement, not a directory
+  the installer installs.
+- **A Linux abstract socket, `SO_PEERCRED`, or TLS on the relay socket**:
+  Linux only, no common web server syntax, credentials sent before the API
+  takes part, or lighttpd cannot proxy to HTTPS.
+- **Falling back to `$XYMONHOME/tmp` where `XYMONRUNDIR` is empty**: against
+  S22, which follows Xymon's own fallback.
+- **Grouping `xymonapi-rag.sh`'s model loads**: 0.5 s each, measured (#62).
+- **`MANIFEST` in what makes a directory an install**: an update cut short,
+  by pip or a signal, must be resumable by `update` (2026-11-23).
+- **Guessing "cut short" from a missing `VERSION`**: an explicit in-progress
+  marker decides it (2026-11-23).
