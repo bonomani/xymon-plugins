@@ -221,20 +221,51 @@ jobs:
           git fetch -q origin stable || true
           OASDIFF="$RUNNER_TEMP/oasdiff" build/contract-check.sh origin/stable | tee -a "$GITHUB_STEP_SUMMARY"
 
-  # macOS's /bin/sh is bash 3.2, older than any shell the Linux lanes run:
-  # it reads a bare case "pattern)" inside a multi-line $( ) as the end of
-  # the substitution, and refuses the whole script. Every script a user's
-  # machine runs is parsed by it here.
-  macos-sh:
-    runs-on: macos-latest
-    timeout-minutes: 5
+  # bash 3.2, macOS's /bin/sh, refuses constructs every later shell takes --
+  # a case pattern with no "(" inside $( ), for one -- so a script that runs
+  # on Linux could not even start on a Mac. Built here from GNU's 3.2.57,
+  # its parser made anew by bison as Apple's is (the y.tab.c in the archive
+  # predates the 57 patches), and cached: no macOS runner to wait for. What
+  # running on macOS checks beyond parsing -- BSD tools, paths -- is the
+  # Mac run's before a change to the installer is merged (docs/PLAN.md).
+  bash32-sh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - name: Parse the scripts with macOS's /bin/sh
+      - name: Cache bash 3.2.57
+        id: bash32
+        uses: actions/cache@v6
+        with:
+          path: ~/bash32
+          key: bash-3.2.57-3fa9daf85ebf35068f090ce51283ddeeb3c75eb5bc70b1a4a7cb05868bfe06a4-${{ runner.os }}
+      - name: Build bash 3.2.57
+        if: steps.bash32.outputs.cache-hit != 'true'
         run: |
-          /bin/sh --version | head -n 1
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bison
+          cd "$RUNNER_TEMP"
+          curl -fsSLO https://ftp.gnu.org/gnu/bash/bash-3.2.57.tar.gz
+          echo "3fa9daf85ebf35068f090ce51283ddeeb3c75eb5bc70b1a4a7cb05868bfe06a4  bash-3.2.57.tar.gz" | sha256sum -c
+          tar -xzf bash-3.2.57.tar.gz
+          cd bash-3.2.57
+          # gnu89 and no warnings: C of 2007, which later compilers refuse otherwise.
+          ./configure --without-bash-malloc --disable-nls CFLAGS='-O1 -std=gnu89 -w' >/dev/null
+          make -j"$(nproc)" >/dev/null
+          mkdir -p ~/bash32 && cp bash ~/bash32/bash
+      - name: Parse the scripts with bash 3.2, as macOS's /bin/sh
+        run: |
+          # Invoked as sh, as on macOS: bash in its POSIX mode.
+          ln -sf ~/bash32/bash "$RUNNER_TEMP/sh"; sh32=$RUNNER_TEMP/sh
+          "$sh32" --version | head -n 1
+          # The check checks itself: a bash that took this would pass
+          # everything, and catch nothing.
+          printf 'x=$(case a in a) echo y ;; esac)\n' > "$RUNNER_TEMP/bad.sh"
+          if "$sh32" -n "$RUNNER_TEMP/bad.sh" 2>/dev/null; then
+            echo "::error::this bash 3.2 parses a case with no ( inside \$( ), which macOS's /bin/sh refuses"; exit 1
+          fi
           for f in xymon-plugin build/*.sh plugins/*/*.sh; do
-            /bin/sh -n "$f" || { echo "::error file=$f::/bin/sh (bash 3.2) cannot parse $f"; rc=1; }
+            "$sh32" -n "$f" || { echo "::error file=$f::bash 3.2 (macOS's /bin/sh) cannot parse $f"; rc=1; }
           done
           exit "${rc:-0}"
 
@@ -242,7 +273,7 @@ jobs:
   # install. Moved forward only, never back nor forced; a run that finishes
   # after a newer one leaves it where it is.
   stable:
-    needs: [test, contract, macos-sh]
+    needs: [test, contract, bash32-sh]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
