@@ -250,7 +250,7 @@ r "is not installed: ./xymon-plugin install --tools xymonapi-agent" update --too
 r "the tools have no task" enable --tools xymonapi
 r "one part at a time" install --server --tools xymonapi
 r "./xymon-plugin install --tools xymonapi" install --server --tools xymonapi
-r "status, with none, covers the server part and the tools" status --server --tools
+r "status, with none, covers every part" status --server --tools
 r "--all, or plugins named: not both" install --server --all xymonapi
 [ -e "$work/refused" ] && fail "[S24] a refused verb installed something"
 # Run as root, the tools are refused without PREFIX or DESTDIR: they would

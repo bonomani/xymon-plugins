@@ -388,7 +388,7 @@ finds no directory to remove (S20): `semodule -r NAME` takes it away.
 ### Knowing what is installed
 
 **S15. `status` says what is installed.**
-`status --server` and `status --tools` say, for each plugin of the part, or
+`status --server`, `status --client` and `status --tools` say, for each plugin of the part, or
 those named: whether it is installed, the version installed, from its
 `VERSION`, a release tag read as its `X.Y.Z`, or that an install of it
 was cut short (S20); on the server, whether its
@@ -398,7 +398,13 @@ when it is, and, at the same version, said to have other code when its files dif
 from those `MANIFEST` says were installed (S29), naming the update. A name that is no plugin is refused. `status` changes nothing. It
 says them by section, each always there, empty or not: the Xymon server,
 its own client tree -- the one its `XYMONCLIENTHOME` names -- and the
-person's tools; `--server` and `--tools` keep to theirs.
+person's tools; `--server` and `--tools` keep to theirs. A standalone
+client's tree (S35) is said as a server's, without the task: with no
+part named, one `XYMONHOME` names stands for the server's sections, and
+without `XYMONHOME` each one found (S25) has its own after the servers';
+`--client` keeps to them. One found that a client verb refuses -- a
+server's own is never one apart (S25), one in doubt is -- is said
+with why, and not read.
 
 ### Running the command
 
@@ -437,7 +443,8 @@ replaces, as `install-server` or `install-client`, is refused, naming the
 new form. Without a part named, on a terminal, the server part is said and
 acted on, but a client's tree named is refused, on a terminal too, the
 command given with `--client`; off a terminal, a verb that changes
-something is refused; `status`, `verify` and `outdated` cover the server
+something is refused; `status` and `verify` cover every part, the
+server's, a standalone client's tree and the tools; `outdated` the server
 part and the tools, not yet a client's tree. `install`, `remove` and `clean` need a
 plugin named, or `--all`. `install` refuses a plugin installed already, and
 `update` one that is not; `--all`, and a plugin one needs, pass over those
@@ -549,7 +556,7 @@ until it is updated. The `data:` and `writes:` lines of the `PLUGIN` copy
 say what the plugin's own commands may have written since (S28).
 
 **S30. `verify` says what differs from what was installed.**
-`verify --server` and `verify --tools` change nothing. They say, one line
+`verify --server`, `verify --client` and `verify --tools` change nothing. They say, one line
 each, `broken:`, `untidy:`, `edited:`, `note:` or `ok:`, the plugin, what differs,
 and the command that puts it right:
 `broken: xymonapi: app.py changed: ./xymon-plugin update --server xymonapi`.
@@ -589,7 +596,12 @@ same. Each line names `update` for a plugin's files, `update --venv` for
 its modules, and `clean` for what is left. It exits 0 when nothing is broken
 or untidy, 3 when something is broken, whatever else is untidy, and 4 when
 something is untidy and nothing broken. It needs no terminal, and, as
-`status`, covers every installation found when none is named (S25).
+`status`, covers every installation found when none is named (S25),
+the standalone clients' too. In a client's tree (S35) it checks the
+same, but what a client part never has: a task link, a copy `/plugins`
+serves, a virtualenv, a SELinux module, a set-aside directory, a file of
+the administrator's; nor does it say yet what is left there, which comes
+with `clean --client`.
 `MANIFEST` lying where the Xymon user can write, `verify` finds what was
 changed by mistake or left behind, not what someone able to write there
 and to rewrite `MANIFEST` too has hidden.
@@ -704,8 +716,11 @@ none named passes over a plugin this checkout lacks, saying so. Before anything
 changes, the run is refused unless the person running it owns the tree's
 `ext/`, root as any other, naming the owner: the files of a part are
 written by whoever owns its tree, so that the same person updates and
-removes them. `status`, `verify`, `outdated` and `clean` refuse
-`--client`: they do not read a client's tree yet.
+removes them. `status` and `verify`, which change nothing, read a
+client's tree as a server's (S15, S30), whoever owns its `ext/`, and
+refuse the trees the other verbs refuse: one of another kind, a server's
+own, one in doubt. `outdated` and `clean` refuse `--client`: they do not
+read a client's tree yet.
 
 ### Getting the code
 
@@ -752,8 +767,8 @@ brings its test.
   move under `plugins/` as a client part when they get a `PLUGIN` file.
 - **A standalone client's part, the first client step (S35)**; still to
   come:
-  - `status`, `verify`, `outdated` and `clean` cover a client's tree as a
-    server's;
+  - `outdated` and `clean` cover a client's tree as a server's, `verify`
+    then saying what is left there;
   - the `PLUGIN` line `task:` becomes `server-task:`, as the server's other
     lines; a client part's task will be `client-task:`;
   - a server's own client tree, and a client part's task, come after;
