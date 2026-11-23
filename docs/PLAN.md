@@ -22,8 +22,8 @@ named holds the detail.
   (the CI's non-interactive variables, every path under the temp dir,
   `XYMONUSER=$(id -un)`, `HTTPDGID=_www`) and `make` -- never `make
   install`, no sudo, nothing outside the temp dir -- then `XYMON_SRC=<xymon>
-  tests/run.sh -j <cores> tests/compat < /dev/null`. CI's `macos-sh` only
-  parses the scripts (`sh -n`).
+  tests/run.sh -j <cores> tests/compat < /dev/null`. CI's `bash32-sh` only
+  parses the scripts with bash 3.2 (`sh -n`).
 - **Real trees.** A copy of a real Xymon tree for a test is made with `cp
   -RL`: Homebrew's `$XYMONHOME/ext` is a link to `/opt/homebrew/var/xymon/ext`,
   and `cp -RP` keeps it, so the copy writes into the real tree.
@@ -136,8 +136,6 @@ Each becomes a numbered rule with the pull request that brings its test.
   staged, though the files are identical. Find why; a moved tree would see
   the same.
 - **A server tree whose `ext/` is a link** (Homebrew): no test builds one.
-- A bash 3.2 built on a Linux runner would check what `macos-sh` checks
-  with no wait for a macOS machine (`stable` waits for it).
 - `plugin-resume.sh` (54 s): keep the cuts that matter, one by signal; the
   full cut matrix stays a tool to run by hand before a release.
 - The dialogue `eval`s a printed command (quoted by `hx`; `set --` would be
