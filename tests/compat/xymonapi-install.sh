@@ -118,7 +118,10 @@ chmod 700 "$home/ext/xymonapi" "$home/ext/xymon-plugins-dist" "$home/ext/xymon-p
 # enters a directory it lists, and that one its owner cannot search.
 closed=$(find "$home/ext" "$home/etc/tasks.d" -path "$home/ext/venv/odd/d0400" -prune -o -type d ! -perm -0055 -print)
 assert_equal "" "$closed" "an update opens what an install under umask 077 left closed"
-odd=$(find "$home/ext/venv/odd/d0400" "$home/ext/venv/odd/f0010" "$home/ext/venv/odd/fifo" -prune \( -perm -0004 -o -perm -0001 \))
+# From the parent, each entry tested then pruned: BSD find opens a
+# directory named as an operand before -prune acts, and d0400 cannot be
+# searched.
+odd=$(find "$home/ext/venv/odd" ! -path "$home/ext/venv/odd" \( \( -perm -0004 -o -perm -0001 \) -print -o -prune \))
 assert_equal "" "$odd" "what its owner may not use itself, and a fifo, are left closed"
 [ -n "$(find "$work/private" -perm 0600)" ] || fail "a link in the virtualenv was followed or changed: $work/private is no longer 600"
 [ -n "$(find "$home/ext/venv/shared" -prune -perm -2055)" ] || fail "a setgid directory was left closed"
