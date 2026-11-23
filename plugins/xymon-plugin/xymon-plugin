@@ -1023,22 +1023,27 @@ aside_ok() {
 		die "$(stale "$sa" "$1"); then install or update $1"
 	fi
 }
-# running_ok PLUGIN -- refuse a run on PLUGIN while another one runs: the
-# process PROG names, alive by kill -0, and an xymon-plugin by what ps
-# says it runs. One that is another program -- its number taken again --
-# is no run; one ps cannot tell of is taken for none, said.
+# running_ok PLUGIN -- refuse a run on PLUGIN while another one runs
+# (running).
 running_ok() {
+	if rm_=$(running "$1"); then die "$rm_"; fi
+}
+# running PLUGIN -- another run on PLUGIN is going on, said: the process
+# PROG names, alive by kill -0, and an xymon-plugin by what ps says it
+# runs. One that is another program -- its number taken again -- is no
+# run; one ps cannot tell of is taken for none, said.
+running() {
 	ip=$EXTROOT/$1/$PROG
-	[ -f "$ip" ] && [ ! -L "$ip" ] || return 0
+	[ -f "$ip" ] && [ ! -L "$ip" ] || return 1
 	pid=$(sed -n "s/^xymon-plugin in progress: $1 \([0-9][0-9]*\)\( first\)\{0,1\}\$/\1/p" "$ip")
-	[ -n "$pid" ] && [ "$pid" != "$$" ] && kill -0 "$pid" 2>/dev/null || return 0
+	[ -n "$pid" ] && [ "$pid" != "$$" ] && kill -0 "$pid" 2>/dev/null || return 1
 	# ps -p where it has it; busybox's lists every process with -o.
 	args=$(ps -p "$pid" -o args= 2>/dev/null) || args=$(ps -o pid,args 2>/dev/null | awk -v p="$pid" '$1 == p { $1 = ""; print }')
 	case $args in
-		*xymon-plugin*) die "an install or update of $1 is running, process $pid: wait for it to end; if no such run is going on, remove $ip and run this again" ;;
+		*xymon-plugin*) echo "an install or update of $1 is running, process $pid: wait for it to end; if no such run is going on, remove $ip and run this again"; return 0 ;;
 		"") echo "xymon-plugin: process $pid, which $ip names, runs, and ps cannot say what it is: taken for no run of $1" >&2 ;;
 	esac
-	return 0
+	return 1
 }
 
 # aside PLUGIN -- AS, ext/.xymon-plugin.PLUGIN, where an install or an
@@ -2545,14 +2550,16 @@ ext_names() {
 
 # installs PART [ABSENT] -- for an action given no names, every directory
 # in ext/ an install left, and with ABSENT the plugins of LIST with none;
-# anything else there is passed over, said.
+# anything else there is passed over, said -- one another run is making
+# as such (running), not as no install.
 installs() {
 	if [ -n "${2:-}" ]; then
 		for n in $LIST; do [ -e "$EXTROOT/$n" ] || [ -L "$EXTROOT/$n" ] || echo "$n"; done
 	fi
 	while IFS= read -r n; do
 		[ -n "$n" ] || continue
-		if takes "$1" "$n"; then echo "$n"
+		if plain "$n" && running "$n" >&2; then :
+		elif takes "$1" "$n"; then echo "$n"
 		else echo "$EXTROOT/$n is no install of $n's: left as it is" >&2; fi
 	done <<EOX
 $(ext_names)
