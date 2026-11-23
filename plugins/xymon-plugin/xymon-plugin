@@ -121,6 +121,8 @@ case $VERB in
 	*) usage ;;
 esac
 NAMES=
+RUNMSG=
+PS_SAID=
 REMEMBER=
 CLIENT_CHECKED=
 FORCE=
@@ -1029,9 +1031,10 @@ aside_ok() {
 # running_ok PLUGIN -- refuse a run on PLUGIN while another one runs
 # (running).
 running_ok() {
-	if rm_=$(running "$1"); then die "$rm_"; fi
+	if running "$1"; then die "$RUNMSG"; fi
 }
-# running PLUGIN -- another run on PLUGIN is going on, said: the process
+# running PLUGIN [quiet] -- another run on PLUGIN is going on, RUNMSG
+# saying it, for the caller to say: the process
 # PROG names, alive by kill -0, and an xymon-plugin by what ps says it
 # runs. One that is another program -- its number taken again -- is no
 # run; one ps cannot tell of is taken for none, said.
@@ -1043,8 +1046,14 @@ running() {
 	# ps -p where it has it; busybox's lists every process with -o.
 	args=$(ps -p "$pid" -o args= 2>/dev/null) || args=$(ps -o pid,args 2>/dev/null | awk -v p="$pid" '$1 == p { $1 = ""; print }')
 	case $args in
-		*xymon-plugin*) echo "an install or update of $1 is running, process $pid: wait for it to end; if no such run is going on, remove $ip and run this again"; return 0 ;;
-		"") echo "xymon-plugin: process $pid, which $ip names, runs, and ps cannot say what it is: taken for no run of $1" >&2 ;;
+		*xymon-plugin*) RUNMSG="an install or update of $1 is running, process $pid: wait for it to end; if no such run is going on, remove $ip and run this again"; return 0 ;;
+		# Said once a run: running_ok asks more than once (the check first,
+		# then the file in progress), in this shell, so PS_SAID keeps it;
+		# installs, listing in a subshell of its own, passes QUIET.
+		"") case " $PS_SAID ${2:-} " in
+			*" $1 "*|*" quiet "*) ;;
+			*) PS_SAID="$PS_SAID $1"; echo "xymon-plugin: process $pid, which $ip names, runs, and ps cannot say what it is: taken for no run of $1" >&2 ;;
+		esac ;;
 	esac
 	return 1
 }
@@ -2561,7 +2570,7 @@ installs() {
 	fi
 	while IFS= read -r n; do
 		[ -n "$n" ] || continue
-		if plain "$n" && running "$n" >&2; then :
+		if plain "$n" && running "$n" quiet; then echo "$RUNMSG" >&2
 		elif takes "$1" "$n"; then echo "$n"
 		else echo "$EXTROOT/$n is no install of $n's: left as it is" >&2; fi
 	done <<EOX
