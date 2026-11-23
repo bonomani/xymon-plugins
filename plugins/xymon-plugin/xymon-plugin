@@ -3232,18 +3232,20 @@ case $VERB in
 			installed "$PARTROOT" "$n" >/dev/null || { case $PART in server|client) cut_short "$n" ;; *) false ;; esac; } \
 				|| die "$n is not installed: ./xymon-plugin install --$PART $n"
 		done
-		if [ -z "$NAMES" ] && [ "$PART" = client ]; then
-			# The client parts installed, and nothing else ext/ may hold;
-			# one this checkout does not have is passed over, said.
-			LIST=$(installs client)
+		if [ -z "$NAMES" ]; then
+			# What is installed, and nothing else ext/ may hold; one this
+			# checkout does not have -- a release's archive holds its own
+			# plugin alone -- is passed over, said, before anything changes,
+			# rather than met halfway (S24).
+			case $PART in
+				server|client) LIST=$(installs "$PART") ;;
+				*) LIST=$(for n in $(with_installed "$PARTROOT"); do [ -f "$PARTROOT/$n/VERSION" ] && echo "$n"; done) ;;
+			esac
 			[ -n "$LIST" ] || die "nothing is installed in $PARTROOT to update"
 			LIST=$(for n in $LIST; do
 				if [ -f "$ROOT/plugins/$n/PLUGIN" ]; then echo "$n"; else echo "$n is not in this checkout: left as it is" >&2; fi
 			done)
-		elif [ -z "$NAMES" ]; then
-			if [ "$PART" = server ]; then LIST=$(installs server)
-			else LIST=$(for n in $(with_installed "$PARTROOT"); do [ -f "$PARTROOT/$n/VERSION" ] && echo "$n"; done); fi
-			[ -n "$LIST" ] || die "nothing is installed in $PARTROOT to update"
+			[ -n "$LIST" ] || die "none of the plugins installed in $PARTROOT is in this checkout: nothing to update"
 		fi
 		if [ "$PART" = server ]; then
 			for n in $LIST; do xymon_ok "$n"; done

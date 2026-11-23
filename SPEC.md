@@ -300,7 +300,9 @@ removes what was installed: its directory, its command, its manual page,
 its task link or the task file in the link's place -- that directory gone
 (S9), only the link into it, a file at its name left and said, and no
 SELinux module (S23). An action given no names covers the plugins
-installed with a copy that the checkout no longer has. An update reads the
+installed with a copy that the checkout no longer has -- but `update`,
+which takes the code from the checkout, passes over each, saying so, before
+anything changes: a release's archive holds its own plugin alone. An update reads the
 copy before replacing it, and removes the command, manual page and task
 link the installed version put in place and the new one does not. A plugin
 installed before the copy existed is managed by the checkout's `PLUGIN`
