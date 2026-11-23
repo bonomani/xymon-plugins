@@ -21,6 +21,9 @@ set -euo pipefail
 
 ROOT=$(find_root)
 work=$(mktempdir)
+# Resolved: the installer names trees by their resolved path, and on macOS
+# the temporary directory lies under /var, a link to /private/var.
+work=$(cd "$work" && pwd -P)
 py=${XYMONAPI_PYTHON:-python3}
 export XDG_CONFIG_HOME="$work/cfg" XYMON_PLUGINS_TREES_ONLY=1
 man=$work/man

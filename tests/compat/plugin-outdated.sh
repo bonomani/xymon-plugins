@@ -215,11 +215,15 @@ if [ "$(id -u)" -ne 0 ]; then
 	# Any directory it cannot enter, a release's name or not; but the
 	# virtualenv, the installer's own.
 	r=$prefix/libexec/xymon-plugins
+	# A virtualenv an earlier step made, where a Python has the modules, is
+	# set aside for this step and put back after it.
+	[ ! -e "$r/venv" ] || mv "$r/venv" "$r/venv.kept"
 	mkdir -p "$r/private" "$r/venv"; chmod a-x "$r/private" "$r/venv"
 	RC=0; PATH="$bin:$PATH" "$work/lone/xymon-plugin" outdated --tools PREFIX="$prefix" >"$work/out" 2>"$work/err" || RC=$?
 	assert_contains "private: cannot read $r/private/VERSION: $r/private is mode 644" "$(out)" "[S32] a directory no release names, closed, is said"
 	assert_not_contains "venv" "$(out)" "the virtualenv, closed, is not taken for a plugin"
 	chmod u+x,go+x "$r/private" "$r/venv"; rmdir "$r/private" "$r/venv"
+	[ ! -e "$r/venv.kept" ] || mv "$r/venv.kept" "$r/venv"
 	chmod a-x "$d"
 	chmod u+x,go+x "$d"
 	r=$prefix/libexec/xymon-plugins

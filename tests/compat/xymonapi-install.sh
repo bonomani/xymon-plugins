@@ -94,6 +94,8 @@ echo 'stale' > "$home/ext/xymonapi-rag/gone.py"
 # ext/ and tasks.d/, a plugin's directory, /plugins' stage, a virtualenv --
 # is opened again; a link in the virtualenv is not followed out of it. The
 # virtualenv is one whose Python runs, so that the install keeps it.
+# Anew: where a Python has the modules, an earlier step made a real one.
+rm -rf "$home/ext/venv"
 mkdir -p "$home/ext/venv/bin" "$home/ext/venv/lib"
 : > "$home/ext/venv/pyvenv.cfg"
 ln -s "$(command -v "${XYMONAPI_PYTHON:-python3}")" "$home/ext/venv/bin/python3"
