@@ -56,14 +56,16 @@ an `ext/` owned but not writable (a raw `mkdir` error today).
   commands), the server `NAME.8`, the client `NAME-client.8`, each with SEE
   ALSO to the others; each part installs and removes its own page only.
   xymon-plugin's client page is a short one pointing to `xymon-plugin.8`.
-  SPEC first.
+  SPEC first: it changes S4 and S35, and xymon-plugin's `PLUGIN`, whose
+  `client-manual:` names `xymon-plugin.8` today, as its server part does.
 - **`ext/` as a full inventory** (2026-11-23): every entry is a plugin's
   install or listed as the site's own in a file the administrator writes
   (proposed `etc/xymon-plugin.d/local.cfg`, a name or simple pattern a
   line, read and never written by the installer); anything else is
   `untidy` in `verify`, with the advice to list it. install, update and
-  remove touch neither. A client's tree alike. SPEC first. Until then only
-  entries that look like a plugin's are read.
+  remove touch neither. A client's tree alike. SPEC first: it changes S20,
+  which says today that the rest of `ext/` is the site's and is not read,
+  and S30. Until then only entries that look like a plugin's are read.
 - **An alarm of five levels** -- RFC #113, version 2 (2026-11-18, after Stef
   Coene's reading): host, domain, test, instance, metric, in two stages --
   what the API can say on Xymon 4.3.31 (the renaming, the flags `stale`,
@@ -71,6 +73,31 @@ an `ext/` owned but not writable (a raw `mkdir` error today).
   the instance where Xymon names it), and a state per instance as the
   direction of a Xymon 5.0.0. Asked, in order: the words, then the API
   before 5.0.0, then 5.0.0's goal. #114 stays a draft for reference.
+
+## Decided in SPEC's Planned section, not yet built
+
+Each becomes a numbered rule with the pull request that brings its test.
+
+- **Removing the directory by hand removes everything of that part**: the
+  settings in `ext/NAME/xymonserver.cfg`, seen through a link in
+  `etc/xymonserver.d/`; what `/plugins` serves kept in `ext/NAME/`; and a
+  virtualenv of each plugin's own in `ext/NAME/venv/`, in place of the one
+  shared today. Tested by installing every plugin, enabling it, deleting
+  `ext/`, and checking xymonlaunch, `xymoncmd`, `apachectl configtest`
+  and `nginx -t`.
+- **What `/plugins` serves can be checked against the repository**: a
+  server serves the release archive it installed, not one built on the
+  spot; `install` from a server not trusted with `--source` checks the
+  archive by its attestation or by rebuilding it from the tag; a checkout
+  that is no release tag has no attested archive and says so.
+- **The parts asked for**: on a terminal, with no part named, the command
+  asks which parts; `--server` and `--client` together, on a server, for
+  its own client tree (S24 refuses two parts today).
+- **`connect URL`**, **the code comes from a source** and **`trust`**, with
+  the questions below.
+- The checks under `checks/` move under `plugins/` as client parts when they
+  get a `PLUGIN` file; a client part keeps its runtime files in
+  `$XYMONTMP/NAME` and its logs in `XYMONCLIENTLOGS`.
 
 ## Waiting on an answer
 
@@ -82,7 +109,15 @@ an `ext/` owned but not writable (a raw `mkdir` error today).
   `connect:`. `--tools` and `connect --tools` proposing the installation
   (decision 55) come with it.
 - **`trust`** and its four guards: how each is turned off; the command that
-  sets `trust` and the emergency stop; the block list's form.
+  sets `trust` and the emergency stop; the block list's form; the setting by
+  which a server allows serving an archive no proof checks.
+- The others of SPEC's "Open, to decide": where the search index lies on a
+  server (`$XDG_CACHE_HOME/xymonapi-rag/` or under `$XYMONVAR`); how much of
+  "while it runs" a test can check; `install --all` and a plugin needed when
+  some are installed, and S3 and S8 part by part; for a server's own client,
+  which tree's `xymon-plugin.cfg` keeps its source; whether a standalone
+  client's server URL is given only by `connect --client`; who owns the
+  files written for `SUDO_USER` under `sudo`.
 
 ## Later
 
