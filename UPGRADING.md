@@ -5,6 +5,42 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## The installer leaves what is not its own, from xymon-plugin 0.2.4
+
+xymon-plugin 0.2.4 to 0.2.6 take or replace only what an install made, in
+`ext/` and beside it. Nothing is asked of you for a usual install; these
+cases now behave differently:
+
+- **A link, or anything no install left, at `ext/NAME`** -- a directory
+  holding data, a `PLUGIN` naming another plugin, a link to a directory of
+  yours -- is refused by `install`, `update` and `remove` before anything
+  changes, naming it; before, it was replaced or deleted. A package that
+  put a link there: install into a directory instead. `remove --all` and
+  `update` with none named pass over it, saying so.
+- **An install cut short** (an update stopped by an error or a signal)
+  carries a file in progress, and its edited task file, snippets and
+  `.old` files wait in `ext/.xymon-plugin.NAME`: the next `install` or
+  `update` of the plugin resumes and puts them back. An installer older
+  than 0.2.4 does not know that state: it advises removing `ext/NAME` by
+  hand. Update with 0.2.4 or later instead.
+- **Your own manual page or command** at a plugin's name -- in `MANDIR`, or
+  `$PREFIX/bin` for the tools -- is left as it is and said, where it was
+  replaced.
+- **A task file or web server snippet you edited, that a new version no
+  longer ships**, is kept as `NAME.old` (`verify` says it is untidy until
+  you remove it); an edited snippet replaced by another for the same web
+  server stops the update until your edits are carried into the new one
+  and the old one is moved out of `ext/NAME`, as the refusal says.
+- **Removing a plugin whose directory is gone** takes only the task link
+  pointing into it: a task file of yours at that name stays.
+- **The installation used last** is remembered per part, in a file of its
+  own: the one remembered before is not known after the update, so where
+  several are found none is offered as the default until one is chosen
+  again.
+- **`update` with none named, from one release's archive**, which holds its
+  own plugin alone, passes over the plugins installed that it does not
+  carry (0.2.6; 0.2.4 and 0.2.5 stopped on the first of them).
+
 ## The API takes up an update by itself, from xymonapi 9.1.0
 
 `./xymon-plugin update --server` no longer looks for the API's process to
