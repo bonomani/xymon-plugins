@@ -80,7 +80,8 @@ assert_contains "$(cksum < "$alt/plugins/xymonapi/app.py")${TAB}app.py" "$(cat "
 x update --server xymonapi XYMONHOME="$home"
 # A virtualenv made by the update: the lines are the same, the modules may
 # not be, so MANIFEST is written anew. A stand-in Python, with every module,
-# that makes one.
+# that makes one -- none there before: where a Python here has the modules,
+# the install made one already.
 cat > "$work/mkpy" <<'SH'
 #!/bin/sh
 case $* in
@@ -90,6 +91,7 @@ esac
 exit 0
 SH
 chmod 755 "$work/mkpy"
+rm -rf "$home/ext/venv"
 before=$(ino "$home/ext/xymonapi/MANIFEST")
 x update --server xymonapi XYMONHOME="$home" PYTHON="$work/mkpy"
 [ -x "$home/ext/venv/bin/python3" ] || fail "the stand-in Python made no virtualenv: $(tail -n 5 "$work/x.log")"
