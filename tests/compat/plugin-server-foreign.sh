@@ -7,12 +7,16 @@
 # directory in ext/ an install left: VERSION and its PLUGIN copy naming the
 # plugin and a server part, plain files, or VERSION alone from before the
 # copy (S20); not MANIFEST, so an update cut short by pip is put right by
-# the next. Anything else at ext/NAME -- data and no VERSION, an install
-# cut short before its VERSION, a PLUGIN naming another, with no server
-# part or a link, a VERSION that is a link, a link to the person's own
-# directory -- is left as it is: each refusal changes nothing, modes
-# included, and names the path; remove --all and update with none named
-# pass over it, saying so, and what it says it needs blocks no removal; a
+# the next. One cut short, the file in progress there naming it, is
+# resumed by install and update, named or not, refused while the process
+# it names runs, and refused by remove, naming that update; remove --all
+# passes over it. Anything else at ext/NAME -- data and no VERSION, a
+# PLUGIN and no VERSION as the plugin's directory copied by hand,
+# a PLUGIN naming another, with no server part or a link, a VERSION that
+# is a link, a link to the person's own directory -- is left as it is:
+# each refusal changes nothing, modes included, and names the path; remove
+# --all and update with none named pass over it, saying so, and what it
+# says it needs blocks no removal; a
 # need's directory stops the plugin needing it before anything changes.
 # An install from before the copy is still updated and removed. Removing
 # a plugin not there leaves a manual page that is no link of an install.
@@ -82,7 +86,7 @@ foreign() { echo "$e/$1 is not $1's server part as an install leaves it"; }
 # all_refused LABEL NAME -- install, update and remove of NAME each refused.
 all_refused() {
 	refused "$1, install" "$(foreign "$2")" install --server "$2"
-	refused "$1, install" "if it is an install cut short, remove it by hand: rm -rf $e/$2" install --server "$2"
+	refused "$1, install" "if nothing in it is wanted, remove it by hand: rm -rf $e/$2" install --server "$2"
 	refused "$1, update" "$(foreign "$2")" update --server "$2"
 	refused "$1, remove" "$(foreign "$2")" remove --server "$2"
 }
@@ -115,12 +119,62 @@ all_refused "a PLUGIN with no server part" xymon-plugin
 rm -f "$d/PLUGIN"; ln -s "$work/PLUGIN.kept" "$d/PLUGIN"
 all_refused "a PLUGIN that is a link" xymon-plugin
 rm -f "$d/PLUGIN"; cp "$work/PLUGIN.kept" "$d/PLUGIN"
-# Cut short before its VERSION, the files in it: what was edited is
-# said to be saved first, and the task enabled again.
+# A PLUGIN and no VERSION, as the plugin's directory copied by hand, is
+# no install: nothing is guessed from a VERSION missing.
 mv "$d/VERSION" "$work/VERSION.kept"
-refused "an install cut short before its VERSION, install" "saving first its task file and web server snippets if edited, its task enabled again once installed" install --server xymon-plugin
-refused "an install cut short before its VERSION, remove" "$(foreign xymon-plugin)" remove --server xymon-plugin
+all_refused "a PLUGIN and no VERSION" xymon-plugin
+echo "xymon-plugin in progress: other 1" > "$d/.xymon-plugin-in-progress"
+all_refused "a PLUGIN and no VERSION, the file in progress naming another" xymon-plugin
+rm -f "$d/.xymon-plugin-in-progress"
 mv "$work/VERSION.kept" "$d/VERSION"
+# Cut short, the file in progress there naming it, a process gone, with
+# something set aside: remove refuses it, naming the update that resumes
+# it; install and update resume it, with or without its VERSION.
+cut() { echo "$e/$1 is an install of $1's server part cut short: ./xymon-plugin update --server $1 resumes it, with what it set aside"; }
+inprog() { echo "xymon-plugin in progress: $1 $(sh -c 'echo $$')" > "$e/$1/.xymon-plugin-in-progress"; }
+aside_with() { mkdir -p "$e/.xymon-plugin.$1"; printf 'xymon-plugin set aside: %s\n' "$1" > "$e/.xymon-plugin.$1/.xymon-plugin-set-aside"; echo mine > "$e/.xymon-plugin.$1/tasks.cfg"; }
+inprog xymon-plugin; aside_with xymon-plugin
+refused "an install cut short, remove" "$(cut xymon-plugin)" remove --server xymon-plugin
+rm -f "$d/VERSION"
+refused "an install cut short before its VERSION, remove" "$(cut xymon-plugin)" remove --server xymon-plugin
+for a in install update; do
+	rm -f "$d/VERSION"; inprog xymon-plugin
+	x "$a" --server xymon-plugin
+	[ "$rc" -eq 0 ] || fail "[S20] $a of an install cut short before its VERSION failed: $out"
+	repaired "an install cut short before its VERSION, ${a}d"
+	[ ! -e "$d/.xymon-plugin-in-progress" ] || fail "[S20] the $a resumed left the file in progress"
+done
+assert_equal mine "$(cat "$d/tasks.cfg")" "[S20] the resume put back what was set aside"
+# Cut short with nothing set aside, nothing of the admin's -- a first
+# install's, as its file in progress says --: remove takes it, and the
+# refusals say it would; an update's, VERSION or not, remove refuses.
+inprog xymon-plugin
+refused "an update cut short before it set anything aside, remove" "$(cut xymon-plugin)" remove --server xymon-plugin
+rm -f "$d/VERSION"
+refused "an update cut short, no VERSION, remove" "$(cut xymon-plugin)" remove --server xymon-plugin
+echo "xymon-plugin in progress: xymon-plugin $(sh -c 'echo $$') first" > "$d/.xymon-plugin-in-progress"
+x verify --server xymon-plugin
+assert_contains "nothing set aside: ./xymon-plugin update --server xymon-plugin resumes it, or ./xymon-plugin remove --server xymon-plugin takes it" "$out" "[S20] verify says remove takes one cut short with nothing set aside"
+x remove --server xymon-plugin
+[ "$rc" -eq 0 ] && [ ! -e "$d" ] || fail "[S20] remove did not take one cut short with nothing set aside: $out"
+x install --server xymon-plugin
+# Another run on it, its process alive and an xymon-plugin: refused, not
+# resumed; a process alive that is no run of it, its number taken again:
+# resumed.
+mkdir -p "$work/fake"; printf '#!/bin/sh\nsleep 30\n' > "$work/fake/xymon-plugin"; chmod 755 "$work/fake/xymon-plugin"
+"$work/fake/xymon-plugin" & alive=$!
+echo "xymon-plugin in progress: xymon-plugin $alive" > "$d/.xymon-plugin-in-progress"
+refused "an install still running" "an install or update of xymon-plugin is running, process $alive: wait for it to end; if no such run is going on, remove $d/.xymon-plugin-in-progress and run this again" update --server xymon-plugin
+aside_with xymon-plugin
+refused "a removal while one runs" "an install or update of xymon-plugin is running, process $alive" remove --server xymon-plugin
+rm -r "$e/.xymon-plugin.xymon-plugin"
+kill "$alive"; wait "$alive" 2>/dev/null || :
+sleep 30 & other=$!
+echo "xymon-plugin in progress: xymon-plugin $other" > "$d/.xymon-plugin-in-progress"
+x update --server xymon-plugin
+[ "$rc" -eq 0 ] || fail "[S20] a file in progress naming a process that is no run of it refused the update: $out"
+[ ! -e "$d/.xymon-plugin-in-progress" ] || fail "[S20] the update resumed left the file in progress"
+kill "$other"; wait "$other" 2>/dev/null || :
 # MANIFEST gone, an update cut short after VERSION: still an install.
 mv "$d/MANIFEST" "$work/MANIFEST.kept"
 x update --server xymon-plugin
@@ -261,32 +315,40 @@ v
 [ "$rc" -eq 0 ] || fail "[S20] verify with none named beside the site's own scripts exited $rc, not 0: $out"
 for w in check_raid.sh mes-scripts; do assert_not_contains "$w" "$out" "[S20] verify says nothing of the site's $w"; done
 mkdir -p "$d" "$e/thirdparty"; cp "$work/PLUGIN.kept" "$d/PLUGIN"; echo mine > "$d/tasks.cfg"; echo theirs > "$e/thirdparty/run"
+inprog xymon-plugin; aside_with xymon-plugin
+# And a plugin's directory copied by hand: no install, passed over.
+cp -R "$r/plugins/sneed" "$e/sneed"
 # A VERSION in it, and no PLUGIN: no install from before the copy, which
 # only a plugin of this checkout can be.
 echo 1.0 > "$e/thirdparty/VERSION"
 v xymon-plugin
 [ "$rc" -eq 3 ] || fail "[S20] verify of one cut short before its VERSION exited $rc, not 3: $out"
-assert_contains "broken: xymon-plugin: $(foreign xymon-plugin)" "$out" "[S20] verify says one cut short before its VERSION is none"
+assert_contains "broken: xymon-plugin: $(cut xymon-plugin)" "$out" "[S20] verify says one cut short before its VERSION is one, naming the update that resumes it"
 assert_not_contains "not installed" "$out" "[S20] and not that it is not installed"
 v
 [ "$rc" -eq 3 ] || fail "[S20] verify with none named exited $rc, not 3: $out"
 assert_contains "broken: thirdparty: $(foreign thirdparty)" "$out" "[S20] verify with none named sees a third party's directory"
-assert_contains "broken: xymon-plugin: $(foreign xymon-plugin)" "$out" "[S20] and one cut short before its VERSION"
-site() { grep -e "^${d}[ /]" -e "^$e/thirdparty[ /]" -e "^$e/check_raid.sh " -e "^$e/mes-scripts[ /]" "$1" || :; }
+assert_contains "broken: xymon-plugin: $(cut xymon-plugin)" "$out" "[S20] and one cut short before its VERSION"
+site() { grep -e "^$e/thirdparty[ /]" -e "^$e/sneed[ /]" -e "^$e/check_raid.sh " -e "^$e/mes-scripts[ /]" "$1" || :; }
 state snap-t0; site "$work/snap-t0" > "$work/snap-t0.f"
-x update --server
-[ "$rc" -eq 0 ] || fail "[S20] update with none named beside a third party's directory failed: $out"
-assert_contains "$e/thirdparty is no install of thirdparty's: left as it is" "$out" "[S20] update with none named passes over a third party's directory, said"
-assert_contains "$d is no install of xymon-plugin's: left as it is" "$out" "[S20] and one cut short before its VERSION"
-for w in check_raid.sh mes-scripts; do assert_not_contains "$w" "$out" "[S20] update says nothing of the site's $w"; done
 x remove --server --all
 [ "$rc" -eq 0 ] || fail "[S20] remove --all beside a third party's directory failed: $out"
 assert_contains "$e/thirdparty is no install of thirdparty's: left as it is" "$out" "[S20] remove --all passes over a third party's directory, said"
+assert_contains "$d is no install of xymon-plugin's: left as it is" "$out" "[S20] and one cut short before its VERSION"
+assert_equal mine "$(cat "$d/tasks.cfg")" "[S20] remove --all leaves one cut short as it is"
 for w in check_raid.sh mes-scripts; do assert_not_contains "$w" "$out" "[S20] remove --all says nothing of the site's $w"; done
+x update --server
+[ "$rc" -eq 0 ] || fail "[S20] update with none named beside a third party's directory failed: $out"
+assert_contains "$e/thirdparty is no install of thirdparty's: left as it is" "$out" "[S20] update with none named passes over a third party's directory, said"
+assert_contains "Updated xymon-plugin" "$out" "[S20] and resumes one cut short before its VERSION"
+assert_contains "$e/sneed is no install of sneed's: left as it is" "$out" "[S20] and passes over a plugin's directory copied by hand"
+assert_equal mine "$(cat "$d/tasks.cfg")" "[S20] keeping its task file"
+for w in check_raid.sh mes-scripts; do assert_not_contains "$w" "$out" "[S20] update says nothing of the site's $w"; done
+x remove --server --all
 state snap-t1; site "$work/snap-t1" > "$work/snap-t1.f"
 grep -q "^$e/check_raid.sh " "$work/snap-t1.f" && grep -q "^$e/mes-scripts/run " "$work/snap-t1.f" || fail "[S20] the site's own scripts are gone"
 cmp -s "$work/snap-t0.f" "$work/snap-t1.f" || fail "[S20] update or remove --all changed what no install left: $(diff "$work/snap-t0.f" "$work/snap-t1.f" || :)"
-rm -rf "$d" "$e/thirdparty" "$e/check_raid.sh" "$e/mes-scripts"
+rm -rf "$d" "$e/thirdparty" "$e/sneed" "$e/check_raid.sh" "$e/mes-scripts"
 
 # A removal refused for a need refuses before anything goes, the stage
 # /plugins serves included: two named, the second needed by one staying.

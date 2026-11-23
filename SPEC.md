@@ -163,7 +163,49 @@ as `NAME.old`. On N, off a terminal -- nothing is merged unattended --,
 under `DESTDIR`, on a conflict, or without `diff3` or a version to start
 from, the file stays as it is and this version's is written beside it as
 `NAME.new`, said with the `diff` to run. `verify` says a `.new` or `.old`
-left (S30).
+left (S30). A task file or snippet this version no longer ships goes,
+nothing said; edited -- neither as `.shipped/` keeps it nor, for a
+snippet, as a version shipped it (S16) --, it is kept as `NAME.old`,
+where no include line reaches it, and said, a task's link removed all the
+same (S20). Such a snippet dropped while this version ships another for
+the same web server, the same `-apache`, `-nginx` or `-lighttpd` before
+`.conf`, would go live without the edits: the update is refused before
+anything changes, for every plugin named and every part it needs, naming
+both, until the edited one is moved out of the plugin's directory, its
+edits to carry into the new one before the web server reloads.
+A `NAME.old` stays through the updates after, until the administrator
+removes it -- a file at any depth of the plugin's directory, hidden or
+not, a link as a link, a directory so named whole; one there when the
+update writes another becomes `NAME.N.old`, the first `N` free, so that
+neither is lost.
+What an install or an update sets aside meanwhile -- the task file, the
+snippets, `.shipped/`, each `NAME.old` -- goes in one directory in
+`ext/`, `.xymon-plugin.NAME`, made by `mkdir`, so that nothing already
+there is written over or through, and marked by a file
+`.xymon-plugin-set-aside` naming the plugin and the date it was made;
+once the plugin is in place, what is left there goes back into its
+directory -- a `NAME.old` as a `.old` of its own, a file this version no
+longer ships as one unless as `.shipped/` has it, said, as edited or as
+one that could not be told unedited, a link said and removed, what it
+names left -- and the directory goes, never while it holds a file of the
+administrator's. One cut short, by a failure or a signal, leaves it,
+saying what it holds, and the install cut short (S20) that the next
+install or update resumes with it, saying to reload the web server:
+from the plugin's directory it sets aside only what that one lacks, a
+file there in both and differing -- changed since -- kept as a `.old`,
+said. Where
+`.xymon-plugin.NAME` is there and cannot be resumed with -- a link, not
+a directory, not marked for the plugin, another user's, or beside a
+complete install or none -- `install` and `update` are refused before
+anything changes, saying why and what to do: beside a complete install
+or none, marked, it is stale, the administrator's to compare and
+remove, or, the plugin's directory gone, to take back from, said with
+its date, as `remove` and `verify` name it too, `verify` as untidy
+(S30); one not marked is said to be no set-aside directory. The
+refusal of a replaced snippet the administrator edited (above) holds
+for any run resuming, and names where the edited one lies. A task file
+in place of the link that this one replaces, the task file set aside
+edited too, has that one kept as a `.old`, said.
 A long-running plugin takes up the update by itself: the API watches its
 `MANIFEST` and xymonapi-rag's, whose code its `/search` loads, the update
 command's last step (S29), and once one is written anew stops
@@ -244,15 +286,19 @@ the install before anything is copied.
 **S20. An installed plugin keeps its `PLUGIN` file, and is managed by it.**
 An install copies the plugin's `PLUGIN` file into its installed directory,
 beside `VERSION`, and keeps its manual page there too, linked from
-`MANDIR`. Uninstalling, enabling, disabling, reporting `status` and
-checking what needs a plugin, and in what order to remove several, read
-that copy, not the checkout's, so that a checkout of another version, or
-one the plugin is gone from, still removes what was installed: its
-directory, its command, its manual page, its task link or the task file in
-the link's place. An action given no names covers the plugins installed
-with a copy that the checkout no longer has. An update reads the copy
-before replacing it, and removes the command, manual page and task link
-the installed version put in place and the new one does not. A plugin
+`MANDIR` where the page's name is free or that link already: anything else
+there -- a page of the administrator's, another's link, a directory -- is
+left as it is and said, the install going on. Uninstalling, enabling,
+disabling, reporting `status` and checking what needs a plugin, and in
+what order to remove several, read that copy, not the checkout's, so that
+a checkout of another version, or one the plugin is gone from, still
+removes what was installed: its directory, its command, its manual page,
+its task link or the task file in the link's place -- that directory gone
+(S9), only the link into it, a file at its name left and said, and no
+SELinux module (S23). An action given no names covers the plugins
+installed with a copy that the checkout no longer has. An update reads the
+copy before replacing it, and removes the command, manual page and task
+link the installed version put in place and the new one does not. A plugin
 installed before the copy existed is managed by the checkout's `PLUGIN`
 file, as before, until it is installed again. The copy lies in a directory
 the Xymon user can write, so it decides nothing alone: a manual page is
@@ -265,14 +311,31 @@ plain plugin name, not a link, with `VERSION` and its `PLUGIN` copy,
 naming the plugin and that part, both plain files -- or, on the server,
 from before the copy, a plain `VERSION` and no `PLUGIN`, of a plugin the
 checkout has. `MANIFEST` is no part of it, deciding nothing alone (S29):
-an update cut short after `VERSION` is put right by the next. Anything
-else in `ext/`, a link among them, is left as it is, and counts as
-installed for no need: the run is refused before anything changes,
-naming it and, if it is an install cut short, the command removing it by
-hand, for every plugin named and every part it needs. With none named,
+an update cut short after `VERSION` is put right by the next. An install
+or update writes, before anything in `ext/NAME` changes, a file there,
+`.xymon-plugin-in-progress`, naming the plugin and its process, made new
+-- with noclobber, never through a link -- in the one step that finds
+none there, and removes it, its own, once `VERSION` is written: a
+directory, not a link, holding it as a plain file naming the plugin, is
+an install cut short, whatever else it holds, and nothing else is taken
+for one. It is resumed by `install` and `update`, the files it set aside
+put back (S7) -- refused, as is `remove`, while the process it names
+runs an xymon-plugin, as `ps` says, a second run on the same plugin --
+and refused by `remove`, naming the `update` that resumes it, unless it
+is a first install's, as the file in progress says, with nothing set
+aside, nothing of the administrator's, which `remove` takes.
+It counts as present for a need, for `remove`'s virtualenv and for
+`clean`, which leave what is its, and `status` says it is cut short. An
+update of an install from before the `PLUGIN` copy replaces the manual
+page it copied into `MANDIR` by the link; a removal of a part not there
+takes no page. Anything else
+in `ext/`, a link among them, is left as it is, and counts as installed
+for no need: the run is refused before anything changes, naming it, for
+every plugin named and every part it needs. With none named,
 `remove --all`, `update` and `verify --server` read only what may be a
 plugin's -- an entry named as a plugin of the checkout, or a directory
-holding a `PLUGIN` or a `VERSION` -- the first two passing over each that
+holding a `PLUGIN` or a `VERSION` -- the first two
+passing over each that
 is no install, saying so, `verify` saying it is none; the rest of `ext/`
 is the site's, its own scripts, and is not read. The virtualenv and the
 stage `/plugins` serves are no plugin's, and go only with an install
@@ -289,9 +352,9 @@ followed inside `DESTDIR`: a link to an absolute path from `DESTDIR`, a
 relative one from where it lies, a `..` stopping at `DESTDIR`, a chain of
 links each in turn, a link higher up the path as well as at its end; a
 link that cannot be read stops the run. Below those directories, a link in
-the place of a plugin's directory, of a file an update sets aside, or of
-the stage's `plugins/` is removed, never followed, and a command is
-written in place of a link, never through it. No virtualenv is made or
+the place of a plugin's directory or of the stage's `plugins/` is removed,
+never followed -- what an update sets aside goes in a directory it makes
+new (S7) --, and a command is written in place of a link, never through it. No virtualenv is made or
 used under `DESTDIR`: it belongs to the installed system.
 
 **S22. A socket a plugin makes for another program is in Xymon's runtime
@@ -319,15 +382,16 @@ removes it, and an update to a version without one: the module named after
 the plugin, never one the installed `PLUGIN` copy names otherwise. Under
 `DESTDIR`, or where SELinux is not active, nothing is loaded. The module
 lies outside the plugin's directory: deleting `ext/NAME` by hand leaves it
-loaded, inert while its booleans are off, until the next removal through
-the command.
+loaded, inert while its booleans are off, and so does a removal that then
+finds no directory to remove (S20): `semodule -r NAME` takes it away.
 
 ### Knowing what is installed
 
 **S15. `status` says what is installed.**
 `status --server` and `status --tools` say, for each plugin of the part, or
 those named: whether it is installed, the version installed, from its
-`VERSION`, a release tag read as its `X.Y.Z`; on the server, whether its
+`VERSION`, a release tag read as its `X.Y.Z`, or that an install of it
+was cut short (S20); on the server, whether its
 task is on; and the version of the copy run from -- a checkout, or
 releases unpacked side by side -- said as "this copy has", marked newer
 when it is, and, at the same version, said to have other code when its files differ
@@ -444,8 +508,11 @@ in `MANDIR` (S20); its command in `$PREFIX/bin` (S4); its copy in the stage
 `/plugins` serves (S19); the virtualenv beside the plugins (S26); and its
 SELinux module (S23); a client part, only its directory and its manual
 page's link (S35). The command itself writes, besides, only the
-installations used last (S25): no file of its own, not even a temporary one,
-anywhere else. While it runs, a plugin writes only: its
+installations used last (S25), and while an install or an update runs
+the directory `ext/.xymon-plugin.NAME` where it sets files aside, and
+`ext/NAME/.xymon-plugin-in-progress`, left after one cut short until the
+next resumes (S7, S20): no file of its own, not even a
+temporary one, anywhere else. While it runs, a plugin writes only: its
 sockets, in its directory of Xymon's runtime directory (S22); its log, in
 Xymon's log directory; and what its `PLUGIN` file declares -- a `data:`
 line for each directory it keeps for the administrator or the person,
@@ -504,7 +571,10 @@ or older than its `requirements.txt` asks -- what is checked of the
 virtualenv, which `MANIFEST` leaves out. Untidy, as it works all the same:
 a `NAME.new` or `NAME.old` an update left beside an administrator's file
 (S7), "this version's beside yours" or "yours before the merge", to
-compare and remove; any other file in the plugin's directory that the
+compare and remove; a stale set-aside directory of the plugin, or of
+one whose directory is gone, or one at its name not marked (S7); any
+other `NAME.old` on the server, at any depth, which an update keeps
+(S7); any other file in the plugin's directory that the
 manifest does not name;
 and a plugin with no `MANIFEST`, installed before it was kept, which an
 update records. A file the manifest marks the administrator's is said
@@ -531,7 +601,8 @@ else: never a file in an installed plugin's directory, which `update`
 replaces (S7), nor anything a `data:` or `writes:` line names, which is
 the administrator's or the person's (S28). A name given is that of a
 plugin that is gone: a plain file name (S20), refused when a plugin of
-that name is installed in the part, naming `remove`; it need not be in the
+that name is installed in the part, naming `remove`, or is an install
+cut short there, naming `update` (S20); it need not be in the
 checkout. What is left of it is what bears its name: its task link, its
 staged copy, and the links and commands that point into its directory.
 `--all` covers every such name, and the stage and the virtualenv when no
@@ -616,7 +687,8 @@ again at its next time.
 `client-*` lines, in a standalone Xymon client's tree (S18, S25): its files
 under `ext/NAME/`, with `VERSION`, its `PLUGIN` copy and its `MANIFEST`
 (S20, S29); its manual page, `client-manual:`, kept there and linked from
-`MANDIR` when that can be written, else not, the command saying so.
+`MANDIR` when that can be written and the page's name is free there
+(S20), else not, the command saying so.
 Nothing else is written: no task, no copy in the stage `/plugins` serves,
 no virtualenv (`--venv` with `--client` is refused), no web server snippet
 and no SELinux module; nor is a client part staged under `DESTDIR`, which
@@ -627,7 +699,7 @@ a link, before any plugin is installed. A client part's needs,
 replace or take only a directory an install left, as on the server (S20):
 `VERSION` and `PLUGIN`, naming the plugin and a client part, plain files;
 only such a one counts as installed, for a need too. Any other in `ext/`
-is left as it is, an install cut short removed by hand; `update` with
+is left as it is, an install cut short resumed as on the server; `update` with
 none named passes over a plugin this checkout lacks, saying so. Before anything
 changes, the run is refused unless the person running it owns the tree's
 `ext/`, root as any other, naming the owner: the files of a part are

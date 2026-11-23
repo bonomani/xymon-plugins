@@ -237,6 +237,7 @@ for c in rm mv cp ln mkdir; do
 	cat > "$watch/$c" <<'SH'
 #!/bin/sh
 c=${0##*/}
+[ "$c" != mv ] || printf '%s\n' "$*" >> "$WORK/mv.log"
 [ -e "$LINK" ] || printf 'before %s %s\n' "$c" "$*" >> "$WORK/dangling"
 "/bin/$c" "$@"; rc=$?
 [ -e "$LINK" ] || printf 'after %s %s\n' "$c" "$*" >> "$WORK/dangling"
@@ -251,15 +252,23 @@ PATH="$watch:$PATH" LINK="$link" WORK="$work" "$ROOT/xymon-plugin" update --serv
 [ -s "$work/dangling" ] && fail "[S13] during the update, tasks.d/'s link pointed nowhere: $(head -n 3 "$work/dangling")"
 [ "$(readlink "$link")" = "$home/ext/xymon-plugin/tasks.cfg" ] || fail "[S13] the update did not leave the task on"
 assert_contains "task is on, as it was" "$(cat "$work/update.log")" "[S13] and says so"
-# A name the update writes aside, planted as a hard link to a file outside
-# the plugin's directory, is not written through: the file outside keeps
-# what it holds.
+# The task file is set aside in a directory the run makes in ext/, and
+# renamed back from it, within one file system; the directory is gone after.
+grep -q "^$home/ext/\.xymon-plugin\.[^/]*/tasks\.cfg $ext/tasks\.cfg\$" "$work/mv.log" \
+	|| fail "[S13] the task file was not renamed back from the run's own directory in ext/: $(cat "$work/mv.log")"
+for f in "$home"/ext/.xymon-plugin.*; do [ ! -e "$f" ] || fail "[S7] the update left $f"; done
+# A file at the name an older install set the task file aside under, a
+# hard link to a file outside, and one planted beside the task file, are
+# not written through: the file outside keeps what it holds, and the
+# first stays where it is.
 printf 'outside\n' > "$work/outside"
 ln "$work/outside" "$home/ext/.xymon-plugin.tasks.cfg"
 ln "$work/outside" "$ext/tasks.cfg.tmp"
 "$ROOT/xymon-plugin" update --server xymon-plugin XYMONHOME="$home" MANDIR="$work/man" >"$work/update.log" 2>&1 \
 	|| fail "update --server xymon-plugin failed: $(tail -n 5 "$work/update.log")"
 assert_equal "outside" "$(cat "$work/outside")" "the update wrote through a hard link planted beside the task file"
+assert_equal "outside" "$(cat "$home/ext/.xymon-plugin.tasks.cfg")" "[S7] the file at the name an older install used is left as it is"
+rm -f "$home/ext/.xymon-plugin.tasks.cfg"
 
 # The same when this version's task file differs from the one installed,
 # unedited: it replaces it.

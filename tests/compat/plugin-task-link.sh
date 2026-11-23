@@ -124,7 +124,7 @@ cp "$link" "$work/renamed"
 install renamed
 [ -L "$link" ] || fail "[S6] the regular file that replaced the link was not replaced by the link"
 cmp -s "$work/renamed" "$tf" || fail "[S6] the file xymonlaunch was reading was not the one kept"
-if [ -e "$home/ext/.xymonapi.tasks.cfg" ]; then fail "[S6] the task file set aside was left in ext/"; fi
+for f in "$home"/ext/.xymon-plugin.*; do [ ! -e "$f" ] || fail "[S6] the directory the task file was set aside in was left in ext/: $f"; done
 install renamed-again
 cmp -s "$work/renamed" "$tf" || fail "[S6] a second install did not keep the edited task file"
 [ -L "$link" ] || fail "[S13] a second install turned the edited task off"

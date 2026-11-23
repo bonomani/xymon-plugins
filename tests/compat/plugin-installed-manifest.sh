@@ -96,7 +96,8 @@ server "$v1" enable xymonapi-rag || fail "enable-server xymonapi-rag failed: $(t
 server "$v2" update xymonapi-rag || fail "install-server xymonapi-rag from v2 failed: $(tail -n 5 "$work/server.log")"
 [ -e "$home/etc/tasks.d/xymonapi-rag.cfg" ] || [ -L "$home/etc/tasks.d/xymonapi-rag.cfg" ] \
 	&& fail "[S20] an update to a version with no task left the task link"
-[ -e "$home/ext/.xymonapi-rag.tasks.cfg" ] && fail "[S20] an update to a version with no task left its task file aside"
+for f in "$home"/ext/.xymon-plugin.*; do [ ! -e "$f" ] || fail "[S20] an update to a version with no task left its task file aside: $f"; done
+[ ! -e "$home/ext/xymonapi-rag/tasks.cfg.old" ] || fail "[S7] an update to a version with no task kept the unedited task file as .old"
 
 # What needs a plugin is read from the copies: xymonapi-agent, installed
 # from v1, needs xymonapi-mcp, though v2's xymonapi-agent no longer says so.

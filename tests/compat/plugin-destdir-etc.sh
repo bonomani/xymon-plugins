@@ -11,8 +11,9 @@
 # link taken from DESTDIR, a relative one from where it lies, a .. stopping
 # at DESTDIR, a chain of links each in turn, a link higher up the path as
 # well as at its end. A link in a plugin's directory's place is left and
-# the install refused (S20); one where a file is set aside, or at the
-# stage's plugins/, is removed, not followed; a
+# the install refused (S20); one at the stage's plugins/ is removed, not
+# followed, and one where an install before set a file aside left as it
+# is, the update setting aside in a directory of its own; a
 # command is written in place of a link; no virtualenv is made or used. The
 # plugin's messages name the installed system's paths, not the stage's.
 #
@@ -108,10 +109,11 @@ assert_contains "$stage$home/ext/xymonapi is not xymonapi's server part as an in
 check "install-server, the plugin's directory a link"
 assert_equal "$host/plugdir" "$(readlink "$stage$home/ext/xymonapi")" "[S20] the link in the plugin's directory's place is left as it is"
 rm -f "$stage$home/ext/xymonapi"; mv "$work/xymonapi.kept" "$stage$home/ext/xymonapi"
-# And a link where the task file is set aside.
+# And a link where an install before this one set the task file aside:
+# an update sets it aside in a directory of its own, and leaves the link.
 ln -s "$host/plugdir" "$stage$home/ext/.xymonapi.tasks.cfg"
-run install server; check "install-server, the set-aside task file a link"
-[ -L "$stage$home/ext/.xymonapi.tasks.cfg" ] && fail "[S21] the link where the task file is set aside is still there"
+run install server; check "install-server, a link where the task file was set aside"
+assert_equal "$host/plugdir" "$(readlink "$stage$home/ext/.xymonapi.tasks.cfg")" "[S21] the link where the task file was set aside is left as it is"
 assert_equal "host task" "$(cat "$host/plugdir/tasks.cfg")" "[S21] the host's file the link named is untouched"
 
 # The stage /plugins serves, its plugins/ a link: an uninstall removes
