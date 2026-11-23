@@ -10,8 +10,9 @@
 # Every path the install writes to is followed inside DESTDIR: an absolute
 # link taken from DESTDIR, a relative one from where it lies, a .. stopping
 # at DESTDIR, a chain of links each in turn, a link higher up the path as
-# well as at its end. A link in a plugin's directory's place, where a file
-# is set aside, or at the stage's plugins/ is removed, not followed; a
+# well as at its end. A link in a plugin's directory's place is left and
+# the install refused (S20); one where a file is set aside, or at the
+# stage's plugins/, is removed, not followed; a
 # command is written in place of a link; no virtualenv is made or used. The
 # plugin's messages name the installed system's paths, not the stage's.
 #
@@ -96,16 +97,22 @@ run install server; check "install-server, MANDIR an absolute link"
 cycle "MANDIR an absolute link"
 
 # A plugin's directory a link to a host directory holding a task file and
-# a snippet: an update neither reads nor moves through it.
+# a snippet: the install is refused, neither reading nor moving through it.
 fresh; run install server
 mkdir -p "$host/plugdir"; echo "host task" > "$host/plugdir/tasks.cfg"; echo "host snippet" > "$host/plugdir/xymonapi-apache.conf"
 snap > "$work/host.before"
-rm -rf "$stage$home/ext/xymonapi"; ln -s "$host/plugdir" "$stage$home/ext/xymonapi"
-run install server; check "install-server, the plugin's directory a link"
-[ -d "$stage$home/ext/xymonapi" ] && [ ! -L "$stage$home/ext/xymonapi" ] || fail "[S21] the plugin's directory is still a link"
+mv "$stage$home/ext/xymonapi" "$work/xymonapi.kept"; ln -s "$host/plugdir" "$stage$home/ext/xymonapi"
+"$ROOT/xymon-plugin" install --server xymonapi XYMONHOME="$home" PREFIX=/opt/x MANDIR=/usr/share/man DESTDIR="$stage" </dev/null >"$work/run.log" 2>&1 \
+	&& fail "[S20] an install through the plugin's directory a link was taken"
+assert_contains "$stage$home/ext/xymonapi is not xymonapi's server part as an install leaves it" "$(cat "$work/run.log")" "[S20] the link in the plugin's directory's place is refused, named"
+check "install-server, the plugin's directory a link"
+assert_equal "$host/plugdir" "$(readlink "$stage$home/ext/xymonapi")" "[S20] the link in the plugin's directory's place is left as it is"
+rm -f "$stage$home/ext/xymonapi"; mv "$work/xymonapi.kept" "$stage$home/ext/xymonapi"
 # And a link where the task file is set aside.
 ln -s "$host/plugdir" "$stage$home/ext/.xymonapi.tasks.cfg"
 run install server; check "install-server, the set-aside task file a link"
+[ -L "$stage$home/ext/.xymonapi.tasks.cfg" ] && fail "[S21] the link where the task file is set aside is still there"
+assert_equal "host task" "$(cat "$host/plugdir/tasks.cfg")" "[S21] the host's file the link named is untouched"
 
 # The stage /plugins serves, its plugins/ a link: an uninstall removes
 # nothing through it.
@@ -114,6 +121,8 @@ mkdir -p "$host/plugins/xymonapi"; echo "host" > "$host/plugins/xymonapi/keep"
 snap > "$work/host.before"
 rm -rf "$stage$home/ext/xymon-plugins-dist/plugins"; ln -s "$host/plugins" "$stage$home/ext/xymon-plugins-dist/plugins"
 run uninstall server; check "uninstall-server, the stage's plugins/ a link"
+[ -L "$stage$home/ext/xymon-plugins-dist/plugins" ] && fail "[S21] the stage's plugins/ link is still there"
+assert_file_exists "$host/plugins/xymonapi/keep"
 
 # Your own side: libexec and bin absolute links, and the command already
 # there a link to a host file.
@@ -143,4 +152,4 @@ rc=0; "$ROOT/xymon-plugin" enable --server xymonapi XYMONHOME="$home" DESTDIR="$
 [ "$rc" -ne 0 ] || fail "enable-server over a directory at tasks.d/xymonapi succeeded"
 assert_contains "is a directory" "$(cat "$work/en.log")" "and says why"
 
-pass "under DESTDIR nothing is written outside it: absolute, relative, chained and higher links to etc, ext, MANDIR, libexec and bin are followed inside DESTDIR; links at a plugin directory, a set-aside file or the stage's plugins/ are removed, not followed; a command replaces a link; no virtualenv is made"
+pass "under DESTDIR nothing is written outside it: absolute, relative, chained and higher links to etc, ext, MANDIR, libexec and bin are followed inside DESTDIR; a link at a plugin directory is refused and left, links at a set-aside file or the stage's plugins/ are removed, not followed; a command replaces a link; no virtualenv is made"

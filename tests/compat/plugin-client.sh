@@ -18,7 +18,8 @@
 # no client part, and an ext/ not the person's -- an id on PATH that
 # answers another uid, as ownership is ls -n's uid compared with id -u
 # (S35); a client file the checkout lacks, before anything is written; a
-# directory no install completed, with no MANIFEST, never taken (S35).
+# directory no install left, cut short before its VERSION, never taken; an
+# install whose MANIFEST is gone is still one, updated (S35).
 # A tree named relative, with ., or through a link finds the same
 # ../server (S25). Detection offers the client trees found, and the one
 # used last while its marks hold, remembered apart from the server's, and
@@ -249,27 +250,39 @@ mkdir -p "$c/ext/stray"; echo precious > "$c/ext/stray/data"
 refused "[S35]" "removing a directory no plugin has" "no plugin stray here" remove --client stray XYMONHOME="$c"
 assert_file_exists "$c/ext/stray/data"
 mkdir -p "$c/ext/xymonapi"; echo precious > "$c/ext/xymonapi/data"
-refused "[S35]" "removing a directory named as a plugin, not its install" "$c/ext/xymonapi is not xymonapi's client part as an install completes it" remove --client xymonapi XYMONHOME="$c"
+refused "[S35]" "removing a directory named as a plugin, not its install" "$c/ext/xymonapi is not xymonapi's client part as an install leaves it" remove --client xymonapi XYMONHOME="$c"
 # One that looks like an install by links: never one an install leaves.
 mkdir -p "$c/ext/xymon-plugin"; echo precious > "$c/ext/xymon-plugin/data"; echo "$version" > "$c/ext/xymon-plugin/VERSION"
 ln -s "$ROOT/plugins/xymon-plugin/PLUGIN" "$c/ext/xymon-plugin/PLUGIN"
-refused "[S35]" "removing a directory whose PLUGIN is a link" "is not xymon-plugin's client part as an install completes it" remove --client xymon-plugin XYMONHOME="$c"
+refused "[S35]" "removing a directory whose PLUGIN is a link" "is not xymon-plugin's client part as an install leaves it" remove --client xymon-plugin XYMONHOME="$c"
 assert_file_exists "$c/ext/xymon-plugin/data"
 rm -rf "$c/ext/xymon-plugin"
-# One an install did not complete, with no MANIFEST: left as it is, named
-# or with --all, the refusal saying how to remove it by hand.
-mkdir -p "$c/ext/xymon-plugin"; echo "$version" > "$c/ext/xymon-plugin/VERSION"
+# One an install cut short before its VERSION: left as it is, named or
+# with --all, the refusal saying how to remove it by hand.
+mkdir -p "$c/ext/xymon-plugin"
 cp "$ROOT/plugins/xymon-plugin/PLUGIN" "$c/ext/xymon-plugin/PLUGIN"
-refused "[S35]" "removing an install with no MANIFEST" "an interrupted install is removed by hand, rm -rf $c/ext/xymon-plugin" remove --client xymon-plugin XYMONHOME="$c"
-refused "[S35]" "installing over an install with no MANIFEST" "an interrupted install is removed by hand" install --client xymon-plugin XYMONHOME="$c"
+refused "[S35]" "removing an install cut short before its VERSION" "if it is an install cut short, remove it by hand: rm -rf $c/ext/xymon-plugin" remove --client xymon-plugin XYMONHOME="$c"
+refused "[S35]" "installing over an install cut short before its VERSION" "if it is an install cut short, remove it by hand" install --client xymon-plugin XYMONHOME="$c"
 # A stray directory with a PLUGIN file too; and an installation used last
 # that a run removing nothing must not rewrite.
 printf 'name: stray\nclient-files: data\n' > "$c/ext/stray/PLUGIN"
 mkdir -p "$work/cfg/xymon-plugin"; echo /another/client > "$work/cfg/xymon-plugin/installation-used-last-client"
 untouched "[S35]" "remove --client --all beside directories no install completed" remove --client --all XYMONHOME="$c"
 refused "[S35]" "update --client, none named, with only directories no install completed" "nothing is installed" update --client XYMONHOME="$c"
+assert_contains "$c/ext/stray is no install of stray's: left as it is" "$out" "[S35] update --client, none named, says what it passes over"
 rm -rf "$c/ext/xymon-plugin"
 untouched "[S25]" "a client removal of a plugin not there" remove --client xymon-plugin XYMONHOME="$c"
+# An install whose MANIFEST is gone -- an update cut short after its
+# VERSION -- is still one: the next update puts it back.
+x install --client xymon-plugin XYMONHOME="$c"
+rm -f "$c/ext/xymon-plugin/MANIFEST"
+x update --client xymon-plugin XYMONHOME="$c"
+[ "$rc" -eq 0 ] || fail "[S35] an install with no MANIFEST was not updated: $out"
+for f in xymon-plugin xymon-plugin.8 PLUGIN VERSION; do
+	assert_file_exists "$c/ext/xymon-plugin/$f"
+	grep -q "	$f\$" "$c/ext/xymon-plugin/MANIFEST" || fail "[S35] the MANIFEST an update put back does not name $f"
+done
+x remove --client xymon-plugin XYMONHOME="$c"
 # update with none named passes over them, updating only an install.
 x install --client xymon-plugin XYMONHOME="$c"
 state snap-s0; grep "^$c/ext/stray" "$work/snap-s0" > "$work/snap-s0.stray"
@@ -277,6 +290,20 @@ x update --client XYMONHOME="$c"
 [ "$rc" -eq 0 ] || fail "[S35] update --client beside a stray directory failed: $out"
 state snap-s1; grep "^$c/ext/stray" "$work/snap-s1" > "$work/snap-s1.stray"
 cmp -s "$work/snap-s0.stray" "$work/snap-s1.stray" || fail "[S35] update --client changed a stray directory"
+# The site's own scripts in ext/, no PLUGIN, no VERSION, no plugin's name:
+# not read, nothing said, nothing touched (S20).
+echo '#!/bin/sh' > "$c/ext/check_raid.sh"; mkdir -p "$c/ext/mes-scripts"; echo mine > "$c/ext/mes-scripts/run"
+state snap-m0; grep -e "^$c/ext/check_raid.sh " -e "^$c/ext/mes-scripts[ /]" "$work/snap-m0" > "$work/snap-m0.f" || :
+x update --client XYMONHOME="$c"
+[ "$rc" -eq 0 ] || fail "[S35] update --client beside the site's own scripts failed: $out"
+for w in check_raid.sh mes-scripts; do assert_not_contains "$w" "$out" "[S35] update --client says nothing of the site's $w"; done
+x remove --client --all XYMONHOME="$c"
+[ "$rc" -eq 0 ] || fail "[S35] remove --client --all beside the site's own scripts failed: $out"
+for w in check_raid.sh mes-scripts; do assert_not_contains "$w" "$out" "[S35] remove --client --all says nothing of the site's $w"; done
+state snap-m1; grep -e "^$c/ext/check_raid.sh " -e "^$c/ext/mes-scripts[ /]" "$work/snap-m1" > "$work/snap-m1.f" || :
+[ -s "$work/snap-m1.f" ] && cmp -s "$work/snap-m0.f" "$work/snap-m1.f" || fail "[S35] the site's own scripts changed: $(diff "$work/snap-m0.f" "$work/snap-m1.f" || :)"
+rm -rf "$c/ext/check_raid.sh" "$c/ext/mes-scripts"
+x install --client xymon-plugin XYMONHOME="$c"
 x remove --client xymon-plugin XYMONHOME="$c"
 rm -f "$work/cfg/xymon-plugin/installation-used-last-client"
 rm -rf "$c/ext/stray" "$c/ext/xymonapi"
@@ -330,12 +357,13 @@ rm -rf "$work/stage"
 # install and update replace ext/NAME whole: one no install left is left
 # as it is -- data in it, a VERSION beside data, a link to the person's own.
 mkdir -p "$c/ext/xymon-plugin"; echo precious > "$c/ext/xymon-plugin/mydata"
-refused "[S28]" "install over a directory no install left" "$c/ext/xymon-plugin is not xymon-plugin's client part as an install completes it" install --client xymon-plugin XYMONHOME="$c"
+refused "[S28]" "install over a directory no install left" "$c/ext/xymon-plugin is not xymon-plugin's client part as an install leaves it" install --client xymon-plugin XYMONHOME="$c"
+refused "[S28]" "update of a directory with no VERSION, said as none, not as absent" "$c/ext/xymon-plugin is not xymon-plugin's client part as an install leaves it" update --client xymon-plugin XYMONHOME="$c"
 echo "$version" > "$c/ext/xymon-plugin/VERSION"
-refused "[S28]" "update of a directory no install left" "$c/ext/xymon-plugin is not xymon-plugin's client part as an install completes it" update --client xymon-plugin XYMONHOME="$c"
+refused "[S28]" "update of a directory no install left" "$c/ext/xymon-plugin is not xymon-plugin's client part as an install leaves it" update --client xymon-plugin XYMONHOME="$c"
 assert_file_exists "$c/ext/xymon-plugin/mydata"
 rm -rf "$c/ext/xymon-plugin"; mkdir -p "$work/mine"; echo "$version" > "$work/mine/VERSION"; ln -s "$work/mine" "$c/ext/xymon-plugin"
-refused "[S28]" "update of a link to the person's own" "is not xymon-plugin's client part as an install completes it" update --client xymon-plugin XYMONHOME="$c"
+refused "[S28]" "update of a link to the person's own" "is not xymon-plugin's client part as an install leaves it" update --client xymon-plugin XYMONHOME="$c"
 [ -L "$c/ext/xymon-plugin" ] || fail "[S28] the person's link was replaced"
 rm -f "$c/ext/xymon-plugin"
 # An install's own marks, one by one: each makes it no install's.
@@ -343,15 +371,15 @@ x install --client xymon-plugin XYMONHOME="$c"
 [ "$rc" -eq 0 ] || fail "[S35] install --client failed: $out"
 cp "$c/ext/xymon-plugin/PLUGIN" "$work/PLUGIN.kept"
 sed -e 's/^name: .*/name: other/' "$work/PLUGIN.kept" > "$c/ext/xymon-plugin/PLUGIN"
-refused "[S35]" "removing an install whose PLUGIN names another" "is not xymon-plugin's client part as an install completes it" remove --client xymon-plugin XYMONHOME="$c"
+refused "[S35]" "removing an install whose PLUGIN names another" "is not xymon-plugin's client part as an install leaves it" remove --client xymon-plugin XYMONHOME="$c"
 sed -e '/^client-files:/d' "$work/PLUGIN.kept" > "$c/ext/xymon-plugin/PLUGIN"
-refused "[S35]" "removing an install whose PLUGIN has no client part" "is not xymon-plugin's client part as an install completes it" remove --client xymon-plugin XYMONHOME="$c"
+refused "[S35]" "removing an install whose PLUGIN has no client part" "is not xymon-plugin's client part as an install leaves it" remove --client xymon-plugin XYMONHOME="$c"
 cp "$work/PLUGIN.kept" "$c/ext/xymon-plugin/PLUGIN"
 mv "$c/ext/xymon-plugin/VERSION" "$work/VERSION.kept"; ln -s "$work/VERSION.kept" "$c/ext/xymon-plugin/VERSION"
-refused "[S35]" "removing an install whose VERSION is a link" "is not xymon-plugin's client part as an install completes it" remove --client xymon-plugin XYMONHOME="$c"
+refused "[S35]" "removing an install whose VERSION is a link" "is not xymon-plugin's client part as an install leaves it" remove --client xymon-plugin XYMONHOME="$c"
 rm -f "$c/ext/xymon-plugin/VERSION"; mv "$work/VERSION.kept" "$c/ext/xymon-plugin/VERSION"
 mv "$c/ext/xymon-plugin" "$work/xp.kept"; ln -s "$work/xp.kept" "$c/ext/xymon-plugin"
-refused "[S35]" "removing an install that is a link" "is not xymon-plugin's client part as an install completes it" remove --client xymon-plugin XYMONHOME="$c"
+refused "[S35]" "removing an install that is a link" "is not xymon-plugin's client part as an install leaves it" remove --client xymon-plugin XYMONHOME="$c"
 rm -f "$c/ext/xymon-plugin"; mv "$work/xp.kept" "$c/ext/xymon-plugin"
 # --all passes over what is installed already, saying so.
 x install --client --all XYMONHOME="$c"
@@ -413,7 +441,7 @@ printf 'name: cneed\nversion: 1.0.0\nsummary: a test\nclient-files: check.sh\ncl
 # changes: a directory no install left where xymon-plugin's goes stops the
 # install of cneed, and is left as it is.
 mkdir -p "$c/ext/xymon-plugin"; echo precious > "$c/ext/xymon-plugin/mydata"
-XP="$r/xymon-plugin" refused "[S35]" "a client part whose need's directory no install left" "is not xymon-plugin's client part as an install completes it" install --client cneed XYMONHOME="$c"
+XP="$r/xymon-plugin" refused "[S35]" "a client part whose need's directory no install left" "is not xymon-plugin's client part as an install leaves it" install --client cneed XYMONHOME="$c"
 assert_file_exists "$c/ext/xymon-plugin/mydata"
 rm -rf "$c/ext/xymon-plugin"
 rc=0; out=$("$r/xymon-plugin" install --client cneed XYMONHOME="$c" MANDIR="$man" </dev/null 2>&1) || rc=$?
@@ -439,17 +467,24 @@ XP=$r/xymon-plugin x install --client zfree XYMONHOME="$c"
 [ "$rc" -eq 0 ] || fail "[S35] install --client zfree failed: $out"
 XP=$r/xymon-plugin refused "[S3]" "removing two, one needed by a plugin that stays" "xymon-plugin is needed by cneed" remove --client zfree xymon-plugin XYMONHOME="$c"
 XP=$r/xymon-plugin x remove --client zfree XYMONHOME="$c"
-# A directory there no install completed -- no VERSION, or a VERSION and
-# no MANIFEST -- is no plugin's install: what its PLUGIN says it needs
+# A directory there no install left -- no VERSION, or a PLUGIN naming
+# another -- is no plugin's install: what its PLUGIN says it needs
 # blocks nothing (S3).
 mkdir -p "$c/ext/native"; printf 'name: native\nclient-needs: cneed\n' > "$c/ext/native/PLUGIN"
-mkdir -p "$c/ext/half"; printf 'name: half\nclient-files: h.sh\nclient-needs: cneed\n' > "$c/ext/half/PLUGIN"; echo 1.0.0 > "$c/ext/half/VERSION"
+mkdir -p "$c/ext/half"; printf 'name: other\nclient-files: h.sh\nclient-needs: cneed\n' > "$c/ext/half/PLUGIN"; echo 1.0.0 > "$c/ext/half/VERSION"
 rc=0; out=$("$r/xymon-plugin" remove --client cneed XYMONHOME="$c" MANDIR="$man" </dev/null 2>&1) || rc=$?
 [ "$rc" -eq 0 ] || fail "[S3] a directory no install completed blocked a removal: $out"
 [ ! -e "$c/ext/cneed" ] || fail "[S3] cneed was not removed: $out"
 assert_file_exists "$c/ext/native/PLUGIN"
 assert_file_exists "$c/ext/half/VERSION"
 rm -rf "$c/ext/native" "$c/ext/half"
+# Nor one whose name no plugin's can be, its PLUGIN naming it.
+mkdir -p "$c/ext/evil name"; echo 1.0.0 > "$c/ext/evil name/VERSION"
+printf 'name: evil name\nclient-files: h.sh\nclient-needs: xymon-plugin\n' > "$c/ext/evil name/PLUGIN"
+XP=$r/xymon-plugin x remove --client xymon-plugin XYMONHOME="$c"
+[ "$rc" -eq 0 ] || fail "[S3] a directory named as no plugin can be blocked a removal: $out"
+assert_file_exists "$c/ext/evil name/PLUGIN"
+rm -rf "$c/ext/evil name"
 # Both named, the one needing the other: both go.
 XP=$r/xymon-plugin x install --client cneed XYMONHOME="$c"
 XP=$r/xymon-plugin x remove --client cneed xymon-plugin XYMONHOME="$c"

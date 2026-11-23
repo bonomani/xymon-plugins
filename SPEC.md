@@ -259,6 +259,24 @@ the Xymon user can write, so it decides nothing alone: a manual page is
 removed only if it is the link into the plugin's directory, a command only
 if it is, byte for byte, the one an install of that plugin wrote, and a
 name only if it is a plain file name.
+In `ext/`, of the server and of a client (S35), `install`, `update` and
+`remove` replace or take only a directory an install left: one with a
+plain plugin name, not a link, with `VERSION` and its `PLUGIN` copy,
+naming the plugin and that part, both plain files -- or, on the server,
+from before the copy, a plain `VERSION` and no `PLUGIN`, of a plugin the
+checkout has. `MANIFEST` is no part of it, deciding nothing alone (S29):
+an update cut short after `VERSION` is put right by the next. Anything
+else in `ext/`, a link among them, is left as it is, and counts as
+installed for no need: the run is refused before anything changes,
+naming it and, if it is an install cut short, the command removing it by
+hand, for every plugin named and every part it needs. With none named,
+`remove --all`, `update` and `verify --server` read only what may be a
+plugin's -- an entry named as a plugin of the checkout, or a directory
+holding a `PLUGIN` or a `VERSION` -- the first two passing over each that
+is no install, saying so, `verify` saying it is none; the rest of `ext/`
+is the site's, its own scripts, and is not read. The virtualenv and the
+stage `/plugins` serves are no plugin's, and go only with an install
+removed (S8).
 
 **S21. Under `DESTDIR`, nothing is written outside it.**
 An install staged under `DESTDIR` writes only there. Xymon's own staged
@@ -606,12 +624,11 @@ is refused. A plugin named with no client part is refused, and one whose
 `client-files:` or `client-manual:` names a file its directory lacks, or
 a link, before any plugin is installed. A client part's needs,
 `client-needs:`, are client parts (S3). `install`, `update` and `remove`
-replace or take only a directory an install completed: `VERSION`,
-`PLUGIN`, naming the plugin and a client part, and `MANIFEST`, written
-last, all plain files; only such a one counts as installed, for a need
-too. Any other in `ext/` is left as it is, an install cut short removed by
-hand; `update` with none named passes over a plugin this checkout lacks,
-saying so. Before anything
+replace or take only a directory an install left, as on the server (S20):
+`VERSION` and `PLUGIN`, naming the plugin and a client part, plain files;
+only such a one counts as installed, for a need too. Any other in `ext/`
+is left as it is, an install cut short removed by hand; `update` with
+none named passes over a plugin this checkout lacks, saying so. Before anything
 changes, the run is refused unless the person running it owns the tree's
 `ext/`, root as any other, naming the owner: the files of a part are
 written by whoever owns its tree, so that the same person updates and

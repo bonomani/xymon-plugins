@@ -391,14 +391,17 @@ EOF
 	done
 }
 
-# xymon_ok PLUGIN -- refuse the plugin, or one it needs, when its xymon:
-# line names a newer Xymon than the server's, unless --force; say so when
-# the server's cannot be read. Run on every plugin to install before any is
-# touched.
+# xymon_ok PLUGIN -- refuse the plugin, or one it needs, when its directory
+# in ext/ is no install's, or its xymon: line names a newer Xymon than the
+# server's, unless --force; say so when the server's cannot be read. Run
+# on every plugin to install before any is touched.
 CHECKED=
 xymon_ok() {
 	case " $CHECKED " in *" $1 "*) return 0 ;; esac
 	CHECKED="$CHECKED $1"
+	# Its directory in ext/ absent, or one an install left: install and
+	# update replace it whole, and ext/ may hold anything (S20).
+	part_left server "$1"
 	ns=$(needs "$1" server) || exit 1
 	for n in $ns; do xymon_ok "$n"; done
 	want=$(field "$1" xymon); [ -n "$want" ] || return 0
@@ -839,10 +842,14 @@ remember_tree() {
 # hx -- --xymon-home and XYMONHOME, for a command printed, which the
 # dialogue runs by eval: quoted where a shell would split it, a quote in it
 # written '\''.
-hx() {
-	case $XYMONHOME in
-		*[!A-Za-z0-9._/+-]*) printf " --xymon-home '%s'" "$(printf '%s\n' "$XYMONHOME" | sed "s/'/'\\\\''/g")" ;;
-		*) printf ' --xymon-home %s' "$XYMONHOME" ;;
+hx() { printf ' --xymon-home %s' "$(shq "$XYMONHOME")"; }
+
+# shq WORD -- WORD for a command printed, to paste or eval: quoted where a
+# shell would split it, a quote in it written '\''.
+shq() {
+	case $1 in
+		*[!A-Za-z0-9._/+-]*) printf "'%s'" "$(printf '%s\n' "$1" | sed "s/'/'\\\\''/g")" ;;
+		*) printf '%s' "$1" ;;
 	esac
 }
 
@@ -1862,9 +1869,6 @@ install_server() {
 	for n in $ns; do known "$n"; install_server "$n"; done
 	[ -n "$(field "$1" server-files)" ] || die "$1 has nothing to install on the server"
 	ext=$EXTROOT/$1
-	# A link in the plugin directory's place is not the plugin's: removed,
-	# as fresh would, before anything is read or moved through it.
-	if [ -L "$ext" ]; then rm -f "$ext" || exit 1; fi
 	# What the install in place put outside its directory, by its record,
 	# for what this one no longer does.
 	was_manual=$(held "$EXTROOT" "$1" server-manual)
@@ -1913,6 +1917,8 @@ install_server() {
 			mv "$ext/.shipped/$c" "$EXTROOT/.$1.$c.shipped" || exit 1
 		fi
 	done
+	# A link come since the check before anything changed: not followed.
+	[ ! -L "$ext" ] || die "$ext is a link: left as it is"
 	fresh "$ext" "$keep" || exit 1
 	# Kept, not made anew, it may be one made under umask 077.
 	open_dir -1 "$EXTROOT"
@@ -2036,11 +2042,14 @@ install_client() {
 # removing it would leave that one broken.
 needed() {
 	for p in "$3"/*; do
-		# An install has its VERSION, a client part's all client_installed
-		# asks: any other directory there is no plugin's, and needs nothing
-		# (S3); nor does one removed in the same run, SKIP.
-		if [ "$2" = client ]; then client_installed "${p##*/}" || continue
-		else [ -d "$p" ] && [ -f "$p/VERSION" ] || continue; fi
+		# An install is what client_installed or server_installed asks, a
+		# tools part's its VERSION: any other directory there is no
+		# plugin's, and needs nothing (S3); nor does one removed in the
+		# same run, SKIP.
+		case $2 in
+			client|server) "$2_installed" "${p##*/}" || continue ;;
+			*) [ -d "$p" ] && [ -f "$p/VERSION" ] || continue ;;
+		esac
 		case " ${4:-} " in *" ${p##*/} "*) continue ;; esac
 		ns=$(needs "${p##*/}" "$2" "$3") || exit 1
 		case " $ns " in
@@ -2104,26 +2113,81 @@ drop_task() {
 	rm -f "$EXTROOT/.$1.tasks.cfg" "$TASKDIR/.$1.cfg.tmp"
 }
 
-# client_installed NAME -- NAME is a client part an install completed in
-# ext/: a directory, not a link, with VERSION, PLUGIN and MANIFEST as an
-# install writes them, plain files, the PLUGIN naming NAME and a client
-# part; MANIFEST is written last, so an install cut short has none. Read
-# from that PLUGIN alone, never the checkout's: a removal takes the
-# directory whole, and must not take one that only looks like an install.
-client_installed() {
+# installed_as NAME PART -- NAME is a PART part an install left in ext/: a
+# directory, not a link, with VERSION and PLUGIN as an install writes
+# them, plain files, the PLUGIN naming NAME and a PART part; VERSION is
+# written after the files, so an install cut short before it has none.
+# Not MANIFEST, which decides nothing alone (S29): an update cut short
+# after VERSION is put right by the next. Read from that PLUGIN alone,
+# never the checkout's: a removal takes the directory whole, and must not
+# take one that only looks like an install.
+installed_as() {
+	plain "$1" || return 1
 	ci=$EXTROOT/$1
 	[ -d "$ci" ] && [ ! -L "$ci" ] && [ -f "$ci/VERSION" ] && [ ! -L "$ci/VERSION" ] \
 		&& [ -f "$ci/PLUGIN" ] && [ ! -L "$ci/PLUGIN" ] \
-		&& [ -f "$ci/MANIFEST" ] && [ ! -L "$ci/MANIFEST" ] \
 		&& [ "$(sed -n 's/^name: *//p' "$ci/PLUGIN")" = "$1" ] \
-		&& [ -n "$(sed -n 's/^client-files: *//p' "$ci/PLUGIN")" ]
+		&& [ -n "$(sed -n "s/^$2-files: *//p" "$ci/PLUGIN")" ]
+}
+client_installed() { installed_as "$1" client; }
+
+# server_installed NAME -- the same for a server part; or, with no PLUGIN
+# at all, a directory with a plain VERSION, an install from before the
+# copy, of a plugin of this checkout, whose PLUGIN file manages it (S20).
+server_installed() {
+	plain "$1" || return 1
+	if [ -e "$EXTROOT/$1/PLUGIN" ] || [ -L "$EXTROOT/$1/PLUGIN" ]; then installed_as "$1" server
+	else [ -d "$EXTROOT/$1" ] && [ ! -L "$EXTROOT/$1" ] && [ -f "$EXTROOT/$1/VERSION" ] && [ ! -L "$EXTROOT/$1/VERSION" ] \
+		&& [ -f "$ROOT/plugins/$1/PLUGIN" ]; fi
 }
 
-# client_left NAME -- refuse ext/NAME when it is there and no completed
-# install's: install, update and remove would replace or take it whole.
-client_left() {
-	{ [ ! -e "$EXTROOT/$1" ] && [ ! -L "$EXTROOT/$1" ]; } || client_installed "$1" \
-		|| die "$EXTROOT/$1 is not $1's client part as an install completes it (VERSION, PLUGIN and MANIFEST, plain files, naming $1 and a client part): left as it is; an interrupted install is removed by hand, rm -rf $EXTROOT/$1"
+# no_install PART NAME -- why ext/NAME is no install of NAME's PART part,
+# and what to do: by hand, as nothing here takes it. One cut short before
+# its VERSION holds what an admin may have edited, and its task is off.
+no_install() {
+	o=; [ "$1" = client ] || o=", or VERSION alone from before the PLUGIN copy"
+	k=
+	if [ "$1" = server ] && [ ! -e "$EXTROOT/$2/VERSION" ] && [ -f "$EXTROOT/$2/PLUGIN" ] && [ ! -L "$EXTROOT/$2/PLUGIN" ]; then
+		k=", saving first its task file and web server snippets if edited, its task enabled again once installed"
+	fi
+	echo "$EXTROOT/$2 is not $2's $1 part as an install leaves it (VERSION and PLUGIN, plain files, naming $2 and a $1 part$o): left as it is; if it is an install cut short, remove it by hand$k: rm -rf $(shq "$EXTROOT/$2")"
+}
+
+# part_left PART NAME -- refuse ext/NAME when it is there and no install's
+# of PART: install, update and remove would replace or take it whole.
+part_left() {
+	{ [ ! -e "$EXTROOT/$2" ] && [ ! -L "$EXTROOT/$2" ]; } || "$1_installed" "$2" || die "$(no_install "$1" "$2")"
+}
+
+# ext_names -- what in ext/ may be a plugin's, one name a line: a plugin of
+# this checkout's name, or a directory holding a PLUGIN or a VERSION. The
+# rest -- the site's own scripts, the virtualenv, the stage /plugins
+# serves, the dot files an install keeps beside a directory -- is not read.
+ext_names() {
+	for d in "$EXTROOT"/*; do
+		{ [ -e "$d" ] || [ -L "$d" ]; } || continue
+		case ${d##*/} in venv|xymon-plugins-dist) continue ;; esac
+		[ -f "$ROOT/plugins/${d##*/}/PLUGIN" ] \
+			|| { [ -d "$d" ] && { [ -e "$d/PLUGIN" ] || [ -L "$d/PLUGIN" ] || [ -e "$d/VERSION" ] || [ -L "$d/VERSION" ]; }; } \
+			|| continue
+		printf '%s\n' "${d##*/}"
+	done
+}
+
+# installs PART [ABSENT] -- for an action given no names, every directory
+# in ext/ an install left, and with ABSENT the plugins of LIST with none;
+# anything else there is passed over, said.
+installs() {
+	if [ -n "${2:-}" ]; then
+		for n in $LIST; do [ -e "$EXTROOT/$n" ] || [ -L "$EXTROOT/$n" ] || echo "$n"; done
+	fi
+	while IFS= read -r n; do
+		[ -n "$n" ] || continue
+		if "$1_installed" "$n"; then echo "$n"
+		else echo "$EXTROOT/$n is no install of $n's: left as it is" >&2; fi
+	done <<EOX
+$(ext_names)
+EOX
 }
 
 # client_ok NAME -- before anything changes, NAME and every client part it
@@ -2146,7 +2210,7 @@ client_ok() {
 	set +f
 	ns=$(needs "$1" client) || exit 1
 	for m in $ns; do client_ok "$m"; done
-	client_left "$1"
+	part_left client "$1"
 }
 
 uninstall_client() {
@@ -2180,7 +2244,10 @@ uninstall_server() {
 	for c in $(held "$EXTROOT" "$1" conf); do
 		if [ -f "$EXTROOT/$1/$c" ]; then cf=1; fi
 	done
-	legacy=; [ -f "$EXTROOT/$1/PLUGIN" ] || legacy=1
+	# Legacy, the page copied, only for a directory there with no copy: with
+	# none, a page in MANDIR is no install's to take.
+	legacy=; [ ! -d "$EXTROOT/$1" ] || [ -f "$EXTROOT/$1/PLUGIN" ] || legacy=1
+	[ ! -d "$EXTROOT/$1" ] || REMOVED=1
 	rm -rf "$EXTROOT/$1" "$DIST/plugins/$1"
 	drop_manual "$m" "$MANDIR" "$XYMONHOME/ext/$1" "$legacy"
 	[ -z "$t" ] || drop_task "$1"
@@ -2223,7 +2290,11 @@ v_runs() { case $1 in *.py|*.pyc|*.pth|*.so|*.sh) return 0 ;; esac; [ -x "$2" ];
 # verify_plugin PART ROOT PLUGIN -- the lines for one plugin installed.
 verify_plugin() {
 	part=$1 root=$2 n=$3 dir=$2/$3 fix="./xymon-plugin update --$1 $3" bad=0 before=$((BROKEN + UNTIDY))
-	if [ ! -f "$dir/MANIFEST" ]; then
+	if [ "$part" = server ] && ! server_installed "$n"; then
+		# No install's: update and remove refuse it (S20), nor is it read.
+		v_broken "$n: $(no_install server "$n")"
+		return 0
+	elif [ ! -f "$dir/MANIFEST" ]; then
 		v_untidy "$n: no MANIFEST, installed before it was kept: $fix"
 	else
 		# The paths MANIFEST names, one a line between newlines.
@@ -2436,11 +2507,19 @@ EOF
 # verify_part PART ROOT -- every plugin installed in the part, or those
 # named; with none named, what is left too.
 verify_part() {
-	if [ -n "$NAMES" ]; then L=$NAMES; else L=$(for d in "$2"/*; do [ -f "$d/VERSION" ] && echo "${d##*/}"; done); fi
-	for n in $L; do
-		if [ -f "$2/$n/VERSION" ]; then verify_plugin "$1" "$2" "$n"
+	# One a line: on the server, with none named, every name in ext/.
+	# shellcheck disable=SC2086 # the names, one a line
+	if [ -n "$NAMES" ]; then L=$(printf '%s\n' $NAMES)
+	elif [ "$1" = server ]; then L=$(ext_names)
+	else L=$(for d in "$2"/*; do [ -f "$d/VERSION" ] && echo "${d##*/}"; done); fi
+	while IFS= read -r n; do
+		[ -n "$n" ] || continue
+		# On the server, anything there is an install or none, said (S20).
+		if [ -f "$2/$n/VERSION" ] || { [ "$1" = server ] && { [ -e "$2/$n" ] || [ -L "$2/$n" ]; }; }; then verify_plugin "$1" "$2" "$n"
 		else echo "$n: not installed"; fi
-	done
+	done <<EOX
+$L
+EOX
 	# A part with nothing installed says so, as status does, rather than a
 	# heading with nothing under it.
 	[ -n "$L" ] || echo "no plugin"
@@ -2489,7 +2568,8 @@ dialogue() {
 			fi
 			f=$(findings server "$EXTROOT" "$n")
 			echo "  $n $v$st${f:+ -- $f}"
-			[ -z "$f" ] || REPAIR_S="$REPAIR_S $n"
+			# One no install left is no update's to repair (S20).
+			[ -z "$f" ] || ! server_installed "$n" || REPAIR_S="$REPAIR_S $n"
 		done
 		LEFT_S=$(left_by server)
 		printf '%s\n' "$LEFT_S" | while IFS='	' read -r t w; do
@@ -2525,13 +2605,14 @@ dialogue() {
 	if [ -n "$XYMONHOME" ]; then
 		for n in $(ordered server); do
 			[ -n "$(field "$n" server-files)" ] || continue
-			installed "$EXTROOT" "$n" >/dev/null && continue
+			# Anything there, an install or not, is no install's to offer.
+			{ [ -e "$EXTROOT/$n" ] || [ -L "$EXTROOT/$n" ]; } && continue
 			w=; for d in $(needs "$n" server 2>/dev/null); do installed "$EXTROOT" "$d" >/dev/null || w="$w $d"; done
 			add "install $n on the server${w:+, with$w}: $(short "$n" server)" "$me install --server$hx $n"
 		done
 		any=
 		for n in $(all_plugins); do
-			installed "$EXTROOT" "$n" >/dev/null || continue
+			server_installed "$n" || continue
 			any=1
 			[ -n "$(held "$EXTROOT" "$n" task)" ] || continue
 			if is_on "$n"; then add "turn $n off" "$me disable --server$hx $n"
@@ -2539,10 +2620,10 @@ dialogue() {
 		done
 		[ -z "$any" ] || add "update the server's plugins${REPAIR_S:+, which repairs$REPAIR_S}" "$me update --server$hx"
 		for n in $(all_plugins); do
-			installed "$EXTROOT" "$n" >/dev/null || continue
+			server_installed "$n" || continue
 			by=
 			for p in $(all_plugins); do
-				installed "$EXTROOT" "$p" >/dev/null || continue
+				server_installed "$p" || continue
 				case " $(needs "$p" server "$EXTROOT" 2>/dev/null) " in *" $n "*) by="$by $p" ;; esac
 			done
 			[ -z "$by" ] || continue
@@ -2688,8 +2769,8 @@ case $VERB in
 		# anything changes; --all and what one needs pass over them.
 		for n in $NAMES; do
 			v=$(installed "$PARTROOT" "$n") || continue
-			# A client's directory no install completed: client_ok says so.
-			[ "$PART" != client ] || client_installed "$n" || continue
+			# A directory no install completed: client_ok, xymon_ok say so.
+			case $PART in client|server) "${PART}_installed" "$n" || continue ;; esac
 			die "$n is installed already ($v): ./xymon-plugin update --$PART $n"
 		done
 		if [ "$PART" = server ]; then
@@ -2707,18 +2788,21 @@ case $VERB in
 		UPDATING=1
 		for n in $LIST $NAMES; do [ ! -f "$ROOT/plugins/$n/PLUGIN" ] || declared_ok "$n"; done
 		for n in $NAMES; do
+			# Something there no install left is said as such, not as absent.
+			case $PART in server|client) part_left "$PART" "$n" ;; esac
 			installed "$PARTROOT" "$n" >/dev/null || die "$n is not installed: ./xymon-plugin install --$PART $n"
 		done
 		if [ -z "$NAMES" ] && [ "$PART" = client ]; then
 			# The client parts installed, and nothing else ext/ may hold;
 			# one this checkout does not have is passed over, said.
-			LIST=$(for n in $(with_installed "$PARTROOT"); do client_installed "$n" && echo "$n"; done)
+			LIST=$(installs client)
 			[ -n "$LIST" ] || die "nothing is installed in $PARTROOT to update"
 			LIST=$(for n in $LIST; do
 				if [ -f "$ROOT/plugins/$n/PLUGIN" ]; then echo "$n"; else echo "$n is not in this checkout: left as it is" >&2; fi
 			done)
 		elif [ -z "$NAMES" ]; then
-			LIST=$(for n in $(with_installed "$PARTROOT"); do [ -f "$PARTROOT/$n/VERSION" ] && echo "$n"; done)
+			if [ "$PART" = server ]; then LIST=$(installs server)
+			else LIST=$(for n in $(with_installed "$PARTROOT"); do [ -f "$PARTROOT/$n/VERSION" ] && echo "$n"; done); fi
 			[ -n "$LIST" ] || die "nothing is installed in $PARTROOT to update"
 		fi
 		if [ "$PART" = server ]; then
@@ -2863,16 +2947,26 @@ EOF
 		clean_part "$PART" ;;
 	remove)
 		if [ "$PART" = server ]; then
+			# Before anything goes: each name, an install's directory or
+			# none, which removes what S9 leaves; any other is left as it
+			# is, and so passed over with --all: rm -rf would take it.
+			for n in $NAMES; do part_left server "$n"; done
+			[ -n "$NAMES" ] || LIST=$(installs server absent)
+			# And each needed by no install that stays (S3), before
+			# anything goes, the stage included.
+			# shellcheck disable=SC2086,SC2116 # LIST, one line
+			for n in $LIST; do needed "$n" server "$EXTROOT" "$(echo $LIST)"; done
 			# The stage served at /plugins, pruned first, as an install
 			# does: a link there would take the removal elsewhere.
 			prune_dist
-			[ -n "$NAMES" ] || LIST=$(with_installed "$EXTROOT")
+			REMOVED=
 			for n in $(deepest_first "$EXTROOT" server); do uninstall_server "$n"; done
-			# With the last plugin, what they shared: the virtualenv (S8).
-			last=1; for d in "$EXTROOT"/*; do [ -f "$d/VERSION" ] && last=; done
+			# With the last plugin, what they shared: the virtualenv (S8);
+			# only once an install went, not for what S9 leaves alone.
+			last=$REMOVED; for d in "$EXTROOT"/*; do [ -f "$d/VERSION" ] && last=; done
 			[ -z "$last" ] || [ ! -d "$EXTROOT/venv" ] || { rm -rf "$EXTROOT/venv" && echo "Removed the virtualenv, which no plugin uses now."; }
 			# The stage served at /plugins, with no plugin left in it, goes.
-			if [ -d "$DIST" ] && [ ! -L "$DIST" ] && [ -z "$(ls -A "$DIST/plugins" 2>/dev/null)" ]; then
+			if [ -n "$REMOVED" ] && [ -d "$DIST" ] && [ ! -L "$DIST" ] && [ -z "$(ls -A "$DIST/plugins" 2>/dev/null)" ]; then
 				rm -rf "$DIST" || exit 1
 				echo "Removed the stage /plugins serves, which no plugin uses now."
 			fi
@@ -2887,12 +2981,10 @@ EOF
 					[ ! -f "$ROOT/plugins/$n/PLUGIN" ] || [ -n "$(field "$n" client-files)" ] || die "$n has no client part: --server, or --tools"
 					continue
 				fi
-				client_left "$n"
+				part_left client "$n"
 				needed "$n" client "$EXTROOT" "$NAMES"
 			done
-			[ -n "$NAMES" ] || LIST=$(for n in $(with_installed "$EXTROOT"); do
-				client_installed "$n" && echo "$n"
-			done)
+			[ -n "$NAMES" ] || LIST=$(installs client)
 			# Remembered only once something is removed.
 			REMEMBER=
 			for n in $(deepest_first "$EXTROOT" client); do uninstall_client "$n"; done
