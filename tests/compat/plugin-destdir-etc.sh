@@ -126,15 +126,14 @@ run uninstall server; check "uninstall-server, the stage's plugins/ a link"
 [ -L "$stage$home/ext/xymon-plugins-dist/plugins" ] && fail "[S21] the stage's plugins/ link is still there"
 assert_file_exists "$host/plugins/xymonapi/keep"
 
-# Your own side: libexec and bin absolute links, and the command already
-# there a link to a host file.
+# Your own side: libexec and bin absolute links, and the command's name
+# already a link to a host file, another's, left (S4).
 fresh; mkdir -p "$stage/opt/x"
 ln -s "$host/libexec" "$stage/opt/x/libexec"
 mkdir -p "$stage/opt/x/bin"; ln -s "$host/victim" "$stage/opt/x/bin/xymonapi-connect"
 run install tools; check "install-tools, libexec a link and the command a link to a host file"
 assert_file_exists "$stage$host/libexec/xymon-plugins/xymonapi/VERSION"
-[ -f "$stage/opt/x/bin/xymonapi-connect" ] && [ ! -L "$stage/opt/x/bin/xymonapi-connect" ] \
-	|| fail "[S21] the command was not written in place of the link"
+assert_equal "$host/victim" "$(readlink "$stage/opt/x/bin/xymonapi-connect")" "[S4] the link at the command's name is not left as it is"
 run uninstall tools; check "uninstall-tools, libexec a link"
 fresh; mkdir -p "$stage/opt/x"; ln -s "$host/bin" "$stage/opt/x/bin"
 run install tools; check "install-tools, bin an absolute link"
@@ -154,4 +153,4 @@ rc=0; "$ROOT/xymon-plugin" enable --server xymonapi XYMONHOME="$home" DESTDIR="$
 [ "$rc" -ne 0 ] || fail "enable-server over a directory at tasks.d/xymonapi succeeded"
 assert_contains "is a directory" "$(cat "$work/en.log")" "and says why"
 
-pass "under DESTDIR nothing is written outside it: absolute, relative, chained and higher links to etc, ext, MANDIR, libexec and bin are followed inside DESTDIR; a link at a plugin directory is refused and left, links at a set-aside file or the stage's plugins/ are removed, not followed; a command replaces a link; no virtualenv is made"
+pass "under DESTDIR nothing is written outside it: absolute, relative, chained and higher links to etc, ext, MANDIR, libexec and bin are followed inside DESTDIR; a link at a plugin directory is refused and left, links at a set-aside file or the stage's plugins/ are removed, not followed; a link at a command's name is left, not followed; no virtualenv is made"

@@ -1317,7 +1317,8 @@ manifest_tools() {
 	{
 		mf_dir "$TOOLSROOT/$1" ""
 		set -- "$1" $(field "$1" command)
-		[ $# -ne 3 ] || [ ! -f "$BIN/$2" ] || mf_file "$BIN/$2" "$PREFIX/bin/$2"
+		# The command only when it is ours: its name may be another's (S4).
+		[ $# -ne 3 ] || ! our_command "$1" "$2" "$3" || mf_file "$BIN/$2" "$PREFIX/bin/$2"
 		pg=$(field "$1" tools-manual)
 		[ -z "$pg" ] || [ "$(readlink "$TOOLSMAN1/$pg" 2>/dev/null)" != "$PREFIX/libexec/xymon-plugins/$1/$pg" ] \
 			|| mf_link "$TOOLSMAN1/$pg" "$PREFIX/share/man/man1/$pg"
@@ -2303,7 +2304,12 @@ install_tools() {
 	[ "$was_manual" = "$(field "$1" tools-manual)" ] \
 		|| drop_manual "$was_manual" "$PREFIX/share/man" "$PREFIX/libexec/xymon-plugins/$1" ""
 	set -- "$1" $(field "$1" command)
-	if [ $# -eq 3 ]; then
+	# The name free, or the command an install of this plugin wrote --
+	# the old version's for another script went with drop_command above --
+	# it is written; anything else there is the person's, left and said.
+	if [ $# -eq 3 ] && { [ -e "$BIN/$2" ] || [ -L "$BIN/$2" ]; } && ! our_command "$1" "$2" "$3"; then
+		echo "$PREFIX/bin/$2 is another's, left as it is: run $1's command as $PREFIX/libexec/xymon-plugins/$1/$3"
+	elif [ $# -eq 3 ]; then
 		rm -f "$BIN/$2" || exit 1
 		wrapper "$1" "$3" > "$BIN/$2"
 		chmod 755 "$BIN/$2"
@@ -2411,17 +2417,24 @@ drop_manual() {
 
 # wrapper PLUGIN SCRIPT -- the command an install writes in $BIN: it runs
 # the script from where it is installed, PREFIX as given, without DESTDIR.
+# Every version has written this one: a change here leaves the commands
+# written before another's (our_command), unless it still knows them.
 wrapper() {
 	printf '#!/bin/sh\nexec "%s/libexec/xymon-plugins/%s/%s" "$@"\n' "$PREFIX" "$1" "$2"
 }
 
-# drop_command PLUGIN NAME SCRIPT -- remove $BIN/NAME when it is, byte for
-# byte, the command an install of PLUGIN wrote for SCRIPT, and not a
-# command of someone else's, a wrapper of their own among them.
-drop_command() {
-	[ -n "$2" ] && plain "$2" && plain "$3" && [ -f "$BIN/$2" ] && [ ! -L "$BIN/$2" ] || return 0
+# our_command PLUGIN NAME SCRIPT -- true when $BIN/NAME is, byte for byte,
+# the command an install of PLUGIN wrote for SCRIPT, and not a command of
+# someone else's, a wrapper of their own among them, nor a link (S4, S20).
+our_command() {
+	[ -n "$2" ] && plain "$2" && plain "$3" && [ -f "$BIN/$2" ] && [ ! -L "$BIN/$2" ] || return 1
 	# The x keeps the trailing newlines a command substitution drops.
-	[ "$(cat "$BIN/$2"; echo x)" = "$(wrapper "$1" "$3"; echo x)" ] && rm -f "$BIN/$2"
+	[ "$(cat "$BIN/$2"; echo x)" = "$(wrapper "$1" "$3"; echo x)" ]
+}
+
+# drop_command PLUGIN NAME SCRIPT -- remove $BIN/NAME when it is ours.
+drop_command() {
+	! our_command "$@" || rm -f "$BIN/$2"
 	return 0
 }
 

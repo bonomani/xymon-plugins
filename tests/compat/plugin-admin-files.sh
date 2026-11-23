@@ -7,9 +7,11 @@
 # A manual page's name in MANDIR that is not free -- a page of the admin's,
 # another's link, a directory -- is left as it is, said, for the server and
 # the tools parts, the install going on; this plugin's own link is made and
-# kept. An update to a version that no longer ships a snippet or the task
-# file keeps an edited one as NAME.old, said, out of the include lines'
-# reach, the task's link removed; an unedited one goes, nothing said; an
+# kept. So is a command's name in $PREFIX/bin, ours written and replaced,
+# an older version's for another script among them, and the only one a
+# removal takes. An update to a version that no longer ships a snippet or
+# the task file keeps an edited one as NAME.old, said, out of the include
+# lines' reach, the task's link removed; an unedited one goes, nothing said; an
 # edited snippet replaced by another for the same web server refuses the
 # update before anything changes, for a plugin named or one needing it,
 # until it is moved out. Removing a plugin whose directory is gone takes
@@ -133,6 +135,63 @@ mkdir -p "$m1"; echo "someone's page" > "$m1/xymonapi-connect.1"
 x remove --tools xymonapi; ok "remove --tools of a part not there"
 assert_equal "someone's page" "$(cat "$m1/xymonapi-connect.1")" "[S20] removing a tools part not there took a page at its name"
 rm -f "$m1/xymonapi-connect.1"
+
+# The command in $PREFIX/bin, the same: a command of the person's, or a
+# link, at its name is left as it is, said, and out of MANIFEST; ours is
+# written, replaced by an update, and the only one a removal takes.
+b=$work/prefix/bin lx=$work/prefix/libexec/xymon-plugins/xymonapi
+mkdir -p "$b"; printf '#!/bin/sh\necho mine\n' > "$work/cmd"; cp "$work/cmd" "$b/xymonapi-connect"
+# wrapper_of SCRIPT -- the command an install writes for xymonapi's SCRIPT.
+wrapper_of() { printf '#!/bin/sh\nexec "%s/%s" "$@"\n' "$lx" "$1"; }
+canother="$b/xymonapi-connect is another's, left as it is: run xymonapi's command as $lx/xymonapi-connect.sh"
+x install --tools xymonapi; ok "install --tools beside the person's command"
+assert_contains "$canother" "$out" "[S4] install --tools: the person's command at the name is said"
+cmp -s "$work/cmd" "$b/xymonapi-connect" || fail "[S4] install --tools replaced the person's command"
+grep -q "bin/xymonapi-connect" "$lx/MANIFEST" && fail "[S29] the tools' MANIFEST names the person's command"
+x update --tools xymonapi; ok "update --tools beside the person's command"
+assert_contains "$canother" "$out" "[S4] update --tools: the person's command at the name is said"
+cmp -s "$work/cmd" "$b/xymonapi-connect" || fail "[S4] update --tools replaced the person's command"
+grep -q "bin/xymonapi-connect" "$lx/MANIFEST" && fail "[S29] the tools' MANIFEST names the person's command after an update"
+rm -f "$b/xymonapi-connect"; ln -s /elsewhere/xymonapi-connect "$b/xymonapi-connect"
+x update --tools xymonapi; ok "update --tools beside another's link"
+assert_contains "$canother" "$out" "[S4] update --tools: another's link at the command's name is said"
+assert_equal /elsewhere/xymonapi-connect "$(readlink "$b/xymonapi-connect")" "[S4] update --tools: another's link at the command's name is left as it is"
+grep -q "bin/xymonapi-connect" "$lx/MANIFEST" && fail "[S29] the tools' MANIFEST names another's link at the command's name"
+# A link is another's even to a file holding the command ours, byte for byte.
+rm -f "$b/xymonapi-connect"
+wrapper_of xymonapi-connect.sh > "$work/ourcopy"; ln -s "$work/ourcopy" "$b/xymonapi-connect"
+x update --tools xymonapi; ok "update --tools beside a link to a copy of its command"
+assert_contains "$canother" "$out" "[S4] update --tools: a link to a copy of its command is said another's"
+assert_equal "$work/ourcopy" "$(readlink "$b/xymonapi-connect")" "[S4] update --tools: a link to a copy of its command is left as it is"
+rm -f "$b/xymonapi-connect"; mkdir "$b/xymonapi-connect"
+x update --tools xymonapi; ok "update --tools beside a directory at the command's name"
+assert_contains "$canother" "$out" "[S4] update --tools: a directory at the command's name is said"
+[ -d "$b/xymonapi-connect" ] || fail "[S4] update --tools: the directory at the command's name is gone"
+rmdir "$b/xymonapi-connect"
+ours=$(wrapper_of xymonapi-connect.sh; echo x)
+x update --tools xymonapi; ok "update --tools, the command's name free"
+assert_equal "$ours" "$(cat "$b/xymonapi-connect"; echo x)" "[S4] update --tools writes the command at its name free"
+assert_not_contains "is another's" "$out" "[S4] the name free is not said another's"
+grep -q "file	.*	$work/prefix/bin/xymonapi-connect\$" "$lx/MANIFEST" || fail "[S29] MANIFEST does not name the command ours"
+x update --tools xymonapi; ok "update --tools over its own command"
+assert_equal "$ours" "$(cat "$b/xymonapi-connect"; echo x)" "[S4] update --tools keeps writing its own command"
+assert_not_contains "is another's" "$out" "[S4] the command ours is not said another's"
+# A newer version runs another script under the same name: its update
+# replaces the older version's command, and the older one's update the newer's.
+v4=$work/v4; copy "$v4"; cp "$v4/plugins/xymonapi/xymonapi-connect.sh" "$v4/plugins/xymonapi/xymonapi-connect2.sh"
+edit "$v4" 's/^version: .*/version: 99.0.0/; s/^command: xymonapi-connect .*/command: xymonapi-connect xymonapi-connect2.sh/; s/^\(tools-files: .*\)/\1 xymonapi-connect2.sh/; s/^\(executable: .*\)/\1 xymonapi-connect2.sh/'
+x -r "$v4" update --tools xymonapi; ok "update --tools to a version with another wrapper"
+assert_equal "$(wrapper_of xymonapi-connect2.sh; echo x)" "$(cat "$b/xymonapi-connect"; echo x)" "[S4] an update did not replace the older version's command"
+assert_not_contains "is another's" "$out" "[S4] the older version's command is not said another's"
+x update --tools xymonapi; ok "update --tools back from the version with another wrapper"
+assert_equal "$ours" "$(cat "$b/xymonapi-connect"; echo x)" "[S4] an update did not replace the other version's command"
+x remove --tools xymonapi; ok "remove --tools, the command ours"
+[ -e "$b/xymonapi-connect" ] && fail "[S20] remove --tools left its own command"
+cp "$work/cmd" "$b/xymonapi-connect"
+x install --tools xymonapi; ok "install --tools beside the person's command, again"
+x remove --tools xymonapi; ok "remove --tools beside the person's command"
+cmp -s "$work/cmd" "$b/xymonapi-connect" || fail "[S20] remove --tools took the person's command"
+rm -f "$b/xymonapi-connect"
 
 # 2. Files a newer version no longer ships: the edited nginx snippet and
 # task kept as .old, said; the unedited lighttpd snippet gone, silent.
@@ -365,4 +424,4 @@ rm -f "$d/app.py.old"
 x remove --server xymonapi; ok "remove --server"
 [ -z "$(ours_left)" ] || fail "[S28] a run left a directory to set files aside in: $(ours_left)"
 
-pass "a manual page's name not free is left as it is, said, on the server and the tools; an update keeps an edited file no longer shipped as .old, said, refuses one replaced for the same web server before anything changes, and sets files aside in a directory of its own, gone after; removing a plugin gone takes only its task link and no SELinux module"
+pass "a manual page's or a command's name not free is left as it is, said, on the server and the tools, ours written and replaced; an update keeps an edited file no longer shipped as .old, said, refuses one replaced for the same web server before anything changes, and sets files aside in a directory of its own, gone after; removing a plugin gone takes only its task link and no SELinux module"
