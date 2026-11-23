@@ -122,6 +122,8 @@ case $VERB in
 esac
 NAMES=
 RUNMSG=
+# Set once this run makes, removes or fills a virtualenv (manifest).
+VENV_CHANGED=
 PS_SAID=
 REMEMBER=
 CLIENT_CHECKED=
@@ -964,8 +966,9 @@ need_home() {
 # and its PLUGIN file -- and KEEP, names in it left in place: the task file
 # tasks.d/ links to, which xymonlaunch would otherwise find gone, drop the
 # task and stop it, and not notice it back; the file in progress (PROG),
-# which makes one cut short an install cut short; and PLUGIN, which a run
-# resuming reads what the install before put in place from.
+# which makes one cut short an install cut short; PLUGIN, which a run
+# resuming reads what the install before put in place from; and MANIFEST,
+# a plain file only, which the command's end leaves or replaces (manifest).
 fresh() {
 	if [ -z "${2:-}" ] || [ ! -d "$1" ] || [ -L "$1" ]; then
 		rm -rf "$1" && mkdir -p "$1"
@@ -973,7 +976,9 @@ fresh() {
 	fi
 	for f in "$1"/* "$1"/.[!.]* "$1"/..?*; do
 		{ [ -e "$f" ] || [ -L "$f" ]; } || continue
-		case " $2 " in *" ${f##*/} "*) continue ;; esac
+		case " $2 " in *" ${f##*/} "*)
+			[ "${f##*/}" = MANIFEST ] && { [ -L "$f" ] || [ ! -f "$f" ]; } || continue ;;
+		esac
 		rm -rf "$f" || return 1
 	done
 }
@@ -1297,9 +1302,15 @@ mf_dir() {
 
 # manifest DIR -- write what the lines on standard input say into
 # DIR/MANIFEST, the command's last step (manifests): a new file, moved in
-# place.
+# place. The same lines as the one there, and no virtualenv changed, the
+# code is the same: that one is left, so that a program watching it goes
+# on rather than restart for nothing.
 manifest() {
-	cat > "$1/.MANIFEST.new" && chmod 644 "$1/.MANIFEST.new" && mv -f "$1/.MANIFEST.new" "$1/MANIFEST" || exit 1
+	cat > "$1/.MANIFEST.new" && chmod 644 "$1/.MANIFEST.new" || exit 1
+	if [ -z "$VENV_CHANGED" ] && cmp -s "$1/.MANIFEST.new" "$1/MANIFEST"; then
+		rm -f "$1/.MANIFEST.new"; return 0
+	fi
+	mv -f "$1/.MANIFEST.new" "$1/MANIFEST" || exit 1
 }
 
 # manifest_ext PLUGIN -- S29 for a Xymon part, PART: the plugin's
@@ -2071,7 +2082,7 @@ venv_auto() {
 	# modules, before any is fetched. Anything else named venv is left.
 	if [ -f "$root/venv/pyvenv.cfg" ] && ! "$root/venv/bin/python3" -c 'import sys' 2>/dev/null; then
 		echo "The virtualenv $root/venv has no Python that runs: it is made anew."
-		rm -rf "$root/venv" || die "could not remove $root/venv"
+		VENV_CHANGED=1; rm -rf "$root/venv" || die "could not remove $root/venv"
 	fi
 	if [ "$target" = --server ] && [ -f "$root/venv/pyvenv.cfg" ]; then open_dir "$root/venv"; fi
 	if [ -x "$root/venv/bin/python3" ]; then
@@ -2125,6 +2136,7 @@ venv_auto() {
 			echo "Made no virtualenv at $root/venv from $py: it is itself one, whose modules one made from it does not see; the plugins run with it as it is, XYMONAPI_PYTHON=$py, which has the modules ($modules)."
 			return 0
 		fi
+		VENV_CHANGED=1
 		echo "Made $root/venv from $py ($("$py" -V 2>&1)), which has the modules this plugin needs ($modules): the plugins there run with it."
 	elif [ -n "$newest" ] && fetch_ok "$plugin needs $modules, which no Python here has${note:+ ($note)}. Make a virtualenv at $root/venv with $newest, and install them from PyPI?"; then
 		was=$PYTHON; PYTHON=$newest; venv "$root"; PYTHON=$was
@@ -2139,6 +2151,7 @@ venv_auto() {
 # again, it adds the modules of a plugin installed since.
 venv() {
 	[ -z "$DESTDIR" ] || return 0
+	VENV_CHANGED=1
 	# One whose Python does not run -- moved, or the Python it was made
 	# from gone -- is made anew: it is the plugins', beside them (S26).
 	if [ -f "$1/venv/pyvenv.cfg" ] && ! "$1/venv/bin/python3" -c 'import sys' 2>/dev/null; then
@@ -2208,7 +2221,7 @@ install_server() {
 	legacy=; [ ! -f "$ext/VERSION" ] || [ -e "$ext/PLUGIN" ] || [ -L "$ext/PLUGIN" ] || legacy=1
 	progress "$1"
 	aside "$1"
-	keep="$PROG PLUGIN"
+	keep="$PROG PLUGIN MANIFEST"
 	if [ -f "$ext/tasks.cfg" ] && [ ! -L "$ext/tasks.cfg" ] && [ -n "$(field "$1" task)" ]; then
 		put_aside "$ext/tasks.cfg" tasks.cfg cp
 		keep="$keep tasks.cfg"
@@ -2309,7 +2322,7 @@ install_tools() {
 	if [ -L "$dir" ]; then rm -f "$dir" || exit 1; fi
 	was_manual=$(held "$TOOLSROOT" "$1" tools-manual)
 	was_command=$(held "$TOOLSROOT" "$1" command)
-	fresh "$dir" || exit 1
+	fresh "$dir" MANIFEST || exit 1
 	mkdir -p "$BIN" "$TOOLSMAN1"
 	# PLUGIN first, VERSION last, as on the server.
 	record "$1" "$dir"
@@ -2358,7 +2371,7 @@ install_client() {
 	dir=$EXTROOT/$1
 	was_manual=$(held "$EXTROOT" "$1" client-manual)
 	progress "$1"
-	fresh "$dir" "$PROG" || exit 1
+	fresh "$dir" "$PROG MANIFEST" || exit 1
 	# PLUGIN first, VERSION last, as on the server.
 	record "$1" "$dir"
 	copy "$1" client "$dir"
