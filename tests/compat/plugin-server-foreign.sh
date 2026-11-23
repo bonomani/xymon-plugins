@@ -197,6 +197,15 @@ echo "xymon-plugin in progress: xymon-plugin $other" > "$d/.xymon-plugin-in-prog
 # install cut short it may not take.
 x remove --server --all
 assert_contains "$d is no install of xymon-plugin's: left as it is" "$out" "[S20] remove --all, a stale file in progress, passes over it as before"
+# A ps that cannot say what the process runs: taken for no run, said once,
+# where the run decides -- not again by the listing of update with none
+# named before it.
+mkdir -p "$work/blindps"; printf '#!/bin/sh\nexit 0\n' > "$work/blindps/ps"; chmod 755 "$work/blindps/ps"
+PATH="$work/blindps:$PATH" x update --server
+note="process $other, which $d/.xymon-plugin-in-progress names, runs, and ps cannot say what it is: taken for no run of xymon-plugin"
+assert_contains "$note" "$out" "[S20] a process ps cannot tell of is said taken for no run"
+[ "$(printf '%s\n' "$out" | grep -c -F "$note")" -eq 1 ] || fail "[S20] the note on a process ps cannot tell of is said more than once: $out"
+echo "xymon-plugin in progress: xymon-plugin $other" > "$d/.xymon-plugin-in-progress"
 x update --server xymon-plugin
 [ "$rc" -eq 0 ] || fail "[S20] a file in progress naming a process that is no run of it refused the update: $out"
 [ ! -e "$d/.xymon-plugin-in-progress" ] || fail "[S20] the update resumed left the file in progress"
