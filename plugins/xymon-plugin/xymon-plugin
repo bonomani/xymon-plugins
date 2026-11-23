@@ -402,6 +402,8 @@ xymon_ok() {
 	# Its directory in ext/ absent, or one an install left: install and
 	# update replace it whole, and ext/ may hold anything (S20).
 	part_left server "$1"
+	aside_ok "$1"
+	replaced "$1"
 	ns=$(needs "$1" server) || exit 1
 	for n in $ns; do xymon_ok "$n"; done
 	want=$(field "$1" xymon); [ -n "$want" ] || return 0
@@ -954,9 +956,11 @@ need_home() {
 # fresh DIR [KEEP] -- DIR, emptied: an install replaces a plugin's directory
 # as a whole, so that a file a newer version no longer ships does not stay
 # behind to be imported. It holds only what the plugin ships, its VERSION
-# and its PLUGIN file -- and KEEP, a name in it left in place: the task file
+# and its PLUGIN file -- and KEEP, names in it left in place: the task file
 # tasks.d/ links to, which xymonlaunch would otherwise find gone, drop the
-# task and stop it, and not notice it back.
+# task and stop it, and not notice it back; the file in progress (PROG),
+# which makes one cut short an install cut short; and PLUGIN, which a run
+# resuming reads what the install before put in place from.
 fresh() {
 	if [ -z "${2:-}" ] || [ ! -d "$1" ] || [ -L "$1" ]; then
 		rm -rf "$1" && mkdir -p "$1"
@@ -964,8 +968,219 @@ fresh() {
 	fi
 	for f in "$1"/* "$1"/.[!.]* "$1"/..?*; do
 		{ [ -e "$f" ] || [ -L "$f" ]; } || continue
-		[ "$f" = "$1/$2" ] || rm -rf "$f" || return 1
+		case " $2 " in *" ${f##*/} "*) continue ;; esac
+		rm -rf "$f" || return 1
 	done
+}
+
+# progress PLUGIN -- PROG in ext/PLUGIN, made, before anything there
+# changes: it names the plugin and this run's process, and goes once
+# VERSION is written (progress_done). A directory holding it is an
+# install cut short (cut_short), which the next install or update resumes
+# (S20); fresh keeps it. Made with noclobber, in one step with the check
+# that it is not there: one there of a run still going stops this one;
+# one of a run gone is removed, the name only -- a link or a hard link
+# there is never written through -- and made anew, the same way. A first
+# install's says "first", and a resume of it keeps saying it: nothing of
+# the admin's is there, and remove may take it (removable).
+PROG=.xymon-plugin-in-progress
+progress() {
+	pf=$EXTROOT/$1/$PROG pfirst=
+	if [ ! -e "$EXTROOT/$1" ] && [ ! -L "$EXTROOT/$1" ]; then pfirst=' first'
+	elif cut_short "$1" && grep -q ' first$' "$pf"; then pfirst=' first'; fi
+	mkdir -p "$EXTROOT/$1" || exit 1
+	for try_ in 1 2; do
+		if (set -C; printf 'xymon-plugin in progress: %s %s%s\n' "$1" "$$" "$pfirst" > "$pf") 2>/dev/null; then return 0; fi
+		running_ok "$1"
+		[ "$try_" = 1 ] && rm -f "$pf" || die "$pf came back while this run made it: another run of $1 is going on"
+	done
+}
+# progress_done PLUGIN -- PROG removed, if it is this run's.
+progress_done() {
+	pf=$EXTROOT/$1/$PROG
+	if [ -f "$pf" ] && [ ! -L "$pf" ] && [ "$(sed -n 's/^xymon-plugin in progress: [^ ]* \([0-9]*\).*/\1/p' "$pf")" = "$$" ]; then rm -f "$pf"; fi
+}
+
+# aside_ok PLUGIN -- before anything changes, refuse a run on PLUGIN that
+# another run is making (running_ok); and one beside a set-aside
+# directory it cannot resume with: a link or no directory, one not marked
+# as PLUGIN's, another user's, or one beside a complete install, or none
+# -- stale, the admin's to compare and remove.
+aside_ok() {
+	running_ok "$1"
+	sa=$EXTROOT/.xymon-plugin.$1
+	{ [ -e "$sa" ] || [ -L "$sa" ]; } || return 0
+	if [ -L "$sa" ] || [ ! -d "$sa" ]; then
+		die "$sa is a link, or no directory: left as it is; move it away to install or update $1"
+	elif ! marked "$sa" "$1"; then
+		die "$sa is not set aside by xymon-plugin for $1: left as it is; move it away to install or update $1"
+	elif ! mine "$sa"; then
+		# shellcheck disable=SC2012 # ls -ld names one directory's owner
+		die "$sa, set aside by an install of $1 cut short, is $(ls -ld "$sa" | awk '{ print $3 }')'s: left as it is; an install or update of $1 by that user resumes it"
+	elif cut_short "$1"; then
+		return 0
+	else
+		die "$(stale "$sa" "$1"); then install or update $1"
+	fi
+}
+# running_ok PLUGIN -- refuse a run on PLUGIN while another one runs: the
+# process PROG names, alive by kill -0, and an xymon-plugin by what ps
+# says it runs. One that is another program -- its number taken again --
+# is no run; one ps cannot tell of is taken for none, said.
+running_ok() {
+	ip=$EXTROOT/$1/$PROG
+	[ -f "$ip" ] && [ ! -L "$ip" ] || return 0
+	pid=$(sed -n "s/^xymon-plugin in progress: $1 \([0-9][0-9]*\)\( first\)\{0,1\}\$/\1/p" "$ip")
+	[ -n "$pid" ] && [ "$pid" != "$$" ] && kill -0 "$pid" 2>/dev/null || return 0
+	# ps -p where it has it; busybox's lists every process with -o.
+	args=$(ps -p "$pid" -o args= 2>/dev/null) || args=$(ps -o pid,args 2>/dev/null | awk -v p="$pid" '$1 == p { $1 = ""; print }')
+	case $args in
+		*xymon-plugin*) die "an install or update of $1 is running, process $pid: wait for it to end; if no such run is going on, remove $ip and run this again" ;;
+		"") echo "xymon-plugin: process $pid, which $ip names, runs, and ps cannot say what it is: taken for no run of $1" >&2 ;;
+	esac
+	return 0
+}
+
+# aside PLUGIN -- AS, ext/.xymon-plugin.PLUGIN, where an install or an
+# update of PLUGIN sets aside what outlives its directory, by the same
+# paths: the task file, the snippets, .shipped/, each NAME.old. Made by
+# mkdir, which fails on what is there, so nothing there is written
+# through or over; in ext/, so a file moved back is renamed within one
+# file system (S13); marked by MARK, naming the plugin and the date it was
+# made. One there, which aside_ok let through, is that of the install cut
+# short this run resumes: what it holds is the admin's files as they were
+# (S7), and the snippets may have changed: RESUMED.
+MARK=.xymon-plugin-set-aside
+AS='' RESUMED=''
+aside() {
+	AS=$EXTROOT/.xymon-plugin.$1 ASN=$1 RESUMED=''
+	trap 'aside_end' EXIT
+	trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
+	if [ -d "$AS" ] && [ ! -L "$AS" ]; then
+		echo "Resuming the install of $1 cut short, with what it set aside in $AS"
+		RESUMED=1
+		rm -f "${AS:?}"/*.this "${AS:?}"/*.merged
+		[ -d "$AS/.shipped" ] || mkdir "$AS/.shipped" || exit 1
+		return 0
+	fi
+	mkdir -m 700 "$AS" || { AS=; die "could not make $EXTROOT/.xymon-plugin.$1 to set files aside in"; }
+	printf 'xymon-plugin set aside: %s\ndate: %s\n' "$1" "$(date '+%Y-%m-%d %H:%M')" > "$AS/$MARK" && mkdir "$AS/.shipped" || exit 1
+}
+# marked DIR PLUGIN -- DIR is a set-aside directory of PLUGIN's: a real
+# directory, its MARK a real file whose first line names PLUGIN. mine DIR
+# -- of the person running.
+marked() {
+	[ -d "$1" ] && [ ! -L "$1" ] && [ -f "$1/$MARK" ] && [ ! -L "$1/$MARK" ] \
+		&& [ "$(sed -n 1p "$1/$MARK" 2>/dev/null)" = "xymon-plugin set aside: $2" ]
+}
+# shellcheck disable=SC2012 # ls -n gives one directory's owner, as client_home_ok reads it
+mine() { [ "$(ls -nd "$1" | awk '{ print $3 }')" = "$(id -u)" ]; }
+# stale DIR PLUGIN -- what to say of ext/.xymon-plugin.PLUGIN that no run
+# takes up: marked, with the date its marker records, to compare with the
+# plugin's directory or, that gone, to take back from; else not one of
+# the installer's.
+stale() {
+	if ! marked "$1" "$2"; then
+		echo "$1 is not set aside by xymon-plugin: left as it is"
+		return
+	fi
+	sd=$(sed -n 's/^date: //p' "$1/$MARK"); [ -n "$sd" ] || sd="a date it does not say"
+	if [ -e "$EXTROOT/$2" ] || [ -L "$EXTROOT/$2" ]; then
+		echo "$1, set aside on $sd by an install of $2 cut short, is left: compare it with $EXTROOT/$2, then remove it"
+	else
+		echo "$1, set aside on $sd by an install of $2 cut short, is left, $EXTROOT/$2 gone: take back what you want from it, then remove it"
+	fi
+}
+# aside_empty PLUGIN -- ext/.xymon-plugin.PLUGIN not there, or marked and
+# holding nothing of the admin's: what a first install cut short early
+# leaves, which remove may take.
+aside_empty() {
+	ae=$EXTROOT/.xymon-plugin.$1
+	if [ ! -e "$ae" ] && [ ! -L "$ae" ]; then return 0; fi
+	marked "$ae" "$1" && [ -z "$(cd "$ae" && find . \( -type f -o -type l \) ! -name "$MARK" -print)" ]
+}
+
+# aside_end -- on the way out, AS kept while it holds anything of the
+# admin's, said; else removed.
+aside_end() {
+	[ -n "$AS" ] || return 0
+	af=$(cd "$AS" && find . \( -type f -o -type l \) ! -name "$MARK" ! -name '*.this' ! -name '*.merged' -print | sed -e 's|^\./||' | tr '\n' ' ')
+	if [ -n "$af" ]; then
+		echo "xymon-plugin: the install of $ASN was cut short, with ${af% } set aside in $AS: the next install or update of $ASN resumes, and puts them back" >&2
+	else
+		rm -rf "${AS:?}"
+	fi
+	AS=
+}
+
+# old_name FILE -- FILE.old, or, that taken, FILE.N.old, the first N
+# free; FILE's own .old left out first, so that one is NAME.N.old.
+old_name() {
+	ob=${1%.old}
+	if [ ! -e "$ob.old" ] && [ ! -L "$ob.old" ]; then printf '%s\n' "$ob.old"; return; fi
+	ko=1
+	while [ -e "$ob.$ko.old" ] || [ -L "$ob.$ko.old" ]; do ko=$((ko + 1)); done
+	printf '%s\n' "$ob.$ko.old"
+}
+
+# put_aside PATH NAME [cp] -- PATH -- a file, a link or a directory --
+# into AS as NAME, a path under it, moved, or with cp copied; where AS
+# holds a NAME already, that is the admin's, as it was before a run cut
+# short: PATH, unless the same file, changed since, goes beside it as a
+# .old, said, never lost.
+put_aside() {
+	if [ ! -e "$AS/$2" ] && [ ! -L "$AS/$2" ]; then pa=$AS/$2
+	elif [ -f "$1" ] && [ ! -L "$1" ] && [ -f "$AS/$2" ] && [ ! -L "$AS/$2" ] && cmp -s "$1" "$AS/$2"; then return 0
+	else
+		pa=$(old_name "$AS/$2")
+		printf '%s\n' "$1 differs from the copy the run cut short set aside, which is put back: it is kept as ${pa##*/}"
+	fi
+	mkdir -p "${pa%/*}" || exit 1
+	if [ -n "${3:-}" ]; then cp "$1" "$pa"; else mv "$1" "$pa"; fi || exit 1
+}
+
+# olds DIR -- each NAME.old under DIR, one a line, its path from DIR: a
+# file, a link, or a directory whole, hidden or not, at any depth; not in
+# .shipped/. ponytail: read a line each, a name with a newline is not
+# one, and goes with the update.
+olds() {
+	(cd "$1" && find . -path ./.shipped -prune -o -name '*.old' -print -prune) | sed -e 's|^\./||'
+}
+
+# aside_back -- what is left in AS once the plugin is in place goes back
+# into its directory: any file of its top this version no longer ships,
+# as a .old, said, unless as the install before wrote it; a link, said;
+# then each NAME.old, beside one written now as NAME.N.old. AS goes once
+# it holds nothing else.
+aside_back() {
+	for f in "$AS"/* "$AS"/.[!.]*; do
+		[ -f "$f" ] || [ -L "$f" ] || continue
+		n=${f##*/}
+		case $n in "$MARK"|*.old) continue ;; *.this|*.merged) rm -f "$f"; continue ;; esac
+		if [ -L "$f" ]; then
+			printf '%s\n' "$ext/$n, a link to $(readlink "$f"), is no longer shipped: the link is removed, what it names left as it is"
+			rm -f "$f"; continue
+		fi
+		if [ -f "$AS/.shipped/$n" ] && cmp -s "$f" "$AS/.shipped/$n"; then rm -f "$f"; continue; fi
+		o=$(old_name "$ext/$n")
+		mv "$f" "$o" || exit 1
+		if [ -f "$AS/.shipped/$n" ]; then printf '%s\n' "$ext/$n is no longer shipped: your edited copy is kept as ${o##*/}"
+		else printf '%s\n' "$ext/$n is no longer shipped: it is kept as ${o##*/}, as it could not be told unedited"; fi
+	done
+	while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		case $f in */*) mkdir -p "$ext/${f%/*}" || exit 1 ;; esac
+		mv "$AS/$f" "$(old_name "$ext/$f")" || exit 1
+	done <<EOF
+$(olds "$AS")
+EOF
+	for f in "$AS"/.shipped/* "$AS"/.shipped/.[!.]*; do
+		if [ -f "$f" ] || [ -L "$f" ]; then rm -f "$f"; fi
+	done
+	# The directories left empty, the deepest first.
+	(cd "$AS" && find . -depth -type d ! -name . -exec rmdir {} \; 2>/dev/null)
+	if [ "$(ls -A "$AS")" = "$MARK" ]; then rm -f "${AS:?}/$MARK" && rmdir "$AS" && AS=; fi
+	[ -z "$AS" ] || { echo "xymon-plugin: $AS holds what was not put back: compare it with $ext" >&2; AS=; }
 }
 
 # open_dir [-1] DIR -- what is closed to other users in DIR, or with -1 in
@@ -1016,7 +1231,10 @@ version() {
 # without DESTDIR, found inside it -- with MANROOT empty, not linked; the
 # link names FINAL, that directory as installed, without DESTDIR too. Removing
 # the directory leaves a link that points nowhere, and a removal knows the
-# page is the plugin's by the link, not by what its record says.
+# page is the plugin's by the link, not by what its record says. The page's
+# name there free, or the link an install of this plugin made, it is
+# linked; anything else there -- a page of the administrator's, another's
+# link, a directory -- is left as it is, said, the install going on.
 manual() {
 	[ -n "$2" ] || return 0
 	plain "$2" || die "$1's PLUGIN file names '$2' as its manual page, which is no file of its own directory"
@@ -1024,6 +1242,10 @@ manual() {
 	cp -f "$ROOT/plugins/$1/$2" "$3/$2" && chmod 644 "$3/$2" || exit 1
 	[ -n "$4" ] || return 0
 	sec=$(inside "$4/man${2##*.}") || exit 1
+	if { [ -e "$sec/$2" ] || [ -L "$sec/$2" ]; } && [ "$(readlink "$sec/$2" 2>/dev/null)" != "$5/$2" ]; then
+		echo "$4/man${2##*.}/$2 is another's, left as it is: $1's manual page is read as man $5/$2"
+		return 0
+	fi
 	mkdir -p "$sec" || exit 1
 	rm -f "$sec/$2" && ln -s "$5/$2" "$sec/$2" || exit 1
 }
@@ -1048,6 +1270,8 @@ mf_dir() {
 	(cd "$1" && find . \( -type f -o -type l \) ! -name MANIFEST ! -name .MANIFEST.new) \
 		| sed -e 's|^\./||' | LC_ALL=C sort | while IFS= read -r f; do
 		case " $2 " in *" ${f%.new} "*|*" ${f%.old} "*) [ "$f" = "${f%.new}" ] && [ "$f" = "${f%.old}" ] || continue ;; esac
+		# And every other .old the version does not ship: the admin's.
+		case $f in *.old|*.old/*) case " $(field "${1##*/}" server-files) $(field "${1##*/}" client-files) $(field "${1##*/}" tools-files) " in *" $f "*) ;; *) continue ;; esac ;; esac
 		if [ -L "$1/$f" ]; then mf_link "$1/$f" "$f"
 		else case " $2 " in *" $f "*) mf_file "$1/$f" "$f" admin ;; *) mf_file "$1/$f" "$f" ;; esac
 		fi
@@ -1078,9 +1302,9 @@ manifest_ext() {
 		pg=$(field "$1" "$PART-manual")
 		if [ -n "$pg" ]; then
 			sec=$(inside "$MANDIR/man${pg##*.}") || exit 1
-			# The client's link only when it is ours: a MANDIR it could not
-			# write may hold another's at that name (S29).
-			if [ -L "$sec/$pg" ] && { [ "$PART" != client ] || [ "$(readlink "$sec/$pg")" = "$XYMONHOME/ext/$1/$pg" ]; }; then
+			# The link only when it is ours: the page's name may be
+			# another's, left as it is (S29).
+			if [ -L "$sec/$pg" ] && [ "$(readlink "$sec/$pg")" = "$XYMONHOME/ext/$1/$pg" ]; then
 				mf_link "$sec/$pg" "$MANDIR/man${pg##*.}/$pg"
 			fi
 		fi
@@ -1095,7 +1319,8 @@ manifest_tools() {
 		set -- "$1" $(field "$1" command)
 		[ $# -ne 3 ] || [ ! -f "$BIN/$2" ] || mf_file "$BIN/$2" "$PREFIX/bin/$2"
 		pg=$(field "$1" tools-manual)
-		[ -z "$pg" ] || [ ! -L "$TOOLSMAN1/$pg" ] || mf_link "$TOOLSMAN1/$pg" "$PREFIX/share/man/man1/$pg"
+		[ -z "$pg" ] || [ "$(readlink "$TOOLSMAN1/$pg" 2>/dev/null)" != "$PREFIX/libexec/xymon-plugins/$1/$pg" ] \
+			|| mf_link "$TOOLSMAN1/$pg" "$PREFIX/share/man/man1/$pg"
 	} | manifest "$TOOLSROOT/$1"
 }
 
@@ -1282,7 +1507,7 @@ reads_tasks() {
 # with one is off, its line taken out and its link removed.
 # merge PLUGIN NAME NEW -- the administrator's file NAME in the plugin's
 # directory, kept as it was, met with NEW, this version's, and with the
-# version it started from, set aside as .PLUGIN.NAME.shipped: unedited, it
+# version it started from, set aside as .shipped/NAME: unedited, it
 # takes this version's; edited, and this version's the same as before, it
 # stays; both changed, with no conflict, on a terminal both changes are
 # shown and merged on y, the file before kept as NAME.old; on N, off a
@@ -1291,7 +1516,7 @@ reads_tasks() {
 # NAME.new. .shipped/NAME is left the version it now starts from. MCHANGED
 # is set when the file changed.
 merge() {
-	md=$EXTROOT/$1/$2 mb=$EXTROOT/.$1.$2.shipped ms=$EXTROOT/$1/.shipped/$2
+	md=$EXTROOT/$1/$2 mb=$AS/.shipped/$2 ms=$EXTROOT/$1/.shipped/$2
 	mkdir -p "$EXTROOT/$1/.shipped" || exit 1
 	rm -f "$md.new" || exit 1
 	if cmp -s "$md" "$3"; then
@@ -1309,7 +1534,7 @@ merge() {
 	elif cmp -s "$mb" "$3"; then
 		mv -f "$mb" "$ms" || exit 1
 	else
-		mm=$EXTROOT/.$1.$2.merged
+		mm=$AS/$2.merged
 		if command -v diff3 >/dev/null 2>&1 && diff3 -m -E "$md" "$mb" "$3" > "$mm" 2>/dev/null; then
 			# Yours has this version's change already: nothing to merge, and
 			# this version's is the one it now starts from.
@@ -1350,25 +1575,32 @@ task() {
 	mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"
 	old_link "$1"
 	on=
-	this=$EXTROOT/.$1.tasks.cfg.this
+	this=$AS/tasks.cfg.this
 	sed -e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g" "$ROOT/plugins/$1/$t" > "$this" || exit 1
 	if [ -f "$link" ] && [ ! -L "$link" ]; then
 		on=1
-		rm -f "$EXTROOT/.$1.tasks.cfg"
+		# The task file it replaced, edited too -- neither as this file
+		# nor as the install before wrote it --, is kept as a .old.
+		if [ -f "$AS/tasks.cfg" ] && ! cmp -s "$AS/tasks.cfg" "$link" && ! cmp -s "$AS/tasks.cfg" "$AS/.shipped/tasks.cfg"; then
+			to_=$(old_name "$AS/tasks.cfg.old")
+			mv "$AS/tasks.cfg" "$to_" || exit 1
+			echo "$tf, edited too, is kept as a .old of it: $link, the one xymonlaunch read, is the task file now"
+		fi
+		rm -f "$AS/tasks.cfg"
 		# Copied, not moved: it stays where xymonlaunch reads it until the
 		# link is renamed over it.
 		rm -f "$tf.tmp" && cp "$link" "$tf.tmp" && mv -f "$tf.tmp" "$tf" || exit 1
 		echo "keeping $link, copied to $tf, and linked"
 		merge "$1" tasks.cfg "$this"
-	elif [ -f "$EXTROOT/.$1.tasks.cfg" ]; then
+	elif [ -f "$AS/tasks.cfg" ]; then
 		[ -L "$link" ] && on=1
-		mv "$EXTROOT/.$1.tasks.cfg" "$tf" || exit 1
+		mv "$AS/tasks.cfg" "$tf" || exit 1
 		merge "$1" tasks.cfg "$this"
 	else
 		cp -f "$this" "$tf" && chmod 644 "$tf" || exit 1
 		mkdir -p "$EXTROOT/$1/.shipped" && cp -f "$this" "$EXTROOT/$1/.shipped/tasks.cfg" || exit 1
 	fi
-	rm -f "$this" "$EXTROOT/.$1.tasks.cfg.shipped"
+	rm -f "$this" "$AS/.shipped/tasks.cfg"
 	if grep -q '^[[:space:]]*DISABLED[[:space:]]*$' "$tf"; then
 		on=
 		sed -e '/^[[:space:]]*DISABLED[[:space:]]*$/d' "$tf" > "$tf.new" && mv "$tf.new" "$tf" && chmod 644 "$tf" || exit 1
@@ -1448,6 +1680,10 @@ other_code() {
 status() {
 	[ -n "$(held "$2" "$3" "$1-files")" ] || return 0
 	here=$(field "$3" version)
+	if [ "$1" != tools ] && cut_short "$3"; then
+		echo "$3: cut short: ./xymon-plugin update --$1 $3 resumes it; this copy has $here"
+		return 0
+	fi
 	if [ ! -f "$2/$3/VERSION" ]; then
 		echo "$3: not installed; this copy has $here"
 		return 0
@@ -1540,16 +1776,17 @@ stock() {
 
 # shipped PLUGIN SNIPPET FILE -- true when FILE is, byte for byte, the
 # snippet as an older version shipped it: its cksum is among the plugin's
-# conf-stock lines, as it is, or with $XYMONHOME put back as @XYMONHOME@, or
-# $RUNDIR as @XYMONRUNDIR@ and then $XYMONHOME, so that the same snippet
-# installed under any tree gives the same one. As it is first: a snippet
-# without a placeholder is then recognised whatever the tree, though
-# $XYMONHOME may also be part of its text (/xymon in /xymon/api/). Where
-# that putting back cannot tell, the snippet is taken for edited: kept, and
-# said to differ, never overwritten.
+# conf-stock lines, this version's or the installed one's, as it is, or
+# with $XYMONHOME put back as @XYMONHOME@, or $RUNDIR as @XYMONRUNDIR@ and
+# then $XYMONHOME, so that the same snippet installed under any tree gives
+# the same one. As it is first: a snippet without a placeholder is then
+# recognised whatever the tree, though $XYMONHOME may also be part of its
+# text (/xymon in /xymon/api/). Where that putting back cannot tell, the
+# snippet is taken for edited: kept, and said to differ, never overwritten.
 shipped() {
 	list="
 $(field "$1" conf-stock)
+$(held "$EXTROOT" "$1" conf-stock)
 "
 	for way in raw home ${RUNDIR:+run}; do
 		sum=$(awk -v way="$way" -v h="$XYMONHOME" -v r="$RUNDIR" '
@@ -1567,6 +1804,49 @@ $2 $sum
 "*) return 0 ;; esac
 	done
 	return 1
+}
+
+# dropped PLUGIN -- the snippets the install in place wrote that this
+# version no longer ships, there as files, plain names only: the installed
+# PLUGIN copy lies where the Xymon user can write.
+dropped() {
+	for c in $(held "$EXTROOT" "$1" conf); do
+		case " $(field "$1" conf) " in *" $c "*) continue ;; esac
+		plain "$c" && { [ -f "$EXTROOT/$1/$c" ] || [ -f "$EXTROOT/.xymon-plugin.$1/$c" ]; } && echo "$c"
+	done
+	return 0
+}
+
+# conf_edited PLUGIN SNIPPET [DIR] -- true when DIR/SNIPPET, ext/PLUGIN's
+# by default, is the admin's: a real file, neither as the install before
+# wrote it, kept in DIR/.shipped/, nor as a version shipped it (S7, S16).
+conf_edited() {
+	cd_=${3:-$EXTROOT/$1} ce=${3:-$EXTROOT/$1}/$2
+	[ -f "$ce" ] && [ ! -L "$ce" ] || return 1
+	if [ -f "$cd_/.shipped/$2" ] && [ ! -L "$cd_/.shipped/$2" ] && cmp -s "$cd_/.shipped/$2" "$ce"; then return 1; fi
+	RUNDIR=$(rundir) || exit 1
+	! shipped "$1" "$2" "$ce"
+}
+
+# replaced PLUGIN -- refuse, before anything changes, an update that would
+# drop a snippet the admin edited while this version ships another for
+# the same web server, by its -apache, -nginx or -lighttpd: the new one
+# would go live without the edits, an access restriction say. Moved out of
+# the plugin's directory, the edited one is no longer in the way.
+replaced() {
+	{ [ -n "${UPDATING:-}" ] && server_installed "$1"; } || cut_short "$1" || return 0
+	for rc_ in $(dropped "$1"); do
+		case $rc_ in *-apache.conf) rw=apache ;; *-nginx.conf) rw=nginx ;; *-lighttpd.conf) rw=lighttpd ;; *) continue ;; esac
+		for rn in $(field "$1" conf); do
+			case $rn in *-"$rw".conf) ;; *) continue ;; esac
+			# In its directory, or set aside by a run cut short.
+			if conf_edited "$1" "$rc_"; then rd=$EXTROOT/$1
+			elif conf_edited "$1" "$rc_" "$EXTROOT/.xymon-plugin.$1"; then rd=$EXTROOT/.xymon-plugin.$1
+			else continue; fi
+			die "$rd/$rc_, which you edited, is no longer shipped: this version's $rn replaces it, and would go live without your edits. Move $rd/$rc_ away, run the update again, then carry your edits into $EXTROOT/$1/$rn before the web server reloads"
+		done
+	done
+	return 0
 }
 
 # same PLUGIN SNIPPET FILE -- true when FILE is this version's snippet. The
@@ -1590,13 +1870,14 @@ conf() {
 	# install takes a snippet still byte for byte that one for unedited,
 	# whatever it names -- a runtime directory moved since, say.
 	base=$EXTROOT/$1/.shipped
-	changed=${GONE:-}
+	# A run resumed may have changed a snippet before it was cut short.
+	changed=${GONE:-}${RESUMED:-}
 	for c in $(field "$1" conf); do
 		dst=$EXTROOT/$1/$c
-		old=$EXTROOT/.$1.$c.shipped
+		old=$AS/.shipped/$c
 		mkdir -p "$base" || exit 1
-		if [ -f "$EXTROOT/.$1.$c" ]; then
-			mv "$EXTROOT/.$1.$c" "$dst" || exit 1
+		if [ -f "$AS/$c" ]; then
+			mv "$AS/$c" "$dst" || exit 1
 		else
 			stock "$1" "$c" > "$dst" && chmod 644 "$dst" || exit 1
 			cp -f "$dst" "$base/$c" || exit 1
@@ -1618,7 +1899,7 @@ conf() {
 			echo "$dst, unedited, is replaced by this version's"
 			changed=1
 		else
-			this=$EXTROOT/.$1.$c.this
+			this=$AS/$c.this
 			stock "$1" "$c" > "$this" || exit 1
 			MCHANGED=
 			merge "$1" "$c" "$this"
@@ -1855,6 +2136,8 @@ manifests() {
 # with a note when this copy's is newer.
 passed_over() {
 	[ -z "${UPDATING:-}" ] && v=$(installed "$1" "$2") || return 1
+	# One cut short is resumed, not passed over.
+	case $1 in "$EXTROOT") ! cut_short "$2" || return 1 ;; esac
 	here=$(field "$2" version)
 	if [ -n "$here" ] && older "$v" "$here"; then w="; this copy has $here: ./xymon-plugin update"; else w=; fi
 	echo "$2 is installed already ($v): left as it is$w"
@@ -1876,49 +2159,62 @@ install_server() {
 	was_selinux=$(held "$EXTROOT" "$1" selinux)
 	# Refused before anything is replaced, not halfway through.
 	[ -z "$(field "$1" task)" ] || ours "$1"
-	# The task file an admin may have enabled, and the web server snippets
-	# an admin may have edited, outlive the directory.
-	# A link where one is set aside would take it elsewhere: removed first.
+	# The task file an admin may have enabled, the web server snippets an
+	# admin may have edited, and each NAME.old outlive the directory: set
+	# aside in AS, the one a run cut short left taken up (aside), and
+	# only what it lacks set aside from the directory (put_aside).
 	# A real file is copied aside and stays, so that the link tasks.d/ has
 	# to it never points nowhere; task puts the copy back over it.
-	if [ -L "$EXTROOT/.$1.tasks.cfg" ]; then rm -f "$EXTROOT/.$1.tasks.cfg" || exit 1; fi
-	keep=
+	# A link come since the check before anything changed: not followed.
+	[ ! -L "$ext" ] || die "$ext is a link: left as it is"
+	# From before the PLUGIN copy, its manual page was copied into MANDIR,
+	# not linked: the link takes its place.
+	legacy=; [ ! -f "$ext/VERSION" ] || [ -e "$ext/PLUGIN" ] || [ -L "$ext/PLUGIN" ] || legacy=1
+	progress "$1"
+	aside "$1"
+	keep="$PROG PLUGIN"
 	if [ -f "$ext/tasks.cfg" ] && [ ! -L "$ext/tasks.cfg" ] && [ -n "$(field "$1" task)" ]; then
-		rm -f "$EXTROOT/.$1.tasks.cfg" && cp "$ext/tasks.cfg" "$EXTROOT/.$1.tasks.cfg" || exit 1
-		keep=tasks.cfg
+		put_aside "$ext/tasks.cfg" tasks.cfg cp
+		keep="$keep tasks.cfg"
 	elif [ -f "$ext/tasks.cfg" ]; then
-		mv "$ext/tasks.cfg" "$EXTROOT/.$1.tasks.cfg" || exit 1
+		put_aside "$ext/tasks.cfg" tasks.cfg
 	fi
 	# And the task file as the install before wrote it, which merge meets
 	# it with: a real directory and a real file only.
-	rm -f "$EXTROOT/.$1.tasks.cfg.shipped" || exit 1
-	if [ -d "$ext/.shipped" ] && [ ! -L "$ext/.shipped" ] && [ -f "$ext/.shipped/tasks.cfg" ] && [ ! -L "$ext/.shipped/tasks.cfg" ]; then
-		mv "$ext/.shipped/tasks.cfg" "$EXTROOT/.$1.tasks.cfg.shipped" || exit 1
+	if [ -d "$ext/.shipped" ] && [ ! -L "$ext/.shipped" ] && [ -f "$ext/.shipped/tasks.cfg" ] && [ ! -L "$ext/.shipped/tasks.cfg" ] && [ ! -e "$AS/.shipped/tasks.cfg" ]; then
+		mv "$ext/.shipped/tasks.cfg" "$AS/.shipped/tasks.cfg" || exit 1
 	fi
+	# Each NAME.old: a file at any depth, a link as a link, a directory
+	# whole.
+	while IFS= read -r f; do
+		[ -z "$f" ] || put_aside "$ext/$f" "$f"
+	done <<EOF
+$(olds "$ext")
+EOF
 	# A snippet the install before wrote that this version has no more goes
 	# with fresh: a change the web server has to reload for, as conf says.
-	GONE=
-	for c in $(held "$EXTROOT" "$1" conf); do
-		case " $(field "$1" conf) " in
-			*" $c "*) ;;
-			*) if [ -f "$ext/$c" ]; then GONE=1; fi ;;
-		esac
+	# One the admin edited is kept, set aside, as NAME.old (aside_back):
+	# out of reach of the include lines, which end in .conf (S16).
+	GONE=''
+	for c in $(dropped "$1"); do
+		GONE=1
+		[ -f "$ext/$c" ] && conf_edited "$1" "$c" || continue
+		put_aside "$ext/$c" "$c"
+		if [ ! -L "$ext/.shipped" ] && [ -f "$ext/.shipped/$c" ] && [ ! -L "$ext/.shipped/$c" ] && [ ! -e "$AS/.shipped/$c" ]; then
+			mv "$ext/.shipped/$c" "$AS/.shipped/$c" || exit 1
+		fi
 	done
 	for c in $(field "$1" conf); do
-		if [ -L "$EXTROOT/.$1.$c" ]; then rm -f "$EXTROOT/.$1.$c" || exit 1; fi
 		# A real file only: one a link stands for is written anew, never
 		# written through, wherever it points.
-		if [ -f "$ext/$c" ] && [ ! -L "$ext/$c" ]; then mv "$ext/$c" "$EXTROOT/.$1.$c" || exit 1; fi
+		if [ -f "$ext/$c" ] && [ ! -L "$ext/$c" ]; then put_aside "$ext/$c" "$c"; fi
 		# And what the install before wrote of it, which conf compares the
 		# snippet with: a real directory and a real file only, the plugin's
 		# directory being one the Xymon user may write.
-		rm -f "$EXTROOT/.$1.$c.shipped" || exit 1
-		if [ -d "$ext/.shipped" ] && [ ! -L "$ext/.shipped" ] && [ -f "$ext/.shipped/$c" ] && [ ! -L "$ext/.shipped/$c" ]; then
-			mv "$ext/.shipped/$c" "$EXTROOT/.$1.$c.shipped" || exit 1
+		if [ -d "$ext/.shipped" ] && [ ! -L "$ext/.shipped" ] && [ -f "$ext/.shipped/$c" ] && [ ! -L "$ext/.shipped/$c" ] && [ ! -e "$AS/.shipped/$c" ]; then
+			mv "$ext/.shipped/$c" "$AS/.shipped/$c" || exit 1
 		fi
 	done
-	# A link come since the check before anything changed: not followed.
-	[ ! -L "$ext" ] || die "$ext is a link: left as it is"
 	fresh "$ext" "$keep" || exit 1
 	# Kept, not made anew, it may be one made under umask 077.
 	open_dir -1 "$EXTROOT"
@@ -1928,12 +2224,28 @@ install_server() {
 	record "$1" "$ext"
 	copy "$1" server "$ext"
 	dist "$1"
-	[ "$was_manual" = "$(field "$1" server-manual)" ] || drop_manual "$was_manual" "$MANDIR" "$XYMONHOME/ext/$1" ""
+	[ "$was_manual" = "$(field "$1" server-manual)" ] && [ -z "$legacy" ] || drop_manual "$was_manual" "$MANDIR" "$XYMONHOME/ext/$1" "$legacy"
 	manual "$1" "$(field "$1" server-manual)" "$ext" "$MANDIR" "$XYMONHOME/ext/$1"
-	[ -z "$was_task" ] || [ -n "$(field "$1" task)" ] || drop_task "$1"
+	# A task this version has no more -- by the record, or the link to it,
+	# the record a run cut short may have written anew: its link goes; the
+	# task file, set aside, is kept by aside_back, edited; and so is a file
+	# in the link's place, xymonlaunch's, edited.
+	if [ -z "$(field "$1" task)" ] && { [ -n "$was_task" ] || [ "$(readlink "$TASKDIR/$1.cfg" 2>/dev/null)" = "$XYMONHOME/ext/$1/tasks.cfg" ]; }; then
+		for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
+			if [ -f "$l" ] && [ ! -L "$l" ] && ! cmp -s "$l" "$AS/.shipped/tasks.cfg"; then
+				put_aside "$l" tasks.cfg
+				echo "$l, edited, read by xymonlaunch in the link's place, is kept with $1's task file"
+			fi
+		done
+		drop_task "$1"
+	fi
 	task "$1"
 	conf "$1"
+	# What is left set aside goes back, the .old files among it, last: one
+	# cut short keeps them set aside, for the next to resume with.
+	aside_back
 	version "$1" "$ext"
+	progress_done "$1"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$ext/VERSION") in $XYMONHOME/ext/$1."
 	[ -n "${UPDATING:-}" ] || say "$1" installed
@@ -2004,7 +2316,8 @@ install_client() {
 	[ -n "$(field "$1" client-files)" ] || die "$1 has no client part"
 	dir=$EXTROOT/$1
 	was_manual=$(held "$EXTROOT" "$1" client-manual)
-	fresh "$dir" || exit 1
+	progress "$1"
+	fresh "$dir" "$PROG" || exit 1
 	# PLUGIN first, VERSION last, as on the server.
 	record "$1" "$dir"
 	copy "$1" client "$dir"
@@ -2016,21 +2329,16 @@ install_client() {
 	if [ -n "$pg" ]; then
 		sec=$MANDIR/man${pg##*.}
 		# The section a directory that can be written, or none yet under a
-		# MANDIR that can; and the page's name free, or the link an install
-		# of this plugin made: anything else there is another's, left alone.
+		# MANDIR that can; manual leaves the page's name to another's.
 		if [ -d "$sec" ]; then [ -w "$sec" ] || mr=
 		elif [ -e "$sec" ] || [ -L "$sec" ]; then mr=
 		else [ -d "$MANDIR" ] && [ -w "$MANDIR" ] || mr=
 		fi
 		[ -n "$mr" ] || echo "$sec cannot be written: $1's manual page is not linked from it, and is read as man $XYMONHOME/ext/$1/$pg"
-		if [ -n "$mr" ] && { [ -e "$sec/$pg" ] || [ -L "$sec/$pg" ]; } \
-			&& [ "$(readlink "$sec/$pg" 2>/dev/null)" != "$XYMONHOME/ext/$1/$pg" ]; then
-			mr=
-			echo "$sec/$pg is another's, left as it is: $1's manual page is read as man $XYMONHOME/ext/$1/$pg"
-		fi
 	fi
 	manual "$1" "$pg" "$dir" "$mr" "$XYMONHOME/ext/$1"
 	version "$1" "$dir"
+	progress_done "$1"
 	MANIFESTS="$MANIFESTS $1"
 	if [ -n "${UPDATING:-}" ]; then w=Updated; else w=Installed; fi
 	echo "$w $1 $(sed -e 's|^.*/v||' "$dir/VERSION") in $XYMONHOME/ext/$1."
@@ -2047,7 +2355,7 @@ needed() {
 		# plugin's, and needs nothing (S3); nor does one removed in the
 		# same run, SKIP.
 		case $2 in
-			client|server) "$2_installed" "${p##*/}" || continue ;;
+			client|server) "$2_installed" "${p##*/}" || cut_short "${p##*/}" || continue ;;
 			*) [ -d "$p" ] && [ -f "$p/VERSION" ] || continue ;;
 		esac
 		case " ${4:-} " in *" ${p##*/} "*) continue ;; esac
@@ -2062,7 +2370,9 @@ needed() {
 # record PLUGIN DIR -- keep the plugin's PLUGIN file in DIR, its installed
 # directory, as the record held reads.
 record() {
-	cp -f "$ROOT/plugins/$1/PLUGIN" "$2/PLUGIN" && chmod 644 "$2/PLUGIN" || exit 1
+	# A new file renamed over one kept by fresh: never written through.
+	rm -f "$2/.PLUGIN.new" && cp "$ROOT/plugins/$1/PLUGIN" "$2/.PLUGIN.new" && chmod 644 "$2/.PLUGIN.new" \
+		&& mv -f "$2/.PLUGIN.new" "$2/PLUGIN" || exit 1
 }
 
 # drop_manual NAME MANROOT FINAL LEGACY -- remove the manual page NAME from
@@ -2100,17 +2410,20 @@ drop_command() {
 # drop_task PLUGIN -- remove tasks.d/PLUGIN.cfg, and the tasks.d/PLUGIN an
 # install before that name made: the link to the plugin's task file, or
 # the file there, a copy an older install made or the task an editor left
-# in the link's place; never a link to something else. And the task file
-# an install set aside.
+# in the link's place; never a link to something else. With ABSENT, the
+# plugin's directory not there, a file there is no install's surely, and
+# is left, said.
 drop_task() {
 	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
 		if [ -L "$l" ]; then
 			[ "$(readlink "$l")" = "$XYMONHOME/ext/$1/tasks.cfg" ] && rm -f "$l"
+		elif [ -n "${2:-}" ] && [ -f "$l" ]; then
+			echo "$l is left as it is: $1 is not installed, so it may be no install's"
 		elif [ ! -d "$l" ]; then
 			rm -f "$l"
 		fi
 	done
-	rm -f "$EXTROOT/.$1.tasks.cfg" "$TASKDIR/.$1.cfg.tmp"
+	rm -f "$TASKDIR/.$1.cfg.tmp"
 }
 
 # installed_as NAME PART -- NAME is a PART part an install left in ext/: a
@@ -2127,7 +2440,14 @@ installed_as() {
 	[ -d "$ci" ] && [ ! -L "$ci" ] && [ -f "$ci/VERSION" ] && [ ! -L "$ci/VERSION" ] \
 		&& [ -f "$ci/PLUGIN" ] && [ ! -L "$ci/PLUGIN" ] \
 		&& [ "$(sed -n 's/^name: *//p' "$ci/PLUGIN")" = "$1" ] \
-		&& [ -n "$(sed -n "s/^$2-files: *//p" "$ci/PLUGIN")" ]
+		&& [ -n "$(sed -n "s/^$2-files: *//p" "$ci/PLUGIN")" ] && ! cut_short "$1"
+}
+# cut_short NAME -- ext/NAME holds PROG, as a plain file naming NAME: an
+# install or update that did not end, which the next resumes (S20),
+# whatever else the directory holds. Nothing else is taken for one.
+cut_short() {
+	plain "$1" && [ -d "$EXTROOT/$1" ] && [ ! -L "$EXTROOT/$1" ] && [ -f "$EXTROOT/$1/$PROG" ] && [ ! -L "$EXTROOT/$1/$PROG" ] \
+		&& [ "$(sed -n 's/^xymon-plugin in progress: \([^ ]*\).*/\1/p' "$EXTROOT/$1/$PROG")" = "$1" ]
 }
 client_installed() { installed_as "$1" client; }
 
@@ -2138,25 +2458,43 @@ server_installed() {
 	plain "$1" || return 1
 	if [ -e "$EXTROOT/$1/PLUGIN" ] || [ -L "$EXTROOT/$1/PLUGIN" ]; then installed_as "$1" server
 	else [ -d "$EXTROOT/$1" ] && [ ! -L "$EXTROOT/$1" ] && [ -f "$EXTROOT/$1/VERSION" ] && [ ! -L "$EXTROOT/$1/VERSION" ] \
-		&& [ -f "$ROOT/plugins/$1/PLUGIN" ]; fi
+		&& [ -f "$ROOT/plugins/$1/PLUGIN" ] && ! cut_short "$1"; fi
 }
 
 # no_install PART NAME -- why ext/NAME is no install of NAME's PART part,
-# and what to do: by hand, as nothing here takes it. One cut short before
-# its VERSION holds what an admin may have edited, and its task is off.
+# and what to do: an install cut short is resumed by install or update;
+# anything else, by hand, as nothing here takes it.
 no_install() {
-	o=; [ "$1" = client ] || o=", or VERSION alone from before the PLUGIN copy"
-	k=
-	if [ "$1" = server ] && [ ! -e "$EXTROOT/$2/VERSION" ] && [ -f "$EXTROOT/$2/PLUGIN" ] && [ ! -L "$EXTROOT/$2/PLUGIN" ]; then
-		k=", saving first its task file and web server snippets if edited, its task enabled again once installed"
+	if cut_short "$2"; then
+		if removable "$2"; then
+			echo "$EXTROOT/$2 is an install of $2's $1 part cut short, nothing set aside: ./xymon-plugin update --$1 $2 resumes it, or ./xymon-plugin remove --$1 $2 takes it"
+		else
+			echo "$EXTROOT/$2 is an install of $2's $1 part cut short: ./xymon-plugin update --$1 $2 resumes it, with what it set aside"
+		fi
+		return
 	fi
-	echo "$EXTROOT/$2 is not $2's $1 part as an install leaves it (VERSION and PLUGIN, plain files, naming $2 and a $1 part$o): left as it is; if it is an install cut short, remove it by hand$k: rm -rf $(shq "$EXTROOT/$2")"
+	o=; [ "$1" = client ] || o=", or VERSION alone from before the PLUGIN copy"
+	echo "$EXTROOT/$2 is not $2's $1 part as an install leaves it (VERSION and PLUGIN, plain files, naming $2 and a $1 part$o): left as it is; if nothing in it is wanted, remove it by hand: rm -rf $(shq "$EXTROOT/$2")"
 }
 
 # part_left PART NAME -- refuse ext/NAME when it is there and no install's
-# of PART: install, update and remove would replace or take it whole.
+# of PART: install, update and remove would replace or take it whole. An
+# install cut short is taken by install and update, RESUME set, which
+# resume it.
+RESUME=
 part_left() {
-	{ [ ! -e "$EXTROOT/$2" ] && [ ! -L "$EXTROOT/$2" ]; } || "$1_installed" "$2" || die "$(no_install "$1" "$2")"
+	{ [ ! -e "$EXTROOT/$2" ] && [ ! -L "$EXTROOT/$2" ]; } || takes "$1" "$2" || die "$(no_install "$1" "$2")"
+}
+# takes PART NAME -- ext/NAME is one this run may take whole: an install,
+# or one cut short -- by install or update, RESUME set, which resume it;
+# by remove only a first install's (removable).
+takes() {
+	"$1_installed" "$2" || { cut_short "$2" && { [ -n "$RESUME" ] || removable "$2"; }; }
+}
+# removable NAME -- ext/NAME, cut short, holds nothing of the admin's: a
+# first install's, as its file in progress says, nothing set aside.
+removable() {
+	grep -q ' first$' "$EXTROOT/$1/$PROG" && aside_empty "$1"
 }
 
 # ext_names -- what in ext/ may be a plugin's, one name a line: a plugin of
@@ -2183,7 +2521,7 @@ installs() {
 	fi
 	while IFS= read -r n; do
 		[ -n "$n" ] || continue
-		if "$1_installed" "$n"; then echo "$n"
+		if takes "$1" "$n"; then echo "$n"
 		else echo "$EXTROOT/$n is no install of $n's: left as it is" >&2; fi
 	done <<EOX
 $(ext_names)
@@ -2211,6 +2549,7 @@ client_ok() {
 	ns=$(needs "$1" client) || exit 1
 	for m in $ns; do client_ok "$m"; done
 	part_left client "$1"
+	running_ok "$1"
 }
 
 uninstall_client() {
@@ -2246,13 +2585,21 @@ uninstall_server() {
 	done
 	# Legacy, the page copied, only for a directory there with no copy: with
 	# none, a page in MANDIR is no install's to take.
-	legacy=; [ ! -d "$EXTROOT/$1" ] || [ -f "$EXTROOT/$1/PLUGIN" ] || legacy=1
-	[ ! -d "$EXTROOT/$1" ] || REMOVED=1
+	legacy=; [ ! -f "$EXTROOT/$1/VERSION" ] || [ -f "$EXTROOT/$1/PLUGIN" ] || legacy=1
+	# Its directory gone (S9), only what is surely an install's goes: the
+	# task link into it, not a file at its name, nor a SELinux module.
+	absent=1; [ ! -d "$EXTROOT/$1" ] || { REMOVED=1 absent=; }
+	# A set-aside directory of it holding nothing, an install cut short
+	# early's, goes with it (takes).
+	sa=$EXTROOT/.xymon-plugin.$1
+	if cut_short "$1" && marked "$sa" "$1" && aside_empty "$1"; then rm -rf "${sa:?}"; fi
 	rm -rf "$EXTROOT/$1" "$DIST/plugins/$1"
+	# Any other: the admin's, said, never taken.
+	if [ -e "$sa" ] || [ -L "$sa" ]; then stale "$sa" "$1"; fi
 	drop_manual "$m" "$MANDIR" "$XYMONHOME/ext/$1" "$legacy"
-	[ -z "$t" ] || drop_task "$1"
+	[ -z "$t" ] || drop_task "$1" "$absent"
 	# Its SELinux module, the one named after it (S23).
-	if [ -n "$se" ] && [ -z "$DESTDIR" ] && command -v semodule >/dev/null 2>&1; then
+	if [ -n "$se" ] && [ -z "$absent" ] && [ -z "$DESTDIR" ] && command -v semodule >/dev/null 2>&1; then
 		semodule -r "$1" >/dev/null 2>&1 || :
 	fi
 	if [ -f "$ROOT/plugins/$1/PLUGIN" ]; then say "$1" uninstalled; else echo "Uninstalled $1."; fi
@@ -2263,7 +2610,7 @@ uninstall_tools() {
 	needed "$1" tools "$TOOLSROOT"
 	c=$(held "$TOOLSROOT" "$1" command)
 	m=$(held "$TOOLSROOT" "$1" tools-manual)
-	legacy=; [ -f "$TOOLSROOT/$1/PLUGIN" ] || legacy=1
+	legacy=; [ ! -d "$TOOLSROOT/$1" ] || [ -f "$TOOLSROOT/$1/PLUGIN" ] || legacy=1
 	rm -rf "$TOOLSROOT/$1"
 	set -f
 	# shellcheck disable=SC2086
@@ -2290,6 +2637,11 @@ v_runs() { case $1 in *.py|*.pyc|*.pth|*.so|*.sh) return 0 ;; esac; [ -x "$2" ];
 # verify_plugin PART ROOT PLUGIN -- the lines for one plugin installed.
 verify_plugin() {
 	part=$1 root=$2 n=$3 dir=$2/$3 fix="./xymon-plugin update --$1 $3" bad=0 before=$((BROKEN + UNTIDY))
+	# A set-aside directory beside a complete install, which no run takes
+	# up (S7): untidy, to compare and remove.
+	if [ "$part" = server ] && server_installed "$n" && { [ -e "$EXTROOT/.xymon-plugin.$n" ] || [ -L "$EXTROOT/.xymon-plugin.$n" ]; }; then
+		v_untidy "$n: $(stale "$EXTROOT/.xymon-plugin.$n" "$n")"
+	fi
 	if [ "$part" = server ] && ! server_installed "$n"; then
 		# No install's: update and remove refuse it (S20), nor is it read.
 		v_broken "$n: $(no_install server "$n")"
@@ -2329,8 +2681,10 @@ verify_plugin() {
 				*" ${f%.new} "*) [ "$f" != "${f%.new}" ] && { v_untidy "$n: $f, this version's beside yours: compare, then remove it"; continue; } ;;
 			esac
 			case $adm in
-				*" ${f%.old} "*) [ "$f" != "${f%.old}" ] && { v_untidy "$n: $f, yours before the merge: compare, then remove it"; continue; } ;;
+				*" ${f%.old} "*) [ "$f" != "${f%.old}" ] && [ -e "$dir/${f%.old}" ] && { v_untidy "$n: $f, yours before the merge: compare, then remove it"; continue; } ;;
 			esac
+			# Any other .old on the server, which an update keeps (S7).
+			case $part$f in server*.old|server*.old/*) v_untidy "$n: $f, yours, kept by an update: compare, then remove it"; continue ;; esac
 			case $f in
 				__pycache__|*/__pycache__) v_broken "$n: $f, bytecode no install wrote: $fix" ;;
 				*/__pycache__/*|__pycache__/*) ;;
@@ -2389,6 +2743,10 @@ EOF
 	[ $((BROKEN + UNTIDY)) -ne "$before" ] || echo "ok: $n"
 }
 
+# present NAME -- ext/NAME is an install, complete or cut short: what
+# left PART takes for a plugin's that is gone is not.
+present() { [ -f "$EXTROOT/$1/VERSION" ] || cut_short "$1"; }
+
 # left PART -- what is left in the part that no plugin installed owns (S9),
 # one per line, tab-separated: the plugin it was, or * for what the
 # plugins shared; where it lies; its path as installed; what it is; and
@@ -2401,7 +2759,7 @@ left() {
 			[ -L "$l" ] || continue
 			case $(readlink "$l") in
 				"$XYMONHOME/ext/"*/tasks.cfg) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%/tasks.cfg}
-					plain "$t" && [ ! -f "$EXTROOT/$t/VERSION" ] \
+					plain "$t" && ! present "$t" \
 						&& echo "$t$T$l$T$XYMONHOME/etc/tasks.d/${l##*/}${T}the task link of $t${T}proved" ;;
 			esac
 		done
@@ -2410,16 +2768,16 @@ left() {
 			case $(readlink "$l") in
 				"$XYMONHOME/ext/"*/*) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%%/*}
 					sec=${l%/*}
-					plain "$t" && [ ! -f "$EXTROOT/$t/VERSION" ] \
+					plain "$t" && ! present "$t" \
 						&& echo "$t$T$l$T$MANDIR/${sec##*/}/${l##*/}${T}a manual page's link of $t${T}proved" ;;
 			esac
 		done
 		for d in "$DIST/plugins"/*; do
 			[ -d "$d" ] && [ ! -L "$d" ] || continue
-			plain "${d##*/}" && [ ! -f "$EXTROOT/${d##*/}/VERSION" ] \
+			plain "${d##*/}" && ! present "${d##*/}" \
 				&& echo "${d##*/}$T$d$T$XYMONHOME/ext/xymon-plugins-dist/plugins/${d##*/}${T}the staged copy of ${d##*/}${T}proved"
 		done
-		any=; for d in "$EXTROOT"/*; do [ -f "$d/VERSION" ] && any=1; done
+		any=; for d in "$EXTROOT"/*; do present "${d##*/}" && any=1; done
 		if [ -z "$any" ]; then
 			[ ! -d "$DIST" ] || echo "*$T$DIST$T$XYMONHOME/ext/xymon-plugins-dist${T}the stage /plugins serves, with no plugin installed${T}proved"
 			[ ! -d "$EXTROOT/venv" ] || echo "*$T$EXTROOT/venv$T$XYMONHOME/ext/venv${T}the virtualenv, with no plugin installed${T}proved"
@@ -2451,6 +2809,15 @@ left() {
 
 # verify_left PART -- what is left, untidy, each naming clean.
 verify_left() {
+	# A set-aside directory of a plugin whose directory is gone (S7).
+	if [ "$1" = server ]; then
+		for sa in "$EXTROOT"/.xymon-plugin.*; do
+			{ [ -e "$sa" ] || [ -L "$sa" ]; } || continue
+			sn=${sa##*/.xymon-plugin.}
+			plain "$sn" && marked "$sa" "$sn" || continue
+			[ -e "$EXTROOT/$sn" ] || [ -L "$EXTROOT/$sn" ] || v_untidy "$sn: $(stale "$sa" "$sn")"
+		done
+	fi
 	while IFS="$(printf '\t')" read -r t at shown what pr; do
 		[ -n "$t" ] || continue
 		if [ "$t" = '*' ]; then v_untidy "$shown, $what: ./xymon-plugin clean --$1 --all"
@@ -2516,7 +2883,13 @@ verify_part() {
 		[ -n "$n" ] || continue
 		# On the server, anything there is an install or none, said (S20).
 		if [ -f "$2/$n/VERSION" ] || { [ "$1" = server ] && { [ -e "$2/$n" ] || [ -L "$2/$n" ]; }; }; then verify_plugin "$1" "$2" "$n"
-		else echo "$n: not installed"; fi
+		else
+			echo "$n: not installed"
+			# What a run cut short set aside, its directory gone since.
+			if [ "$1" = server ] && { [ -e "$EXTROOT/.xymon-plugin.$n" ] || [ -L "$EXTROOT/.xymon-plugin.$n" ]; }; then
+				v_untidy "$n: $(stale "$EXTROOT/.xymon-plugin.$n" "$n")"
+			fi
+		fi
 	done <<EOX
 $L
 EOX
@@ -2764,6 +3137,7 @@ deepest_first() {
 
 case $VERB in
 	install)
+		RESUME=1
 		for n in $LIST; do [ ! -f "$ROOT/plugins/$n/PLUGIN" ] || declared_ok "$n"; done
 		# A plugin named that is installed already is refused, before
 		# anything changes; --all and what one needs pass over them.
@@ -2785,12 +3159,13 @@ case $VERB in
 		fi
 		manifests ;;
 	update)
-		UPDATING=1
+		UPDATING=1 RESUME=1
 		for n in $LIST $NAMES; do [ ! -f "$ROOT/plugins/$n/PLUGIN" ] || declared_ok "$n"; done
 		for n in $NAMES; do
 			# Something there no install left is said as such, not as absent.
 			case $PART in server|client) part_left "$PART" "$n" ;; esac
-			installed "$PARTROOT" "$n" >/dev/null || die "$n is not installed: ./xymon-plugin install --$PART $n"
+			installed "$PARTROOT" "$n" >/dev/null || { case $PART in server|client) cut_short "$n" ;; *) false ;; esac; } \
+				|| die "$n is not installed: ./xymon-plugin install --$PART $n"
 		done
 		if [ -z "$NAMES" ] && [ "$PART" = client ]; then
 			# The client parts installed, and nothing else ext/ may hold;
@@ -2943,6 +3318,7 @@ EOF
 		# A name given is a plugin gone: one installed is removed, not cleaned.
 		for n in $NAMES; do
 			[ ! -f "$PARTROOT/$n/VERSION" ] || die "$n is installed: ./xymon-plugin remove --$PART $n"
+			[ "$PART" = tools ] || ! cut_short "$n" || die "$(no_install "$PART" "$n")"
 		done
 		clean_part "$PART" ;;
 	remove)
@@ -2950,8 +3326,10 @@ EOF
 			# Before anything goes: each name, an install's directory or
 			# none, which removes what S9 leaves; any other is left as it
 			# is, and so passed over with --all: rm -rf would take it.
-			for n in $NAMES; do part_left server "$n"; done
+			# A run going on is said as such, before what it leaves.
+			for n in $NAMES; do running_ok "$n"; part_left server "$n"; done
 			[ -n "$NAMES" ] || LIST=$(installs server absent)
+			for n in $LIST; do running_ok "$n"; done
 			# And each needed by no install that stays (S3), before
 			# anything goes, the stage included.
 			# shellcheck disable=SC2086,SC2116 # LIST, one line
@@ -2963,7 +3341,7 @@ EOF
 			for n in $(deepest_first "$EXTROOT" server); do uninstall_server "$n"; done
 			# With the last plugin, what they shared: the virtualenv (S8);
 			# only once an install went, not for what S9 leaves alone.
-			last=$REMOVED; for d in "$EXTROOT"/*; do [ -f "$d/VERSION" ] && last=; done
+			last=$REMOVED; for d in "$EXTROOT"/*; do present "${d##*/}" && last=; done
 			[ -z "$last" ] || [ ! -d "$EXTROOT/venv" ] || { rm -rf "$EXTROOT/venv" && echo "Removed the virtualenv, which no plugin uses now."; }
 			# The stage served at /plugins, with no plugin left in it, goes.
 			if [ -n "$REMOVED" ] && [ -d "$DIST" ] && [ ! -L "$DIST" ] && [ -z "$(ls -A "$DIST/plugins" 2>/dev/null)" ]; then
@@ -2981,6 +3359,7 @@ EOF
 					[ ! -f "$ROOT/plugins/$n/PLUGIN" ] || [ -n "$(field "$n" client-files)" ] || die "$n has no client part: --server, or --tools"
 					continue
 				fi
+				running_ok "$n"
 				part_left client "$n"
 				needed "$n" client "$EXTROOT" "$NAMES"
 			done

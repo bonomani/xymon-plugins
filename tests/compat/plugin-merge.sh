@@ -59,9 +59,11 @@ rc=0; v=$("$v2/xymon-plugin" verify --server XYMONHOME="$home" </dev/null 2>&1) 
 assert_equal 4 "$rc" "[S7] verify: a .new left is untidy, exit 4"
 assert_contains "untidy: xymonapi: xymonapi-apache.conf.new, this version's beside yours: compare, then remove it" "$v" "[S7] with a line of its own"
 
-# On a terminal: y merges both, the file before kept as NAME.old.
+# On a terminal: y merges both, the file before kept as NAME.old; a
+# NAME.old an earlier update kept is carried over, the older, as NAME.1.old.
 fresh
 echo "# mine" >> "$conf"
+echo "# an earlier .old" > "$conf.old"
 rc=0; out=$("$py" "$ROOT/tests/lib/answer.py" 'Apply both? [y/N] ' y -- "$v2/xymon-plugin" update --server xymonapi XYMONHOME="$home" 2>&1) || rc=$?
 [ "$rc" -eq 0 ] || fail "update on a terminal: $out"
 assert_contains "Your change:" "$out" "[S7] on a terminal, your change is shown"
@@ -70,6 +72,7 @@ assert_contains "# v2's first line" "$(cat "$conf")" "[S7] y merges this version
 assert_contains "# mine" "$(cat "$conf")" "[S7] and keeps yours"
 assert_not_contains "# v2's first line" "$(cat "$conf.old")" "[S7] the file before kept as NAME.old"
 [ ! -e "$conf.new" ] || fail "[S7] a NAME.new was left after a merge"
+assert_equal "# an earlier .old" "$(cat "$conf.1.old")" "[S7] the .old there before is carried over as NAME.1.old"
 rc=0; v=$("$v2/xymon-plugin" verify --server XYMONHOME="$home" </dev/null 2>&1) || rc=$?
 assert_contains "untidy: xymonapi: xymonapi-apache.conf.old, yours before the merge: compare, then remove it" "$v" "[S7] verify says a .old left"
 

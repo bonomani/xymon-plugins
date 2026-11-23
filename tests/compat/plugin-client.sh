@@ -18,8 +18,10 @@
 # no client part, and an ext/ not the person's -- an id on PATH that
 # answers another uid, as ownership is ls -n's uid compared with id -u
 # (S35); a client file the checkout lacks, before anything is written; a
-# directory no install left, cut short before its VERSION, never taken; an
-# install whose MANIFEST is gone is still one, updated (S35).
+# directory no install left never taken, a PLUGIN and no VERSION among
+# them, one cut short, the file in progress there, resumed by install and
+# update, refused by remove; an install whose
+# MANIFEST is gone is still one, updated (S35).
 # A tree named relative, with ., or through a link finds the same
 # ../server (S25). Detection offers the client trees found, and the one
 # used last while its marks hold, remembered apart from the server's, and
@@ -257,19 +259,53 @@ ln -s "$ROOT/plugins/xymon-plugin/PLUGIN" "$c/ext/xymon-plugin/PLUGIN"
 refused "[S35]" "removing a directory whose PLUGIN is a link" "is not xymon-plugin's client part as an install leaves it" remove --client xymon-plugin XYMONHOME="$c"
 assert_file_exists "$c/ext/xymon-plugin/data"
 rm -rf "$c/ext/xymon-plugin"
-# One an install cut short before its VERSION: left as it is, named or
-# with --all, the refusal saying how to remove it by hand.
-mkdir -p "$c/ext/xymon-plugin"
-cp "$ROOT/plugins/xymon-plugin/PLUGIN" "$c/ext/xymon-plugin/PLUGIN"
-refused "[S35]" "removing an install cut short before its VERSION" "if it is an install cut short, remove it by hand: rm -rf $c/ext/xymon-plugin" remove --client xymon-plugin XYMONHOME="$c"
-refused "[S35]" "installing over an install cut short before its VERSION" "if it is an install cut short, remove it by hand" install --client xymon-plugin XYMONHOME="$c"
 # A stray directory with a PLUGIN file too; and an installation used last
 # that a run removing nothing must not rewrite.
-printf 'name: stray\nclient-files: data\n' > "$c/ext/stray/PLUGIN"
+printf 'name: other\nclient-files: data\n' > "$c/ext/stray/PLUGIN"
 mkdir -p "$work/cfg/xymon-plugin"; echo /another/client > "$work/cfg/xymon-plugin/installation-used-last-client"
 untouched "[S35]" "remove --client --all beside directories no install completed" remove --client --all XYMONHOME="$c"
 refused "[S35]" "update --client, none named, with only directories no install completed" "nothing is installed" update --client XYMONHOME="$c"
 assert_contains "$c/ext/stray is no install of stray's: left as it is" "$out" "[S35] update --client, none named, says what it passes over"
+rm -rf "$c/ext/xymon-plugin"
+# A PLUGIN and no VERSION is no install, nor with a file in progress
+# naming another plugin; one cut short, the file in progress there naming
+# it: remove takes a first install's, nothing set aside on a client;
+# install and update resume it.
+mkdir -p "$c/ext/xymon-plugin"
+cp "$ROOT/plugins/xymon-plugin/PLUGIN" "$c/ext/xymon-plugin/PLUGIN"
+refused "[S35]" "installing over a PLUGIN and no VERSION" "is not xymon-plugin's client part as an install leaves it" install --client xymon-plugin XYMONHOME="$c"
+echo "xymon-plugin in progress: other 1" > "$c/ext/xymon-plugin/.xymon-plugin-in-progress"
+refused "[S35]" "installing over a file in progress naming another" "is not xymon-plugin's client part as an install leaves it" install --client xymon-plugin XYMONHOME="$c"
+inprog() { echo "xymon-plugin in progress: xymon-plugin $(sh -c 'echo $$')" > "$c/ext/xymon-plugin/.xymon-plugin-in-progress"; }
+echo "xymon-plugin in progress: xymon-plugin $(sh -c 'echo $$') first" > "$c/ext/xymon-plugin/.xymon-plugin-in-progress"
+rc=0; out=$("$ROOT/xymon-plugin" remove --client xymon-plugin XYMONHOME="$c" </dev/null 2>&1) || rc=$?
+[ "$rc" -eq 0 ] && [ ! -e "$c/ext/xymon-plugin" ] || fail "[S35] remove did not take an install cut short, nothing set aside: $out"
+mkdir -p "$c/ext/xymon-plugin"; cp "$ROOT/plugins/xymon-plugin/PLUGIN" "$c/ext/xymon-plugin/PLUGIN"
+for a in install update; do
+	rm -f "$c/ext/xymon-plugin/VERSION"; inprog
+	rc=0; out=$("$ROOT/xymon-plugin" "$a" --client xymon-plugin XYMONHOME="$c" </dev/null 2>&1) || rc=$?
+	[ "$rc" -eq 0 ] || fail "[S35] $a of an install cut short failed: $out"
+	assert_file_exists "$c/ext/xymon-plugin/VERSION"
+	[ ! -e "$c/ext/xymon-plugin/.xymon-plugin-in-progress" ] || fail "[S35] the $a resumed left the file in progress"
+done
+# One cut short for real, after its directory is emptied: the file in
+# progress kept, the update resumes it.
+cutc=$work/cutc; mkdir -p "$cutc"; cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$cutc/"
+awk '{ print } $0 == "\tcopy \"$1\" client \"$dir\"" { print "exit 1" }' "$ROOT/plugins/xymon-plugin/xymon-plugin" > "$cutc/plugins/xymon-plugin/xymon-plugin"
+grep -qx 'exit 1' "$cutc/plugins/xymon-plugin/xymon-plugin" || fail "the client's copy line was not found to cut after"
+rc=0; out=$("$cutc/xymon-plugin" update --client xymon-plugin XYMONHOME="$c" </dev/null 2>&1) || rc=$?
+[ "$rc" -ne 0 ] || fail "[S35] the cut update was taken"
+assert_file_exists "$c/ext/xymon-plugin/.xymon-plugin-in-progress"
+rc=0; out=$("$ROOT/xymon-plugin" update --client xymon-plugin XYMONHOME="$c" </dev/null 2>&1) || rc=$?
+[ "$rc" -eq 0 ] || fail "[S35] the update of one cut short for real failed: $out"
+assert_file_exists "$c/ext/xymon-plugin/VERSION"
+# Another run on it, its process alive and an xymon-plugin: refused.
+mkdir -p "$work/fake"; printf '#!/bin/sh\nsleep 30\n' > "$work/fake/xymon-plugin"; chmod 755 "$work/fake/xymon-plugin"
+"$work/fake/xymon-plugin" & alive=$!
+echo "xymon-plugin in progress: xymon-plugin $alive" > "$c/ext/xymon-plugin/.xymon-plugin-in-progress"
+refused "[S35]" "an update still running" "an install or update of xymon-plugin is running, process $alive" update --client xymon-plugin XYMONHOME="$c"
+kill "$alive"; wait "$alive" 2>/dev/null || :
+rm -f "$c/ext/xymon-plugin/.xymon-plugin-in-progress"
 rm -rf "$c/ext/xymon-plugin"
 untouched "[S25]" "a client removal of a plugin not there" remove --client xymon-plugin XYMONHOME="$c"
 # An install whose MANIFEST is gone -- an update cut short after its

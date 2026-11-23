@@ -58,7 +58,7 @@ echo "# the admin's port" >> "$home/ext/xymonapi/xymonapi-nginx.conf"
 cp "$home/ext/xymonapi/xymonapi-nginx.conf" "$work/edited"
 install again
 cmp -s "$work/edited" "$home/ext/xymonapi/xymonapi-nginx.conf" || fail "[S16] an install undid the admin's edit to the nginx snippet"
-[ -e "$home/ext/.xymonapi.xymonapi-nginx.conf" ] && fail "[S16] the snippet set aside was left in ext/"
+for f in "$home"/ext/.xymon-plugin.*; do [ ! -e "$f" ] || fail "[S16] the directory the snippet was set aside in was left in ext/: $f"; done
 assert_not_contains "reload the web server" "$(cat "$work/again.log")" "[S16] an install that changes no snippet says nothing of a reload"
 
 "$ROOT/xymon-plugin" remove --server xymonapi XYMONHOME="$home" MANDIR="$work/man" >"$work/gone.log" 2>&1 || fail "uninstall-server failed"
