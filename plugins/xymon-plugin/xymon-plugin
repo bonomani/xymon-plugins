@@ -2124,7 +2124,6 @@ venv_auto() {
 	if [ -n "$py" ]; then
 		# It has the modules: where it cannot make a virtualenv -- Debian
 		# without python3-venv -- the plugins can still run with it.
-		VENV_CHANGED=1
 		if ! "$py" -m venv --system-site-packages "$root/venv" || [ ! -x "$root/venv/bin/python3" ]; then
 			echo "Could not make a virtualenv at $root/venv with $py (on Debian and Ubuntu, python3-venv provides what it needs): the plugins run with the python3 on PATH, or XYMONAPI_PYTHON=$py, which has the modules ($modules)."
 			return 0
@@ -2137,6 +2136,7 @@ venv_auto() {
 			echo "Made no virtualenv at $root/venv from $py: it is itself one, whose modules one made from it does not see; the plugins run with it as it is, XYMONAPI_PYTHON=$py, which has the modules ($modules)."
 			return 0
 		fi
+		VENV_CHANGED=1
 		echo "Made $root/venv from $py ($("$py" -V 2>&1)), which has the modules this plugin needs ($modules): the plugins there run with it."
 	elif [ -n "$newest" ] && fetch_ok "$plugin needs $modules, which no Python here has${note:+ ($note)}. Make a virtualenv at $root/venv with $newest, and install them from PyPI?"; then
 		was=$PYTHON; PYTHON=$newest; venv "$root"; PYTHON=$was

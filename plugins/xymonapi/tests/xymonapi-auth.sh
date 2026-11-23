@@ -82,16 +82,25 @@ assert_equal "xymon-plugins" "$(ls "$work/unpacked")" "rooted at xymon-plugins/"
 grep -rqF "$(first_line "$(cut -d: -f2 "$work/htpasswd")")" "$work/unpacked" && fail "[C4] /plugins gave the password file's contents"
 [ -n "$(find "$work/unpacked" -type f -name tokens)" ] && fail "[C4] /plugins gave a tokens file"
 assert_contains "\"api\":{\"version\":\"${version##*/v}\"}" "$(curl -s -u alice:secret "$url")" "/health gives the version to a user, a release tag as its X.Y.Z"
-# An install over it has it stop by itself, its MANIFEST written anew
-# (S7), since it would go on with the code it loaded; xymonlaunch, not run
+# An install of other code over it has it stop by itself, its MANIFEST
+# written anew (S7), since it would go on with the code it loaded; xymonlaunch, not run
 # here, would start the new. The install signals nothing. With DESTDIR, a
 # package's staging, nothing runs from there: it goes on.
 "$ROOT/xymon-plugin" install --server xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" DESTDIR="$work/stage" >"$work/stage.log" 2>&1 \
 	|| fail "xymon-plugin install --server with DESTDIR failed: $(tail -n 5 "$work/stage.log")"
 kill -0 "$API_PID" 2>/dev/null || fail "an install with DESTDIR stopped the running API"
 assert_not_contains "Stopped" "$(cat "$work/stage.log")" "and says nothing of it"
+# The same code updated: MANIFEST is left (S29), and the API goes on.
+"$ROOT/xymon-plugin" update --server xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/reinstall.log" 2>&1 \
+	|| fail "an update to the same code failed: $(tail -n 3 "$work/reinstall.log")"
+sleep 8
+kill -0 "$API_PID" 2>/dev/null || fail "[S7] the API stopped after an update to the same code: $(tail -n 3 "$work/reinstall.log")"
+# Other code: a copy whose app.py differs.
+alt=$work/alt; mkdir "$alt"
+cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$alt/"
+echo "# changed" >> "$alt/plugins/xymonapi/app.py"
 rc=0
-"$ROOT/xymon-plugin" update --server xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/reinstall.log" 2>&1 || rc=$?
+"$alt/xymon-plugin" update --server xymonapi XYMONHOME="$work/inst" MANDIR="$work/man" >"$work/reinstall.log" 2>&1 || rc=$?
 assert_equal "0" "$rc" "an install over a running API succeeds, not stopping itself ($(tail -n 3 "$work/reinstall.log"))"
 assert_not_contains "signal to stop" "$(cat "$work/reinstall.log")" "[S7] and signals no process"
 for _ in $(seq 1 40); do kill -0 "$API_PID" 2>/dev/null || break; sleep 0.5; done
