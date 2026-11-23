@@ -320,8 +320,9 @@ directory, not a link, holding it as a plain file naming the plugin, is
 an install cut short, whatever else it holds, and nothing else is taken
 for one. It is resumed by `install` and `update`, the files it set aside
 put back (S7) -- refused, as is `remove`, while the process it names
-runs an xymon-plugin, as `ps` says, a second run on the same plugin --
-and refused by `remove`, naming the `update` that resumes it, unless it
+runs an xymon-plugin, as `ps` says, a second run on the same plugin,
+which `remove --all` and `update` with none named pass over, saying it
+runs -- and refused by `remove`, naming the `update` that resumes it, unless it
 is a first install's, as the file in progress says, with nothing set
 aside, nothing of the administrator's, which `remove` takes.
 It counts as present for a need, for `remove`'s virtualenv and for

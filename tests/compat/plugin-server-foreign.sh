@@ -10,7 +10,8 @@
 # the next. One cut short, the file in progress there naming it, is
 # resumed by install and update, named or not, refused while the process
 # it names runs, and refused by remove, naming that update; remove --all
-# passes over it. Anything else at ext/NAME -- data and no VERSION, a
+# passes over it, and with update with none named says it runs while it
+# does. Anything else at ext/NAME -- data and no VERSION, a
 # PLUGIN and no VERSION as the plugin's directory copied by hand,
 # a PLUGIN naming another, with no server part or a link, a VERSION that
 # is a link, a link to the person's own directory -- is left as it is:
@@ -168,9 +169,34 @@ refused "an install still running" "an install or update of xymon-plugin is runn
 aside_with xymon-plugin
 refused "a removal while one runs" "an install or update of xymon-plugin is running, process $alive" remove --server xymon-plugin
 rm -r "$e/.xymon-plugin.xymon-plugin"
+# With none named, update and remove --all pass over it, saying it runs,
+# not that it is no install, and do their work on the rest; a first
+# install's too, which remove would take were it not running.
+running="an install or update of xymon-plugin is running, process $alive"
+dsum() { find "$d" | sort | while IFS= read -r p; do [ -f "$p" ] && cksum < "$p"; echo "$p"; done; }
+for first in '' ' first'; do
+	echo "xymon-plugin in progress: xymon-plugin $alive$first" > "$d/.xymon-plugin-in-progress"
+	x install --server sfree; [ "$rc" -eq 0 ] || fail "install --server sfree failed: $out"
+	d0=$(dsum)
+	x update --server
+	[ "$rc" -eq 0 ] || fail "[S20] update with none named, one running$first, failed: $out"
+	assert_contains "$running" "$out" "[S20] update with none named says one running$first runs"
+	assert_contains "Updated sfree" "$out" "[S20] update with none named, one running$first, updates the rest"
+	x remove --server --all
+	[ "$rc" -eq 0 ] || fail "[S20] remove --all, one running$first, failed: $out"
+	assert_contains "$running" "$out" "[S20] remove --all says one running$first runs"
+	case $out in *"no install of xymon-plugin's"*) fail "[S20] remove --all says one running$first is no install: $out" ;; esac
+	[ ! -e "$e/sfree" ] || fail "[S20] remove --all, one running$first, left sfree"
+	assert_equal "$d0" "$(dsum)" "[S20] update or remove --all changed one running$first"
+done
+echo "xymon-plugin in progress: xymon-plugin $alive" > "$d/.xymon-plugin-in-progress"
 kill "$alive"; wait "$alive" 2>/dev/null || :
 sleep 30 & other=$!
 echo "xymon-plugin in progress: xymon-plugin $other" > "$d/.xymon-plugin-in-progress"
+# A process that is no run of it: remove --all says what it says of any
+# install cut short it may not take.
+x remove --server --all
+assert_contains "$d is no install of xymon-plugin's: left as it is" "$out" "[S20] remove --all, a stale file in progress, passes over it as before"
 x update --server xymon-plugin
 [ "$rc" -eq 0 ] || fail "[S20] a file in progress naming a process that is no run of it refused the update: $out"
 [ ! -e "$d/.xymon-plugin-in-progress" ] || fail "[S20] the update resumed left the file in progress"
