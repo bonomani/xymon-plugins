@@ -221,8 +221,10 @@ snap snap-r1
 cmp -s "$work/snap-r0" "$work/snap-r1" || fail "[S24] the refusal on a terminal changed something"
 refused "[S24]" "two parts" "./xymon-plugin install --client xymon-plugin" install --server --client xymon-plugin XYMONHOME="$c"
 refused "[S24]" "two parts, said each" "./xymon-plugin install --server xymon-plugin" install --server --client xymon-plugin XYMONHOME="$c"
-refused "[S24]" "status with two parts" "with none, covers the server part and the tools" status --client --tools
+refused "[S24]" "status with two parts" "with none, covers every part" status --client --tools
+refused "[S24]" "outdated with two parts" "with none, covers the server part and the tools; a client's tree is not read yet" outdated --client --tools
 refused "[S24]" "install-client" "install-client is now: ./xymon-plugin install --client" install-client xymon-plugin
+refused "[S24]" "status-client" "status-client is now: ./xymon-plugin status --client" status-client
 refused "[S24]" "enable --client" "the client part has no task" enable --client xymon-plugin XYMONHOME="$c"
 refused "[S24]" "disable --client" "the client part has no task" disable --client xymon-plugin XYMONHOME="$c"
 
@@ -426,17 +428,15 @@ x install --client --all XYMONHOME="$c"
 assert_contains "xymon-plugin is installed already ($version): left as it is" "$out" "[S24] install --client --all names the plugin installed already"
 assert_not_contains "Installed xymon-plugin" "$out" "[S24] install --client --all passes over the plugin installed already"
 x remove --client xymon-plugin XYMONHOME="$c"
-for v in status verify outdated clean; do
-	refused "[S24]" "$v --client" "$v does not read a client's tree yet" $v --client
+for v in outdated clean; do
+	refused "[S35]" "$v --client" "$v does not read a client's tree yet" $v --client
 done
-# status, verify and outdated with no part on a client's tree: not read,
-# and no --client offered, which they refuse. outdated asks GitHub first:
-# a gh on PATH answers no release.
+# outdated with no part on a client's tree: not read, and no --client
+# offered, which it refuses. It asks GitHub first: a gh on PATH answers no
+# release. status and verify read it: plugin-client-status.sh.
 mkdir -p "$work/nogh"; printf '#!/bin/sh\nexit 0\n' > "$work/nogh/gh"; chmod 755 "$work/nogh/gh"
-for v in status verify outdated; do
-	PATH="$work/nogh:$PATH" refused "[S24]" "$v, no part, on a client's tree" "$v does not read a client's tree yet" $v XYMONHOME="$c"
-	assert_not_contains "--client" "$out" "[S24] $v, no part, on a client's tree offers --client"
-done
+PATH="$work/nogh:$PATH" refused "[S24]" "outdated, no part, on a client's tree" "outdated does not read a client's tree yet" outdated XYMONHOME="$c"
+assert_not_contains "--client" "$out" "[S24] outdated, no part, on a client's tree offers --client"
 # enable with two parts: no command for the client part, which has no task.
 refused "[S24]" "enable, two parts" "the client part has no task" enable --server --client xymon-plugin XYMONHOME="$c"
 assert_not_contains "enable --client" "$out" "[S24] enable with two parts proposes enable --client"

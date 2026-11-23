@@ -11,17 +11,18 @@
 #   ./xymon-plugin update [--server|--client|--tools] [PLUGIN...]
 #   ./xymon-plugin enable|disable [--server] [PLUGIN...]   a server task on or off
 #   ./xymon-plugin remove [--server|--client|--tools] PLUGIN...|--all
-#   ./xymon-plugin status [--server|--tools] [PLUGIN...]  what is installed, and on
+#   ./xymon-plugin status [--server|--client|--tools] [PLUGIN...]  what is installed, and on
 #
 # --server, --client and --tools name the part a verb acts on, one at a
 # time: the tools are the person's, a Xymon part its tree's owner's.
 # Without one, on a terminal, the server part is said and acted on, but a
 # client's tree named is refused, the command with --client given; off a
-# terminal, a verb that changes something needs one; status covers the
-# server part and the tools, not yet a client's tree. --client takes a
-# standalone client's tree, whose ext/ the person running it owns, and
-# installs, updates and removes there only the files and manual page of a
-# plugin's client-* lines: no task, no virtualenv yet.
+# terminal, a verb that changes something needs one; status and verify
+# cover every part, outdated the server part and the tools, not yet a
+# client's tree. --client takes a standalone client's tree, whose ext/ the
+# person running it owns, and installs, updates and removes there only the
+# files and manual page of a plugin's client-* lines: no task, no
+# virtualenv yet; status and verify read it, whoever owns it.
 # Run as root, a verb that changes the tools is refused unless DESTDIR or
 # PREFIX is given; status --tools under sudo reads the tools of the person
 # who typed it, SUDO_USER.
@@ -115,8 +116,8 @@ case $VERB in
 		v=${VERB%-*}; [ "$v" = uninstall ] && v=remove
 		[ "$v" = venv ] && die "$VERB is now: ./xymon-plugin update --${VERB##*-} --venv"
 		die "$VERB is now: ./xymon-plugin $v --${VERB##*-}" ;;
-	install-client|uninstall-client) v=${VERB%-*}; [ "$v" = uninstall ] && v=remove; die "$VERB is now: ./xymon-plugin $v --client" ;;
-	*-client) die "$VERB: a client part has no task nor virtualenv, and status does not read a client's tree yet; install, update and remove take --client" ;;
+	install-client|uninstall-client|status-client) v=${VERB%-*}; [ "$v" = uninstall ] && v=remove; die "$VERB is now: ./xymon-plugin $v --client" ;;
+	*-client) die "$VERB: a client part has no task nor virtualenv; install, update, remove, status and verify take --client" ;;
 	*) usage ;;
 esac
 NAMES=
@@ -891,7 +892,8 @@ own_refused() {
 # removes them, root as any other. Ownership is the uid ls -n gives,
 # compared with id -u: find -user takes a name first on BSD, and a user
 # named 1000 is not uid 1000. An ext/ that is a link is refused: it would
-# take the plugins, and a removal, out of the tree.
+# take the plugins, and a removal, out of the tree. With read, for status
+# and verify, which change nothing, whoever owns ext/ may read it.
 client_home_ok() {
 	[ ! -L "$XYMONHOME/ext" ] || die "$XYMONHOME/ext is a link: a client's plugins go in a directory of its tree, not elsewhere"
 	[ -d "$XYMONHOME/ext" ] || die "$XYMONHOME has no directory ext/, where a client's plugins go"
@@ -904,6 +906,7 @@ client_home_ok() {
 	fi
 	[ ! -e "$XYMONHOME/etc/xymonserver.cfg" ] \
 		|| die "$XYMONHOME may be a server's own client: its etc/ holds a xymonserver.cfg, as a server's client sharing that server's etc/ does; refused while in doubt"
+	[ "${1:-}" != read ] || return 0
 	# shellcheck disable=SC2012 # ls -n gives one directory's owner
 	if [ "$(ls -nd "$XYMONHOME/ext" | awk '{ print $3 }')" != "$(id -u)" ]; then
 		# shellcheck disable=SC2012 # ls names one owner
@@ -931,7 +934,7 @@ need_home() {
 			client)
 				# A server's own client tree: that server named, and what to type.
 				own_refused
-				case $VERB in status|verify|outdated) die "$XYMONHOME is a Xymon client's tree ($CLIENT_MARKS), not a server's: $VERB does not read a client's tree yet" ;; esac
+				[ "$VERB" != outdated ] || die "$XYMONHOME is a Xymon client's tree ($CLIENT_MARKS), not a server's: $VERB does not read a client's tree yet"
 				die "$XYMONHOME is a Xymon client's tree ($CLIENT_MARKS), not a server's: a client's tree takes the client part, --client" ;;
 			some) shift; die "$XYMONHOME is not a whole Xymon server's tree: it has $*, and a server's has $SERVER_MARKS" ;;
 			none) die "$XYMONHOME is no Xymon server's tree: none of $SERVER_MARKS is there; to stage one for a package, set DESTDIR" ;;
@@ -942,7 +945,7 @@ need_home() {
 			some) shift; die "$XYMONHOME is not a whole Xymon client's tree: it has $*, and a client's has $CLIENT_MARKS" ;;
 			none) die "$XYMONHOME is no Xymon client's tree: none of $CLIENT_MARKS is there" ;;
 		esac
-		client_home_ok
+		case $VERB in status|verify) client_home_ok read ;; *) client_home_ok ;; esac
 	fi
 	# Before anything changes: the target, the part, and what chose them.
 	# It is remembered once the run has done its work, and not by a verb
@@ -2680,9 +2683,9 @@ verify_plugin() {
 	if [ "$part" = server ] && server_installed "$n" && { [ -e "$EXTROOT/.xymon-plugin.$n" ] || [ -L "$EXTROOT/.xymon-plugin.$n" ]; }; then
 		v_untidy "$n: $(stale "$EXTROOT/.xymon-plugin.$n" "$n")"
 	fi
-	if [ "$part" = server ] && ! server_installed "$n"; then
+	if [ "$part" != tools ] && ! "${part}_installed" "$n"; then
 		# No install's: update and remove refuse it (S20), nor is it read.
-		v_broken "$n: $(no_install server "$n")"
+		v_broken "$n: $(no_install "$part" "$n")"
 		return 0
 	elif [ ! -f "$dir/MANIFEST" ]; then
 		v_untidy "$n: no MANIFEST, installed before it was kept: $fix"
@@ -2714,7 +2717,8 @@ verify_plugin() {
 		while IFS= read -r f; do
 			[ -n "$f" ] || continue
 			case $named in *"$NL$f$NL"*) continue ;; esac
-			adm=" tasks.cfg $(held "$root" "$n" conf) "
+			# A client part has no file of the administrator's.
+			adm=" tasks.cfg $(held "$root" "$n" conf) "; [ "$part" != client ] || adm=' '
 			case $adm in
 				*" ${f%.new} "*) [ "$f" != "${f%.new}" ] && { v_untidy "$n: $f, this version's beside yours: compare, then remove it"; continue; } ;;
 			esac
@@ -2912,15 +2916,15 @@ EOF
 # verify_part PART ROOT -- every plugin installed in the part, or those
 # named; with none named, what is left too.
 verify_part() {
-	# One a line: on the server, with none named, every name in ext/.
+	# One a line: in a Xymon tree, with none named, every name in ext/.
 	# shellcheck disable=SC2086 # the names, one a line
 	if [ -n "$NAMES" ]; then L=$(printf '%s\n' $NAMES)
-	elif [ "$1" = server ]; then L=$(ext_names)
+	elif [ "$1" != tools ]; then L=$(ext_names)
 	else L=$(for d in "$2"/*; do [ -f "$d/VERSION" ] && echo "${d##*/}"; done); fi
 	while IFS= read -r n; do
 		[ -n "$n" ] || continue
-		# On the server, anything there is an install or none, said (S20).
-		if [ -f "$2/$n/VERSION" ] || { [ "$1" = server ] && { [ -e "$2/$n" ] || [ -L "$2/$n" ]; }; }; then verify_plugin "$1" "$2" "$n"
+		# In a Xymon tree, anything there is an install or none, said (S20).
+		if [ -f "$2/$n/VERSION" ] || { [ "$1" != tools ] && { [ -e "$2/$n" ] || [ -L "$2/$n" ]; }; }; then verify_plugin "$1" "$2" "$n"
 		else
 			echo "$n: not installed"
 			# What a run cut short set aside, its directory gone since.
@@ -2934,7 +2938,8 @@ EOX
 	# A part with nothing installed says so, as status does, rather than a
 	# heading with nothing under it.
 	[ -n "$L" ] || echo "no plugin"
-	[ -n "$NAMES" ] || verify_left "$1"
+	# What a client part gone leaves comes with clean --client.
+	[ -n "$NAMES" ] || [ "$1" = client ] || verify_left "$1"
 }
 
 # installed ROOT PLUGIN -- its VERSION there, read as X.Y.Z, or nothing.
@@ -3092,12 +3097,34 @@ dialogue() {
 
 if [ "$VERB" = dialogue ]; then dialogue; exit 0; fi
 
+# xpart -- XPART, the Xymon part status and verify read in XYMONHOME: the
+# one named; with none, a client's when it names a client's tree -- a
+# server's own refused, naming that server -- else the server's.
+xpart() {
+	XPART=$PART
+	[ "$XPART" = both ] || return 0
+	XPART=server
+	if [ -z "$DESTDIR" ] && [ "$(marks "$XYMONHOME")" = client ]; then own_refused; XPART=client; fi
+}
+# client_read TREE -- XYMONHOME and its paths set to TREE, a client tree
+# detection found: true when status and verify may read it, else its
+# refusal said instead, as for one named (S25).
+client_read() {
+	XYMONHOME=$1; server_paths
+	why=$( (client_home_ok read) 2>&1 >/dev/null) && return 0
+	echo "  not read: ${why#xymon-plugin: }"
+	return 1
+}
+
 # The part acted on: named, one at a time; or, on a terminal, the server
 # part, said, but on a client's tree named, whose part is given; off a
-# terminal a verb that changes something needs it named; status covers
-# the server part and the tools, not yet a client's tree.
+# terminal a verb that changes something needs it named; status and
+# verify cover every part, outdated the server part and the tools.
 if [ "$(( ${SEL_SERVER:-0} + ${SEL_CLIENT:-0} + ${SEL_TOOLS:-0} ))" -gt 1 ]; then
-	case $VERB in status|verify|outdated) die "one part at a time: ./xymon-plugin $VERB, with none, covers the server part and the tools; a client's tree is not read yet" ;; esac
+	case $VERB in
+		status|verify) die "one part at a time: ./xymon-plugin $VERB, with none, covers every part: the servers, the standalone clients and the tools" ;;
+		outdated) die "one part at a time: ./xymon-plugin $VERB, with none, covers the server part and the tools; a client's tree is not read yet" ;;
+	esac
 	rest=$(echo $NAMES)${ALL:+ --all}
 	cmds=
 	[ -z "$SEL_SERVER" ] || cmds="$cmds
@@ -3132,7 +3159,7 @@ fi
 if [ "$PART" = client ]; then
 	case $VERB in
 		enable|disable) die "the client part has no task to turn on or off yet" ;;
-		status|verify|outdated|clean) die "$VERB does not read a client's tree yet: install, update and remove take --client" ;;
+		outdated|clean) die "$VERB does not read a client's tree yet: install, update, remove, status and verify take --client" ;;
 	esac
 	[ -z "$VENV_FETCH" ] || die "--venv: a client part has no virtualenv"
 	[ -z "$DESTDIR" ] || die "DESTDIR: a client part is not staged yet, only installed in a client's tree"
@@ -3257,17 +3284,27 @@ case $VERB in
 				for n in $L; do l=$(status server "$EXTROOT" "$n"); [ -z "$l" ] || echo "  $l"; done
 				show_client "$t"
 			done <<EOF
-$(xymon_trees | sed -n 's/^server //p')
+$([ "$PART" = client ] || xymon_trees | sed -n 's/^server //p')
+EOF
+			# Then the standalone clients, each with what it holds.
+			while IFS= read -r t; do
+				[ -n "$t" ] || continue
+				echo "Xymon client $t:"
+				client_read "$t" || continue
+				L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
+				for n in $L; do l=$(status client "$EXTROOT" "$n"); [ -z "$l" ] || echo "  $l"; done
+			done <<EOF
+$([ "$PART" = server ] || xymon_trees | sed -n 's/^client //p')
 EOF
 			XYMONHOME=
 		elif [ "$PART" != tools ]; then
-			need_home server
-			echo "Xymon server $XYMONHOME:"
+			xpart; need_home "$XPART"
+			echo "Xymon $XPART $XYMONHOME:"
 			L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$EXTROOT")
-			for n in $L; do l=$(status server "$EXTROOT" "$n"); [ -z "$l" ] || echo "  $l"; done
-			[ -n "$DESTDIR" ] || show_client "$XYMONHOME"
+			for n in $L; do l=$(status "$XPART" "$EXTROOT" "$n"); [ -z "$l" ] || echo "  $l"; done
+			[ -n "$DESTDIR" ] || [ "$XPART" = client ] || show_client "$XYMONHOME"
 		fi
-		if [ "$PART" != server ]; then
+		if [ "$PART" = tools ] || [ "$PART" = both ]; then
 			L=$LIST; [ -n "$NAMES" ] || L=$(with_installed "$TOOLSROOT")
 			[ "$PART" = tools ] || echo "Your tools, $PREFIX:"
 			for n in $L; do
@@ -3337,15 +3374,23 @@ EOF
 				XYMONHOME=$t; server_paths
 				verify_part server "$EXTROOT"
 			done <<EOF
-$(xymon_trees | sed -n 's/^server //p')
+$([ "$PART" = client ] || xymon_trees | sed -n 's/^server //p')
+EOF
+			while IFS= read -r t; do
+				[ -n "$t" ] || continue
+				echo "Xymon client: $t"
+				client_read "$t" || continue
+				verify_part client "$EXTROOT"
+			done <<EOF
+$([ "$PART" = server ] || xymon_trees | sed -n 's/^client //p')
 EOF
 			XYMONHOME=
 		elif [ "$PART" != tools ]; then
-			need_home server
-			echo "Xymon server: $XYMONHOME"
-			verify_part server "$EXTROOT"
+			xpart; need_home "$XPART"
+			echo "Xymon $XPART: $XYMONHOME"
+			verify_part "$XPART" "$EXTROOT"
 		fi
-		if [ "$PART" != server ]; then
+		if [ "$PART" = tools ] || [ "$PART" = both ]; then
 			echo "Your tools: $PREFIX"
 			verify_part tools "$TOOLSROOT"
 		fi
