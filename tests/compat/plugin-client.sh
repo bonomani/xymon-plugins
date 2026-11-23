@@ -222,7 +222,7 @@ cmp -s "$work/snap-r0" "$work/snap-r1" || fail "[S24] the refusal on a terminal 
 refused "[S24]" "two parts" "./xymon-plugin install --client xymon-plugin" install --server --client xymon-plugin XYMONHOME="$c"
 refused "[S24]" "two parts, said each" "./xymon-plugin install --server xymon-plugin" install --server --client xymon-plugin XYMONHOME="$c"
 refused "[S24]" "status with two parts" "with none, covers every part" status --client --tools
-refused "[S24]" "outdated with two parts" "with none, covers the server part and the tools; a client's tree is not read yet" outdated --client --tools
+refused "[S24]" "outdated with two parts" "with none, covers every part: the servers, the standalone clients and the tools" outdated --client --tools
 refused "[S24]" "install-client" "install-client is now: ./xymon-plugin install --client" install-client xymon-plugin
 refused "[S24]" "status-client" "status-client is now: ./xymon-plugin status --client" status-client
 refused "[S24]" "enable --client" "the client part has no task" enable --client xymon-plugin XYMONHOME="$c"
@@ -427,16 +427,22 @@ x install --client --all XYMONHOME="$c"
 [ "$rc" -eq 0 ] || fail "[S24] install --client --all failed: $out"
 assert_contains "xymon-plugin is installed already ($version): left as it is" "$out" "[S24] install --client --all names the plugin installed already"
 assert_not_contains "Installed xymon-plugin" "$out" "[S24] install --client --all passes over the plugin installed already"
+# outdated reads a client's tree as a server's (S32): a gh on PATH
+# answers the releases in $work/tags.
+mkdir -p "$work/gh"; printf '#!/bin/sh\ncat "%s"\n' "$work/tags" > "$work/gh/gh"; chmod 755 "$work/gh/gh"
+newer=$(echo "$version" | awk -F. -v OFS=. '{ $NF = $NF + 1; print }')
+echo "xymon-plugin/v$newer" > "$work/tags"
+PATH="$work/gh:$PATH" x outdated --client XYMONHOME="$c"
+[ "$rc" -eq 6 ] || fail "[S32] outdated --client, a newer release: not 6 ($rc): $out"
+assert_contains "Xymon client $c:" "$out" "[S32] outdated --client names the client's tree"
+assert_contains "xymon-plugin: $version installed; $newer released: ./xymon-plugin update --client --xymon-home $c xymon-plugin" "$out" "[S32] and the update that takes the newer release, for the client part"
+echo "xymon-plugin/v$version" > "$work/tags"
+PATH="$work/gh:$PATH" x outdated XYMONHOME="$c"
+[ "$rc" -eq 0 ] || fail "[S32] outdated, no part, on a client's tree up to date: not 0 ($rc): $out"
+assert_contains "Xymon client $c:" "$out" "[S32] outdated with no part reads a client's tree named"
+assert_contains "xymon-plugin: $version installed; up to date" "$out" "[S32] and says it up to date"
 x remove --client xymon-plugin XYMONHOME="$c"
-for v in outdated clean; do
-	refused "[S35]" "$v --client" "$v does not read a client's tree yet" $v --client
-done
-# outdated with no part on a client's tree: not read, and no --client
-# offered, which it refuses. It asks GitHub first: a gh on PATH answers no
-# release. status and verify read it: plugin-client-status.sh.
-mkdir -p "$work/nogh"; printf '#!/bin/sh\nexit 0\n' > "$work/nogh/gh"; chmod 755 "$work/nogh/gh"
-PATH="$work/nogh:$PATH" refused "[S24]" "outdated, no part, on a client's tree" "outdated does not read a client's tree yet" outdated XYMONHOME="$c"
-assert_not_contains "--client" "$out" "[S24] outdated, no part, on a client's tree offers --client"
+refused "[S35]" "clean --client" "clean does not read a client's tree yet" clean --client
 # enable with two parts: no command for the client part, which has no task.
 refused "[S24]" "enable, two parts" "the client part has no task" enable --server --client xymon-plugin XYMONHOME="$c"
 assert_not_contains "enable --client" "$out" "[S24] enable with two parts proposes enable --client"
@@ -456,6 +462,13 @@ assert_not_contains "$s" "$out" "[S25] and not the server"
 assert_contains "Target: $c (detected, confirmed), part: client" "$out" "[S25] the first line says what chose it"
 assert_equal "$c" "$(cat "$work/cfg/xymon-plugin/installation-used-last-client")" "[S25] it is remembered as the client tree used last"
 [ -e "$work/cfg/xymon-plugin/installation-used-last-server" ] && fail "[S25] the client's choice was remembered as the server's"
+# outdated with none named reads every tree found, the standalone clients
+# among them, as status does (S32).
+PATH="$work/gh:$PATH" x outdated
+[ "$rc" -eq 0 ] || fail "[S32] outdated with none named, all up to date: not 0 ($rc): $out"
+assert_contains "Xymon server $s:" "$out" "[S32] outdated with none named reads the servers found"
+assert_contains "Xymon client $c:" "$out" "[S32] and the standalone clients found"
+assert_contains "xymon-plugin: $version installed; up to date" "$out" "[S32] with what each holds"
 # A client tree detection does not find: the one used last, while its marks hold.
 export XYMON_PLUGINS_TREES="$s"
 term 'Use it? [Y/n] ' '' update --client xymon-plugin
