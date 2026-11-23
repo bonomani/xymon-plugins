@@ -1,4 +1,4 @@
-.TH XYMON-PLUGIN 8 "November 22, 2026" "xymon-plugins"
+.TH XYMON-PLUGIN 8 "November 23, 2026" "xymon-plugins"
 .SH NAME
 xymon-plugin \- install, update and check the Xymon plugins, itself among them
 .SH SYNOPSIS
@@ -89,6 +89,25 @@ in Xymon's log directory. Yellow and purple alert as any column:
 in
 .I alerts.cfg
 keeps it out of a rule.
+.PP
+With the task on, an
+.BR install ,
+.B update
+or
+.B remove
+of the server part that changed a plugin, and the
+.B enable
+of this plugin, its task on already or not, send the column at once, by the
+reporter with no
+wait, under
+.BR xymoncmd ,
+and say what was sent, or why nothing was; the command's own exit does not
+depend on it. Under
+.B DESTDIR
+nothing is sent. So
+.B enable --server xymon-plugin
+is the way to have the column sent now, a release published since its last
+run among what it says.
 .SH OPTIONS
 .TP
 .B --version
