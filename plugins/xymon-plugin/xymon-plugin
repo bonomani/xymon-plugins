@@ -1721,8 +1721,8 @@ disable() {
 	[ -n "$(held "$EXTROOT" "$1" "$TASKKEY")" ] || die "$1 has no task to disable"
 	ours "$1"
 	is_on "$1" || { echo "$1 is off already"; return 0; }
-	rm -f "$TASKDIR/$1.cfg"
-	[ ! -L "$TASKDIR/$1" ] || rm -f "$TASKDIR/$1"
+	rm -f "$TASKDIR/$1.cfg" || die "could not remove $TASKDIR/$1.cfg: $1 stays on"
+	[ ! -L "$TASKDIR/$1" ] || rm -f "$TASKDIR/$1" || die "could not remove $TASKDIR/$1: $1 stays on"
 	echo "$1 is off: xymonlaunch stops it within half a minute"
 }
 
@@ -2246,6 +2246,7 @@ install_server() {
 	was_selinux=$(held "$EXTROOT" "$1" selinux)
 	# Refused before anything is replaced, not halfway through.
 	[ -z "$(field "$1" server-task)" ] || ours "$1"
+	task_writes "$1"
 	# The task file an admin may have enabled, the web server snippets an
 	# admin may have edited, and each NAME.old outlive the directory: set
 	# aside in AS, the one a run cut short left taken up (aside), and
@@ -2384,6 +2385,26 @@ install_tools() {
 	DONE="$DONE $1"
 }
 
+# task_writes PLUGIN -- refused before anything is replaced, rather than
+# cut short halfway, and every resume with it: this version changes what
+# TASKDIR holds -- a file in the link's place made a link, the link or the
+# file of a task gone taken -- and nothing can be made there, as in a
+# client's etc/ that is the system's. Tried, not read from a mode bit,
+# which stops nothing for root.
+task_writes() {
+	l=$TASKDIR/$1.cfg
+	if [ -n "$(field "$1" "$TASKKEY")" ]; then
+		[ -f "$l" ] && [ ! -L "$l" ] || return 0
+	elif [ -L "$l" ]; then
+		[ "$(readlink "$l")" = "$XYMONHOME/ext/$1/tasks.cfg" ] || return 0
+	else
+		[ -f "$l" ] && [ -n "$(held "$EXTROOT" "$1" "$TASKKEY")" ] || return 0
+	fi
+	lt=$TASKDIR/.$1.cfg.tmp
+	{ rm -f "$lt" && ln -s "$l" "$lt" && rm -f "$lt"; } 2>/dev/null \
+		|| die "$TASKDIR cannot be written, where $1's update must change $l: nothing is replaced"
+}
+
 # task_gone PLUGIN -- a task this version has no more, by the record
 # (was_task) or the link to it, the record a run cut short may have written
 # anew: its link goes; the task file, set aside, is kept by aside_back,
@@ -2416,6 +2437,7 @@ install_client() {
 	was_task=$(held "$EXTROOT" "$1" client-task)
 	# Refused before anything is replaced, not halfway through.
 	[ -z "$(field "$1" client-task)" ] || ours "$1"
+	task_writes "$1"
 	[ ! -L "$dir" ] || die "$dir is a link: left as it is"
 	progress "$1"
 	# The task file, which the admin may have edited and enabled, and each
@@ -2545,11 +2567,11 @@ drop_command() {
 drop_task() {
 	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
 		if [ -L "$l" ]; then
-			[ "$(readlink "$l")" = "$XYMONHOME/ext/$1/tasks.cfg" ] && rm -f "$l"
+			[ "$(readlink "$l")" != "$XYMONHOME/ext/$1/tasks.cfg" ] || rm -f "$l" || die "could not remove $l: $1's task stays on"
 		elif [ -n "${2:-}" ] && [ -f "$l" ]; then
 			echo "$l is left as it is: $1 is not installed, so it may be no install's"
 		elif [ ! -d "$l" ]; then
-			rm -f "$l"
+			rm -f "$l" || die "could not remove $l: $1's task stays on"
 		fi
 	done
 	rm -f "$TASKDIR/.$1.cfg.tmp"

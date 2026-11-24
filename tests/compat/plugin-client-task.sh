@@ -142,6 +142,42 @@ grep -l 'INTERVAL 2h' "$d"/*.old > /dev/null 2>&1 || fail "[S6] the edited file 
 rm -f "$d"/*.old
 x "$v1" update --client ctask; ok "update --client back to a task, again"
 x "$v1" enable --client ctask; ok "enable --client, again"
+
+# A clientlaunch.d/ in which nothing can be removed nor made, as the
+# system's: rm and ln refuse there (a mode bit stops nothing for root, who
+# runs the CI's lanes). disable and remove fail, saying so; an update that
+# must change it is refused before anything is replaced, not cut short.
+mkdir -p "$work/ro"
+for t in rm ln; do
+	# shellcheck disable=SC2016 # the shim's own $a and $@
+	printf '#!/bin/sh\nfor a; do case $a in %s/*) echo "%s: $a: Permission denied" >&2; exit 1 ;; esac; done\nexec %s "$@"\n' \
+		"$c/etc/clientlaunch.d" "$t" "$(command -v "$t")" > "$work/ro/$t"
+	chmod 755 "$work/ro/$t"
+done
+ro() { op=$PATH; PATH=$work/ro:$PATH; x "$@"; PATH=$op; }
+ro "$v1" disable --client ctask
+[ "$rc" -ne 0 ] || fail "[S13] disable that could not remove the link succeeded: $out"
+assert_contains "could not remove $link: ctask stays on" "$out" "[S13] and says why"
+[ -L "$link" ] || fail "[S13] the link went all the same"
+ro "$v3" update --client ctask
+[ "$rc" -ne 0 ] || fail "[S7] an update to no task, the link not removable, succeeded: $out"
+assert_contains "$c/etc/clientlaunch.d cannot be written, where ctask's update must change $link: nothing is replaced" "$out" "[S7] and is refused, saying why"
+[ ! -e "$c/ext/.xymon-plugin.ctask" ] || fail "[S7] the refused update was cut short, not refused before anything: $out"
+x "$v1" status --client; assert_contains "ctask: 1.0.0 installed, on" "$out" "[S7] the install as it was"
+cp "$d/tasks.cfg" "$work/t"; rm "$link"; cat "$work/t" > "$link"
+ro "$v2" update --client ctask
+[ "$rc" -ne 0 ] || fail "[S7] an update that must make a link in place of a file, not writable, succeeded: $out"
+assert_contains "cannot be written, where ctask's update must change $link: nothing is replaced" "$out" "[S7] refused, saying why"
+[ ! -e "$c/ext/.xymon-plugin.ctask" ] || fail "[S7] the refused update was cut short: $out"
+{ [ -f "$link" ] && [ ! -L "$link" ]; } || fail "[S7] the file in the link's place was touched"
+x "$v1" update --client ctask; ok "update --client, the file made a link"
+ro "$v1" remove --client ctask
+[ "$rc" -ne 0 ] || fail "[S8] remove that could not remove the link succeeded: $out"
+assert_contains "could not remove $link: ctask's task stays on" "$out" "[S8] and says why"
+x "$v1" remove --client ctask; ok "remove --client, the link left"
+{ [ -e "$link" ] || [ -L "$link" ]; } && fail "[S9] the link left was not removed"
+x "$v1" install --client ctask; ok "install --client, after"
+x "$v1" enable --client ctask; ok "enable --client, after"
 x "$v1" remove --client ctask; ok "remove --client"
 { [ -e "$link" ] || [ -L "$link" ]; } && fail "[S8] remove --client left the task link"
 
