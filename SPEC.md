@@ -269,9 +269,11 @@ An install or update keeps the link and the file it names in place
 throughout -- the file replaced by a rename, never removed first; one that
 is itself a link, not the install's, is set aside and written anew -- so
 that xymonlaunch, reading `tasks.d/` meanwhile, never drops the task.
-One that must change what `tasks.d/` holds where nothing can be made
-there is refused before anything is replaced; a link `disable`, an
-update or `remove` cannot remove fails it, said, the task on.
+A command that must change what `tasks.d/` holds where nothing can be
+made there: an install or update is refused before anything is
+replaced; `enable` and `disable` fail, the task as it was; `remove`
+fails after the plugin's directory is gone, the link left for `clean`;
+each says which.
 Before it makes the link, `enable` looks for the line by which the
 server's `tasks.cfg` reads `tasks.d/`, a `directory` line naming it, as
 Xymon's own has it. Where there is none, it refuses, makes no link, and

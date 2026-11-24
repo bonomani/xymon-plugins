@@ -145,20 +145,45 @@ x "$v1" enable --client ctask; ok "enable --client, again"
 
 # A clientlaunch.d/ in which nothing can be removed nor made, as the
 # system's: rm and ln refuse there (a mode bit stops nothing for root, who
-# runs the CI's lanes). disable and remove fail, saying so; an update that
-# must change it is refused before anything is replaced, not cut short.
-mkdir -p "$work/ro"
-for t in rm ln; do
-	# shellcheck disable=SC2016 # the shim's own $a and $@
-	printf '#!/bin/sh\nfor a; do case $a in %s/*) echo "%s: $a: Permission denied" >&2; exit 1 ;; esac; done\nexec %s "$@"\n' \
-		"$c/etc/clientlaunch.d" "$t" "$(command -v "$t")" > "$work/ro/$t"
-	chmod 755 "$work/ro/$t"
-done
+# runs the CI's lanes). enable, disable and remove fail, saying so; an
+# update that must change it is refused before anything is replaced, not
+# cut short (S13).
+# shims DIR TREE... -- in DIR, rm, ln, mv and mkdir that refuse in TREE.
+shims() {
+	sd=$1; shift; mkdir -p "$sd"
+	pat=; for p in "$@"; do pat="$pat${pat:+|}$p|$p/*"; done
+	for t in rm ln mv mkdir; do
+		# shellcheck disable=SC2016 # the shim's own $a and $@
+		printf '#!/bin/sh\nfor a; do case $a in %s) echo "%s: $a: Permission denied" >&2; exit 1 ;; esac; done\nexec %s "$@"\n' \
+			"$pat" "$t" "$(command -v "$t")" > "$sd/$t"
+		chmod 755 "$sd/$t"
+	done
+}
+shims "$work/ro" "$c/etc/clientlaunch.d"
 ro() { op=$PATH; PATH=$work/ro:$PATH; x "$@"; PATH=$op; }
 ro "$v1" disable --client ctask
 [ "$rc" -ne 0 ] || fail "[S13] disable that could not remove the link succeeded: $out"
 assert_contains "could not remove $link: ctask stays on" "$out" "[S13] and says why"
 [ -L "$link" ] || fail "[S13] the link went all the same"
+x "$v1" disable --client ctask; ok "disable --client"
+ro "$v1" enable --client ctask
+[ "$rc" -ne 0 ] || fail "[S13] enable that could not make the link succeeded: $out"
+assert_contains "could not make $link: ctask stays off" "$out" "[S13] and says why"
+{ [ -e "$link" ] || [ -L "$link" ]; } && fail "[S13] the refused enable made a link"
+x "$v1" enable --client ctask; ok "enable --client"
+# The name of before, to rename; a task DISABLED, its link to take.
+rm "$link"; ln -s "$d/tasks.cfg" "$c/etc/clientlaunch.d/ctask"
+ro "$v2" update --client ctask
+[ "$rc" -ne 0 ] || fail "[S7] an update that must rename the link of before, not writable, succeeded: $out"
+assert_contains "cannot be written, where ctask's update must change $link: nothing is replaced" "$out" "[S7] the link of before: refused, saying why"
+[ ! -e "$c/ext/.xymon-plugin.ctask" ] || fail "[S7] the update with a link of before was cut short: $out"
+rm "$c/etc/clientlaunch.d/ctask"; ln -s "$d/tasks.cfg" "$link"
+cp "$d/tasks.cfg" "$work/t"; printf '\tDISABLED\n' >> "$d/tasks.cfg"
+ro "$v1" update --client ctask
+[ "$rc" -ne 0 ] || fail "[S7] an update of a task DISABLED, its link not removable, succeeded: $out"
+assert_contains "cannot be written, where ctask's update must change $link: nothing is replaced" "$out" "[S7] DISABLED: refused, saying why"
+[ ! -e "$c/ext/.xymon-plugin.ctask" ] || fail "[S7] the update of a task DISABLED was cut short: $out"
+cat "$work/t" > "$d/tasks.cfg"
 ro "$v3" update --client ctask
 [ "$rc" -ne 0 ] || fail "[S7] an update to no task, the link not removable, succeeded: $out"
 assert_contains "$c/etc/clientlaunch.d cannot be written, where ctask's update must change $link: nothing is replaced" "$out" "[S7] and is refused, saying why"
@@ -173,7 +198,7 @@ assert_contains "cannot be written, where ctask's update must change $link: noth
 x "$v1" update --client ctask; ok "update --client, the file made a link"
 ro "$v1" remove --client ctask
 [ "$rc" -ne 0 ] || fail "[S8] remove that could not remove the link succeeded: $out"
-assert_contains "could not remove $link: ctask's task stays on" "$out" "[S8] and says why"
+assert_contains "could not remove $link: left, pointing to the removed task file; ./xymon-plugin clean --client --xymon-home $c ctask takes it once it can be written" "$out" "[S8] and says why, and what takes it"
 x "$v1" remove --client ctask; ok "remove --client, the link left"
 { [ -e "$link" ] || [ -L "$link" ]; } && fail "[S9] the link left was not removed"
 x "$v1" install --client ctask; ok "install --client, after"
@@ -209,5 +234,21 @@ x "$v1" verify --client
 assert_contains "$c/ext/.xymon-plugin.ctask, set aside on" "$out" "[S30] verify says the set-aside directory left"
 x "$v1" remove --client ctask; ok "remove --client, the directory gone, set aside"
 assert_contains "$c/ext/.xymon-plugin.ctask, set aside on" "$out" "[S7] remove says it too"
+
+# A server's tasks.d/ that cannot be made: an install of a part with a
+# task refused before anything is installed (S7).
+s=$work/server sv=$work/sv
+mkdir -p "$s/bin" "$s/etc" "$s/ext" "$sv"
+: > "$s/etc/xymonserver.cfg"; : > "$s/bin/xymond"
+cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$sv/"
+mkdir -p "$sv/plugins/stask"
+printf 'name: stask\nversion: 1.0.0\nsummary: a test\nserver-files: check.sh\nserver-task: stask.tasks\n' > "$sv/plugins/stask/PLUGIN"
+printf '#!/bin/sh\nexit 0\n' > "$sv/plugins/stask/check.sh"
+printf '[stask]\n\tCMD @XYMONHOME@/ext/stask/check.sh\n' > "$sv/plugins/stask/stask.tasks"
+shims "$work/ros" "$s/etc/tasks.d"
+rc=0; out=$(PATH=$work/ros:$PATH "$sv/xymon-plugin" install --server stask XYMONHOME="$s" MANDIR="$work/man" </dev/null 2>&1) || rc=$?
+[ "$rc" -ne 0 ] || fail "[S7] a server install whose tasks.d/ cannot be made succeeded: $out"
+assert_contains "could not make $s/etc/tasks.d, where stask's task goes: nothing is replaced" "$out" "[S7] and is refused, saying why"
+[ ! -e "$s/ext/stask" ] || fail "[S7] the refused server install installed: $out"
 
 pass "a client part's task, as a server part's: installed off with the client's tree filled in, enable through clientlaunch.d refused unless clientlaunch.cfg reads it or --force, edits and on kept by an update, a cut update resumed, a version with no task taking the link and keeping the edit, remove and clean taking the link"
