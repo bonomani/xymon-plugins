@@ -5,6 +5,19 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## The task line is `server-task:`, from the next xymon-plugin
+
+A plugin's `PLUGIN` file names its server task with `server-task:`, where
+it said `task:`. The installer reads the copy of `PLUGIN` kept with each
+installed plugin, and an install made before reads as one with no task:
+`remove` would leave its task link, `enable` and `disable` refuse it.
+
+- **Update first**: `./xymon-plugin update --server`, with the new
+  version, rewrites every plugin's copy; then everything acts as before.
+- A task link left by a `remove` before that: `rm` it from `etc/tasks.d/`.
+- A plugin of your own: rename the line in its `PLUGIN`; a `task:` line
+  is no longer read, and the plugin installs with no task.
+
 ## The installer leaves what is not its own, from xymon-plugin 0.2.4
 
 xymon-plugin 0.2.4 to 0.2.6 take or replace only what an install made, in

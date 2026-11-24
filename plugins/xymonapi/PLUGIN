@@ -35,7 +35,7 @@ manual: xymonapi.8
 server-files: app.py xymon.py xymonapi_client.py tokens.py openapi.yaml requirements.txt xymonapi.sh xymonapi.cil
 server-manual: xymonapi.8
 server-modules: fastapi uvicorn yaml
-task: xymonapi.tasks.DIST
+server-task: xymonapi.tasks.DIST
 conf: xymonapi-apache.conf xymonapi-nginx.conf xymonapi-lighttpd.conf
 conf-stock: xymonapi-apache.conf 1882972170 1081
 conf-stock: xymonapi-apache.conf 2499290032 1179

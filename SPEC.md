@@ -141,7 +141,8 @@ A plugin's task is installed off, with no link (S13); the install says how
 to turn it on.
 
 **S6. A plugin's task lives in its directory.**
-It is `ext/NAME/tasks.cfg`, and `etc/tasks.d/NAME.cfg`, when there, is a
+The `server-task:` line of its `PLUGIN` names the file; installed, it is
+`ext/NAME/tasks.cfg`, and `etc/tasks.d/NAME.cfg`, when there, is a
 link to it; under `DESTDIR` the link names the installed file. The link
 ends in `.cfg` because a packaged Xymon may read only the files of
 `tasks.d/` that do, where Xymon's own `tasks.cfg` reads them all. A link
@@ -794,9 +795,10 @@ brings its test.
   move under `plugins/` as a client part when they get a `PLUGIN` file.
 - **A standalone client's part, the first client step (S35)**; still to
   come:
-  - the `PLUGIN` line `task:` becomes `server-task:`, as the server's other
-    lines; a client part's task will be `client-task:`;
-  - a server's own client tree, and a client part's task, come after;
+  - a client part's task, named by a `client-task:` line, as the server
+    part's by `server-task:` (S6): until then a `PLUGIN` file with one is
+    refused by `install --client` and `update --client`, saying so;
+  - a server's own client tree comes after;
   - a client tree that may be a server's own (S25) is asked about, once
     the command can ask, rather than refused.
 - **One command, read as a sentence.** `xymon-plugin` (S24) takes a verb

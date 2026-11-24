@@ -27,7 +27,7 @@ assert_contains "xymond" "$known" "Xymon's tasks.cfg defines xymond before tasks
 n=0
 for p in "$ROOT"/plugins/*/PLUGIN; do
 	d=$(dirname "$p")
-	t=$(sed -n 's/^task: //p' "$p")
+	t=$(sed -n 's/^server-task: //p' "$p")
 	[ -n "$t" ] || continue
 	while read -r need; do
 		n=$((n + 1))

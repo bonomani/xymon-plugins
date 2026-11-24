@@ -66,7 +66,7 @@ for d in "$dist"/plugins/* "$dist"/plugins/.[!.]*; do
 	[ -e "$d" ] || continue
 	p=${d##*/}
 	want=$( { echo PLUGIN; [ ! -e "$repo/plugins/$p/README.md" ] || echo README.md
-		for k in server-files tools-files server-manual tools-manual task conf; do
+		for k in server-files tools-files server-manual tools-manual server-task conf; do
 			for f in $(field "$p" "$k"); do echo "$f"; done
 		done; } | sort -u)
 	have=$(ls -A "$d" | sort)

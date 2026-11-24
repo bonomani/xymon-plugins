@@ -33,7 +33,7 @@ mcp=$v2/plugins/xymonapi-mcp
 cp "$mcp/xymonapi-mcp.1" "$mcp/xymon-mcp.1"
 sed -e 's|^command: xymonapi-mcp |command: xymon-mcp |' -e 's|^tools-manual: xymonapi-mcp.1|tools-manual: xymon-mcp.1|' \
 	-e 's|^server-manual: xymonapi-mcp.1|server-manual: xymon-mcp.1|' "$v1/plugins/xymonapi-mcp/PLUGIN" > "$mcp/PLUGIN"
-sed -e '/^task: /d' "$v1/plugins/xymonapi-rag/PLUGIN" > "$v2/plugins/xymonapi-rag/PLUGIN"
+sed -e '/^server-task: /d' "$v1/plugins/xymonapi-rag/PLUGIN" > "$v2/plugins/xymonapi-rag/PLUGIN"
 sed -e '/^server-needs: /d' "$v1/plugins/xymonapi-agent/PLUGIN" > "$v2/plugins/xymonapi-agent/PLUGIN"
 rm -rf "$v3/plugins/xymonapi-agent"
 

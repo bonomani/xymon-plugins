@@ -16,7 +16,7 @@ tools-needs: xymonapi
 server-files: xymonrag.py xymonapi-rag.sh requirements.txt
 server-manual: xymonapi-rag.1
 server-modules: fastembed numpy
-task: xymonapi-rag.tasks.DIST
+server-task: xymonapi-rag.tasks.DIST
 uninstalled: Uninstalled xymonapi-rag. Kept: its index, $XYMONAPI_RAG_INDEX, and xymonapi.
 tools-files: xymonrag.py xymonapi-rag.sh requirements.txt
 tools-manual: xymonapi-rag.1

@@ -12,7 +12,7 @@ manual: xymon-plugin.8
 server-short: the installer, kept on the server, and the plugins column
 server-files: xymon-plugin xymon-plugin-report.sh
 server-manual: xymon-plugin.8
-task: xymon-plugin.tasks.DIST
+server-task: xymon-plugin.tasks.DIST
 executable: xymon-plugin xymon-plugin-report.sh
 # On a monitored host's Xymon client, the installer alone, beside the
 # plugins it installs there.
