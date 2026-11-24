@@ -121,13 +121,15 @@ lifecycle() {
 	[ "$rc" -eq 0 ] || fail "[S35] $l: install --client failed: $out"
 	assert_contains "Target: $c (named by XYMONHOME), part: client" "$out" "[S35] $l: the target and the part are said"
 	d=$c/ext/xymon-plugin
-	assert_equal "MANIFEST PLUGIN VERSION xymon-plugin xymon-plugin.8" "$(ls -A "$d" | tr '\n' ' ' | sed 's/ $//')" "[S35] $l: ext/xymon-plugin holds the client part's files, and only those"
+	assert_equal ".shipped MANIFEST PLUGIN VERSION tasks.cfg xymon-plugin xymon-plugin-report.sh xymon-plugin.8" "$(ls -A "$d" | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')" "[S35] $l: ext/xymon-plugin holds the client part's files, and only those"
 	[ -x "$d/xymon-plugin" ] || fail "[S35] $l: the installer is not executable"
 	assert_equal "$version" "$(cat "$d/VERSION")" "[S35] $l: VERSION is the PLUGIN file's"
 	cmp -s "$ROOT/plugins/xymon-plugin/PLUGIN" "$d/PLUGIN" || fail "[S35] $l: PLUGIN is not the checkout's copy"
 	assert_equal "$d/xymon-plugin.8" "$(readlink "$man/man8/xymon-plugin.8")" "[S35] $l: the manual page is linked from MANDIR"
-	# MANIFEST, line for line: the four files and the page's link, nothing else.
-	mf=$(for f in PLUGIN VERSION xymon-plugin xymon-plugin.8; do printf 'file\t%s\t%s\n' "$(cksum < "$d/$f")" "$f"; done
+	# MANIFEST, line for line: the files, the task file the administrator's,
+	# its copy as shipped, and the page's link, nothing else.
+	mf=$(for f in .shipped/tasks.cfg PLUGIN VERSION xymon-plugin xymon-plugin-report.sh xymon-plugin.8; do printf 'file\t%s\t%s\n' "$(cksum < "$d/$f")" "$f"; done
+		printf 'file\t%s\ttasks.cfg\tadmin\n' "$(cksum < "$d/tasks.cfg")"
 		printf 'link\t%s\t%s\n' "$man/man8/xymon-plugin.8" "$d/xymon-plugin.8")
 	assert_equal "$(printf '%s\n' "$mf" | sort)" "$(sort "$d/MANIFEST")" "[S35] $l: MANIFEST records the client part's files and the page's link, and only those"
 	new install | while IFS= read -r p; do
@@ -225,8 +227,6 @@ refused "[S24]" "status with two parts" "with none, covers every part" status --
 refused "[S24]" "outdated with two parts" "with none, covers every part: the servers, the standalone clients and the tools" outdated --client --tools
 refused "[S24]" "install-client" "install-client is now: ./xymon-plugin install --client" install-client xymon-plugin
 refused "[S24]" "status-client" "status-client is now: ./xymon-plugin status --client" status-client
-refused "[S24]" "enable --client of a plugin with no client task" "xymon-plugin has no task to turn on or off" enable --client xymon-plugin XYMONHOME="$c"
-refused "[S24]" "disable --client of a plugin with no client task" "xymon-plugin has no task to turn on or off" disable --client xymon-plugin XYMONHOME="$c"
 
 refused "[S35]" "--venv with --client" "--venv: a client part has no virtualenv" install --client --venv xymon-plugin XYMONHOME="$c"
 refused "[S35]" "DESTDIR with --client" "a client part is not staged yet" install --client xymon-plugin XYMONHOME="$c" DESTDIR="$work/stage"

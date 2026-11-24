@@ -35,7 +35,7 @@ report its own version beside the others'. On a monitored host,
 .B "./xymon-plugin install --client xymon-plugin"
 installs it the same way into a standalone Xymon client's
 .IR ext/xymon-plugin/ ,
-with no task. The copy installed gives its
+with the client's plugins column (below). The copy installed gives its
 version, and runs
 .BR status ,
 .B verify
@@ -108,6 +108,46 @@ nothing is sent. So
 .B enable --server xymon-plugin
 is the way to have the column sent now, a release published since its last
 run among what it says.
+.PP
+On a standalone client, its task, off until
+.BR "./xymon-plugin enable --client xymon-plugin" ,
+runs the same reporter with
+.BR --client ,
+under
+.IR xymonclient.cfg :
+.B "outdated --client"
+asks GitHub from the client itself, and the client's status
+.B plugins
+goes to its server. The status is for
+.B MACHINEDOTS
+as
+.I runclient.sh
+gives it, its
+.B --hostname
+or the system's name, written by the task each run in
+.IR $XYMONTMP/xymon-plugin.host ;
+the log is
+.I xymon-plugin.log
+in
+.BR XYMONCLIENTLOGS .
+The column is sent at once as on the server, under the name that file
+holds or, before any run, the one in
+.IR logs/clientlaunch.NAME.pid ;
+with neither, nothing is sent, and the command says so. GitHub allows 60
+anonymous requests an hour from one address, which bounds how many clients
+behind one address can ask it each day.
+.PP
+On a server as on a client, where
+.B XYMSRV
+is 0.0.0.0 the status goes to each server
+.B XYMSERVERS
+names, each read back for that host and that column alone: one that did
+not keep it is said and ends the run with 1; kept blue, the column
+disabled, it is said, and does not; one that refuses to show its board to
+this host (xymond's
+.BR --www-senders )
+is said, and does not \(em whether it kept the status is then not known,
+nor, on a xymond that knows no host at all, told apart from a refusal.
 .SH OPTIONS
 .TP
 .B --version
@@ -153,6 +193,11 @@ The installer, installed on a server.
 Its task, which
 .B enable
 links into
-.IR tasks.d/ .
+.IR tasks.d/ ,
+or on a client
+.IR clientlaunch.d/ .
+.TP
+.I $XYMONTMP/xymon-plugin.host
+On a client, the name its task sent the column under.
 .SH SEE ALSO
 .BR xymonapi (8)

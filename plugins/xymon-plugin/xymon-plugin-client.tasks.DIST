@@ -1,0 +1,14 @@
+# The plugins column of this client, xymon-plugin(8): once a day, after a
+# wait drawn at random up to 6 hours, the installer installed here says
+# whether a newer release of a plugin is published, asking GitHub, and
+# this host's status "plugins" says it -- green or yellow, valid 31 hours;
+# purple once that has passed with none sent, GitHub not reached or the
+# task stopped.
+# Off once installed: ./xymon-plugin enable --client xymon-plugin. MAXTIME
+# bounds the wait and the requests to GitHub together.
+[xymon-plugin]
+	ENVFILE @XYMONHOME@/etc/xymonclient.cfg
+	INTERVAL 1d
+	MAXTIME 7h
+	CMD @XYMONHOME@/ext/xymon-plugin/xymon-plugin-report.sh --client
+	LOGFILE $XYMONCLIENTLOGS/xymon-plugin.log

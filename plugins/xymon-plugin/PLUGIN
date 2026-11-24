@@ -14,8 +14,9 @@ server-files: xymon-plugin xymon-plugin-report.sh
 server-manual: xymon-plugin.8
 server-task: xymon-plugin.tasks.DIST
 executable: xymon-plugin xymon-plugin-report.sh
-# On a monitored host's Xymon client, the installer alone, beside the
-# plugins it installs there.
-client-short: the installer, kept in the client's tree beside its plugins
-client-files: xymon-plugin
+# On a monitored host's Xymon client, the installer, beside the plugins it
+# installs there, and the plugins column of that host.
+client-short: the installer, kept in the client's tree beside its plugins, and the plugins column
+client-files: xymon-plugin xymon-plugin-report.sh
 client-manual: xymon-plugin.8
+client-task: xymon-plugin-client.tasks.DIST

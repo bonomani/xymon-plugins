@@ -22,19 +22,31 @@
 # xymonlaunch gives (ENVFILE xymonserver.cfg): XYMON, XYMSRV, XYMONHOME,
 # MACHINEDOTS. What it does goes to its log, one line a
 # run. XYMON_PLUGINS_WAIT, the longest wait in seconds, for the tests.
+#
+# --client: the task of a standalone client's tree, xymonclient.cfg its
+# environment and MACHINEDOTS the name runclient.sh gives; outdated
+# --client, and the name written in $XYMONTMP/xymon-plugin.host, for the
+# installer to send under at once -- not when the installer runs it so,
+# XYMON_PLUGINS_AT_ONCE set. The status goes to XYMSRV, or, where that is
+# 0.0.0.0, to each server XYMSERVERS names, each read back.
 
 here=$(cd "$(dirname "$0")" && pwd)
+part=server; [ "${1:-}" != --client ] || part=client
 log() { printf '%s xymon-plugin-report: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 
 for v in XYMON XYMSRV XYMONHOME MACHINEDOTS; do
 	eval "val=\${$v:-}"
-	if [ -z "$val" ]; then log "$v is not set: run as the task, with ENVFILE xymonserver.cfg"; exit 1; fi
+	if [ -z "$val" ]; then log "$v is not set: run as the task, with ENVFILE xymon$part.cfg"; exit 1; fi
 done
 # The server's name as xymonserver.cfg gives it, MACHINEDOTS -- the one
 # hosts.cfg knows it by, and its own columns go under -- not MACHINE,
 # which may be the system's name instead (Homebrew's Xymon: localhost
 # against bcs-Mac-mini,local), under which xymond would keep nothing.
 host=$(printf '%s' "$MACHINEDOTS" | tr . ,)
+if [ "$part" = client ] && [ -z "${XYMON_PLUGINS_AT_ONCE:-}" ]; then
+	ht=${XYMONTMP:-$XYMONHOME/tmp}/xymon-plugin.host
+	{ printf '%s\n' "$MACHINEDOTS" > "$ht"; } 2>/dev/null || log "could not write $ht: the installer cannot send the column at once"
+fi
 
 # The wait: 0 to max seconds, from /dev/urandom where it is, else from the
 # host, the PID and the time.
@@ -60,13 +72,13 @@ if [ "$wait_s" -gt 0 ] && [ -z "${waited:-}" ]; then
 	# that sends is the one installed now, run in this process's place,
 	# its PID kept for xymonlaunch, no signal sent (S33). Gone, the plugin
 	# removed, this one goes on.
-	if [ -f "$0" ]; then XYMON_PLUGINS_WAITED=$wait_s exec /bin/sh "$0"; fi
+	if [ -f "$0" ]; then XYMON_PLUGINS_WAITED=$wait_s exec /bin/sh "$0" "$@"; fi
 fi
 
 # Not gh, which no time bounds: MAXTIME stops this script, not what it
 # started, and a gh that hangs would stay. curl, bounded, sends GH_TOKEN
 # when it is set.
-out=$(XYMON_PLUGINS_NO_GH=1 "$here/xymon-plugin" outdated --server 2>&1)
+out=$(XYMON_PLUGINS_NO_GH=1 "$here/xymon-plugin" outdated --$part 2>&1)
 rc=$?
 # Each plugin's line, "  NAME: ...", gets the colour it gives, which the
 # status page shows as an icon: green up to date, newer than its latest
@@ -104,21 +116,45 @@ case $rc in
 		exit 0 ;;
 	*) color=yellow summary="outdated ended with $rc" ;;
 esac
-if ! "$XYMON" "$XYMSRV" "status+31h $host.plugins $color $(date) $summary
+# Each server, read back: xymon ends with 0 even where xymond keeps
+# nothing -- a host hosts.cfg does not name. xymond reads host= and test=
+# as regular expressions: anchored, the dots escaped, so that web1 is not
+# web10. A column read back blue is kept, disabled. A board read back empty
+# for every host is one xymond refuses to show this host (--www-senders):
+# said, not a failure -- nor can it be told then whether xymond kept it.
+re=$(printf '%s' "$MACHINEDOTS" | sed 's/[].[^$*+?(){}|\\]/\\&/g')
+servers=$XYMSRV
+[ "$XYMSRV" != 0.0.0.0 ] || servers=${XYMSERVERS:-}
+if [ -z "$(printf '%s' "$servers" | tr -d ' ')" ]; then
+	log "waited ${wait_s}s; outdated ended with $rc; XYMSRV is 0.0.0.0 and XYMSERVERS names no server: nothing sent"
+	exit 1
+fi
+end=0 said=
+set -f
+for srv in $servers; do
+	to=; [ "$srv" = "$XYMSRV" ] || to=" to $srv"
+	if ! "$XYMON" "$srv" "status+31h $host.plugins $color $(date) $summary
 
 $marked"; then
-	log "waited ${wait_s}s; outdated ended with $rc; could not send $color to $XYMSRV"
-	exit 1
-fi
-# xymon ends with 0 even where xymond keeps nothing -- a host hosts.cfg
-# does not name: read it back.
-if ! kept=$("$XYMON" "$XYMSRV" "xymondboard host=$MACHINEDOTS test=plugins fields=color" 2>&1); then
-	log "waited ${wait_s}s; outdated ended with $rc; sent $color, which could not be read back: $kept"
-	exit 0
-fi
-if [ "$kept" != "$color" ]; then
-	log "waited ${wait_s}s; outdated ended with $rc; sent $color for $MACHINEDOTS, which xymond did not keep: is $MACHINEDOTS in hosts.cfg?"
-	exit 1
-fi
-log "waited ${wait_s}s; outdated ended with $rc; sent $color"
-exit 0
+		said="$said; could not send $color to $srv"; end=1; continue
+	fi
+	if ! kept=$("$XYMON" "$srv" "xymondboard host=^$re\$ test=^plugins\$ fields=color" 2>&1); then
+		said="$said; sent $color$to, which could not be read back: $kept"; continue
+	fi
+	if [ -z "$kept" ]; then
+		if ! b=$("$XYMON" "$srv" "xymondboard fields=hostname" 2>&1); then
+			said="$said; sent $color$to, which could not be read back: $b"; continue
+		fi
+		if [ -z "$b" ]; then
+			said="$said; sent $color$to, which xymond refuses to show to this host: not read back"; continue
+		fi
+	fi
+	case $kept in
+		"$color") said="$said; sent $color$to" ;;
+		blue) said="$said; sent $color$to, kept, the column disabled" ;;
+		*) said="$said; sent $color for $MACHINEDOTS$to, which xymond did not keep: is $MACHINEDOTS in hosts.cfg?"; end=1 ;;
+	esac
+done
+set +f
+log "waited ${wait_s}s; outdated ended with $rc$said"
+exit $end
