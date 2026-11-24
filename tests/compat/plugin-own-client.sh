@@ -158,14 +158,23 @@ assert_contains "./xymon-plugin clean --client --xymon-home $s xymon-plugin" "$o
 rm -rf "$c/ext/xymon-plugin" "$c/etc/clientlaunch.d/xymon-plugin-client.cfg"
 x clean --client xymon-plugin XYMONHOME="$s" --yes; ok "clean --client xymon-plugin, the copy removed"
 [ ! -L "$work/man/man8/xymon-plugin.8" ] || fail "[S36] clean left the copy's manual page link"
+# A need on xymon-plugin: met by the server's copy, refused while the
+# server has none; the server's copy, needed there, not removed.
+x install --client dep XYMONHOME="$s"; refused "install --client of a plugin needing xymon-plugin, the server without it"
+assert_contains "dep needs xymon-plugin, whose part in the client tree of a Xymon server is the server's copy, which $s has not" "$out" "[S36] refused, saying the server's copy is missing"
+[ ! -e "$c/ext/dep" ] || fail "[S36] dep installed though its need is unmet"
+x install --server xymon-plugin XYMONHOME="$s"; ok "install --server xymon-plugin"
 x install --client dep XYMONHOME="$s"; ok "install --client of a plugin needing xymon-plugin, on a server"
 assert_contains "xymon-plugin is passed over: the server's copy stands for its client part" "$out" "[S36] a need on xymon-plugin met by the server's copy, said"
 assert_file_exists "$c/ext/dep/VERSION"
 [ ! -e "$c/ext/xymon-plugin" ] || fail "[S36] the need installed xymon-plugin's client part in the server's client tree"
+x remove --server xymon-plugin XYMONHOME="$s"; refused "remove --server xymon-plugin, needed in the server's client tree"
+assert_contains "xymon-plugin is needed by dep, in the client tree of this server" "$out" "[S36] and says by what"
 x remove --client dep XYMONHOME="$s"; ok "remove --client dep"
 x install --client --all XYMONHOME="$s"; ok "install --client --all on a server"
 assert_equal 1 "$(printf '%s\n' "$out" | grep -c 'xymon-plugin is passed over')" "[S36] --all: xymon-plugin passed over, said once"
 x remove --client --all XYMONHOME="$s"; ok "remove --client --all on a server"
+x remove --server xymon-plugin XYMONHOME="$s"; ok "remove --server xymon-plugin, needed no more"
 rmdir "$c/etc/clientlaunch.d"
 
 # XYMONCLIENTHOME: a variable is refused, as nothing here reads it; and a
@@ -253,6 +262,102 @@ PATH=$op
 ok "outdated --client, no ext/"
 x verify --client XYMONHOME="$s"; ok "verify --client, no ext/"
 mv "$work/ext.away" "$c/ext"
+
+# An update in that tree keeps the task on and the edited file; cut short
+# after the directory is emptied, the next resumes it (S7).
+x install --client oc XYMONHOME="$s"; ok "install --client, to update"
+x enable --client oc XYMONHOME="$s"; ok "enable --client, to update"
+sed 's/INTERVAL 5m/INTERVAL 1h/' "$c/ext/oc/tasks.cfg" > "$work/edited"; cat "$work/edited" > "$c/ext/oc/tasks.cfg"
+x update --client oc XYMONHOME="$s"; ok "update --client"
+assert_contains "INTERVAL 1h" "$(cat "$c/ext/oc/tasks.cfg")" "[S36] an update keeps the edited task file"
+assert_equal "$c/ext/oc/tasks.cfg" "$(readlink "$link")" "[S36] and the task on"
+cut=$work/cut; mkdir -p "$cut"; cp -R "$r/xymon-plugin" "$r/LICENSE" "$r/plugins" "$cut/"
+# shellcheck disable=SC2016 # the installer's line, as it is written
+line='	fresh "$dir" "$keep" || exit 1'
+awk -v l="$line" '{ print } $0 == l { print "\tkill -TERM $$" }' "$r/plugins/xymon-plugin/xymon-plugin" > "$cut/plugins/xymon-plugin/xymon-plugin"
+rc=0; out=$("$cut/xymon-plugin" update --client oc XYMONHOME="$s" MANDIR="$work/man" </dev/null 2>&1) || rc=$?
+[ "$rc" -ne 0 ] || fail "[S7] the cut update succeeded: $out"
+x update --client oc XYMONHOME="$s"; ok "update --client resuming"
+assert_contains "Resuming the install of oc cut short" "$out" "[S36] the next update resumes"
+assert_contains "INTERVAL 1h" "$(cat "$c/ext/oc/tasks.cfg")" "[S36] with the edited task file"
+assert_contains "LOGFILE \$XYMONSERVERLOGS/oc-client.log" "$(cat "$c/ext/oc/tasks.cfg.new" 2>/dev/null || cat "$c/ext/oc/tasks.cfg")" "[S36] @LOGDIR@ the server's logs after a resume"
+rm -f "$c/ext/oc/tasks.cfg.new"
+
+# --server on that server leaves the client's links alone: verify and
+# clean neither say nor take them.
+x verify --server XYMONHOME="$s"
+assert_not_contains "oc-client.cfg" "$out" "[S36] verify --server says nothing of the client part's link"
+x clean --server --all --yes XYMONHOME="$s"; ok "clean --server --all"
+[ -L "$link" ] || fail "[S36] clean --server took the client part's link"
+
+# XYMONCLIENTHOME respelt through a link to the same tree: the links made
+# under the first spelling are still the plugin's, taken by remove.
+ln -s "$c" "$work/respelt"
+{ grep -v '^XYMONCLIENTHOME=' "$work/xymonserver.cfg"; printf 'XYMONCLIENTHOME="%s"\n' "$work/respelt"; } > "$s/etc/xymonserver.cfg"
+x verify --client oc XYMONHOME="$s"
+assert_not_contains "broken" "$out" "[S36] respelt: the link made before is still oc's"
+x remove --client oc XYMONHOME="$s"; ok "remove --client, XYMONCLIENTHOME respelt through a link"
+{ [ -e "$link" ] || [ -L "$link" ]; } && fail "[S36] respelt: remove left the task link"
+cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
+
+# XYMONCLIENTHOME's rarer forms: blanks after it, export before it, set in
+# xymonserver.d/ last.
+for form in "XYMONCLIENTHOME=\"$c\"   " "export XYMONCLIENTHOME=$c # mine" "d"; do
+	grep -v '^XYMONCLIENTHOME=' "$work/xymonserver.cfg" > "$s/etc/xymonserver.cfg"
+	if [ "$form" = d ]; then
+		printf 'XYMONCLIENTHOME="%s/none"\n' "$work" >> "$s/etc/xymonserver.cfg"
+		mkdir -p "$s/etc/xymonserver.d"; printf 'XYMONCLIENTHOME="%s"\n' "$c" > "$s/etc/xymonserver.d/client.cfg"
+	else
+		printf '%s\n' "$form" >> "$s/etc/xymonserver.cfg"
+	fi
+	x install --client oc XYMONHOME="$s"; ok "install --client, XYMONCLIENTHOME as: $form"
+	x remove --client oc XYMONHOME="$s"; ok "remove --client, XYMONCLIENTHOME as: $form"
+	rm -rf "$s/etc/xymonserver.d"
+done
+cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
+
+# A link left in the client's clientlaunch.d/, from its life as a
+# standalone client, which the server's launcher does not read: said by
+# verify, taken by clean.
+x install --client oc XYMONHOME="$s"; ok "install --client, for clientlaunch.d"
+mkdir -p "$c/etc/clientlaunch.d"; ln -s "$c/ext/oc/tasks.cfg" "$c/etc/clientlaunch.d/oc-client.cfg"
+x verify --client XYMONHOME="$s"
+assert_contains "a task link in clientlaunch.d/, which the server's xymonlaunch does not read" "$out" "[S36] verify says a link left in clientlaunch.d/"
+assert_contains "clean --client --xymon-home $s --all" "$out" "[S36] with clean, the server named"
+x clean --client --all --yes XYMONHOME="$s"; ok "clean --client, clientlaunch.d/"
+[ ! -L "$c/etc/clientlaunch.d/oc-client.cfg" ] || fail "[S36] clean left the link in clientlaunch.d/"
+x remove --client oc XYMONHOME="$s"; ok "remove --client, after clientlaunch.d"
+rmdir "$c/etc/clientlaunch.d"
+
+# The client tree named directly with a linked ext/, as Homebrew's: the
+# server's form given, the names kept, the path quoted.
+x install --client oc XYMONHOME="$hc"; refused "install --client named by Homebrew's client tree"
+assert_contains "is the client tree of the Xymon server $hs: name the server, ./xymon-plugin install --client --xymon-home $hs oc" "$out" "[S36] Homebrew's client tree named: the server's form, the names kept"
+# A dangling ext/ link: the directory it names to make.
+mv "$hb/var/client/ext" "$hb/var/client/ext.away"
+x install --client oc XYMONHOME="$hs"; refused "install --client, a dangling ext/ link"
+assert_contains "mkdir -p $hb/var/client/ext" "$out" "[S36] a dangling ext/ link: the directory it names to make"
+mv "$hb/var/client/ext.away" "$hb/var/client/ext"
+# An upgrade: the version replaced, opt/ repointed; nothing named the old.
+x install --client oc XYMONHOME="$hs"; ok "install --client, before an upgrade"
+x enable --client oc XYMONHOME="$hs"; ok "enable --client, before an upgrade"
+cp -R "$hb/Cellar/xs/1.0" "$hb/Cellar/xs/1.1"; rm "$hb/opt/xs"; ln -s "$hb/Cellar/xs/1.1" "$hb/opt/xs"; rm -rf "$hb/Cellar/xs/1.0"
+x verify --client XYMONHOME="$hs"; ok "verify --client after an upgrade"
+assert_contains "ok: oc" "$out" "[S36] Homebrew: after an upgrade, the install as it was"
+x update --client oc XYMONHOME="$hs"; ok "update --client after an upgrade"
+x remove --client oc XYMONHOME="$hs"; ok "remove --client after an upgrade"
+{ [ -e "$hs/etc/tasks.d/oc-client.cfg" ] || [ -L "$hs/etc/tasks.d/oc-client.cfg" ]; } && fail "[S36] Homebrew: remove after an upgrade left the link"
+
+# A path with a blank: the commands printed quote it.
+sp="$work/a b"; mkdir -p "$sp/client/bin" "$sp/client/etc"; : > "$sp/client/bin/xymonclient.sh"; : > "$sp/client/etc/xymonclient.cfg"
+{ grep -v '^XYMONCLIENTHOME=' "$work/xymonserver.cfg"; printf 'XYMONCLIENTHOME="%s/client"\n' "$sp"; } > "$s/etc/xymonserver.cfg"
+x install --client oc XYMONHOME="$s"; refused "install --client, a client tree with a blank and no ext/"
+assert_contains "mkdir '$sp/client/ext'" "$out" "[S36] the printed command quotes the path"
+cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
+
+# No XYMONHOME, off a terminal: the server's form said too.
+x install --client oc; refused "install --client with no XYMONHOME"
+assert_contains "or a server's for its own client tree" "$out" "[S36] the server's form said"
 
 # An ext/ owned by another: refused, the chown given. The owner is read
 # through ls, here a stand-in, as a test is not root.

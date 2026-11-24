@@ -438,7 +438,8 @@ when it is, and, at the same version, said to have other code when its files dif
 from those `MANIFEST` says were installed (S29), naming the update. A name that is no plugin is refused. `status` changes nothing. It
 says them by section, each always there, empty or not: the Xymon server,
 its own client tree -- the one its `XYMONCLIENTHOME` names -- and the
-person's tools; `--server` and `--tools` keep to theirs. A standalone
+person's tools; `--server` and `--tools` keep to theirs, and `--client`
+with `XYMONHOME` naming a server to its own client tree (S36). A standalone
 client's tree (S35) is said as a server's: with no
 part named, one `XYMONHOME` names stands for the server's sections, and
 without `XYMONHOME` each one found (S25) has its own after the servers';
@@ -811,7 +812,8 @@ written by whoever owns its tree, so that the same person updates and
 removes them. `status` and `verify`, which change nothing, read a
 client's tree as a server's (S15, S30), whoever owns its `ext/`, and
 refuse the trees the other verbs refuse: one of another kind, a server's
-own, one in doubt. `outdated` reads a client's tree as a server's (S32),
+own named as a client's tree, one in doubt; a server's own is read
+through its server (S36). `outdated` reads a client's tree as a server's (S32),
 and `clean --client` takes away what `verify` says is left there (S31),
 run as the other verbs that change something.
 
@@ -827,10 +829,11 @@ kept, as Homebrew's `opt/`, which names the current version --; a server that na
 which nothing here runs the server's programs to read --, a path not
 absolute, a directory that is not there, one without a client's marks
 (S18), or the server's own tree, is refused, saying what it read. Before a verb changes
-anything: a tree with no `ext/` -- which Xymon's own installs make, a
-directory or, as Homebrew's, a link to one -- is
-refused, giving the commands that make it and give it to the server's
-`ext/` owner; an `ext/` owned by neither that owner nor root is refused,
+anything: a server with no `ext/` of its own, which every Xymon server
+install makes, is refused as an install incomplete; a client tree with no
+`ext/` -- which Xymon's own installs make, a directory or, as Homebrew's, a
+link to one -- is refused, giving the commands that make it, or what a
+link names, and give it to the server's `ext/` owner; an `ext/` owned by neither that owner nor root is refused,
 giving the `chown`, as the part's task runs as the server's xymonlaunch;
 and the person running it owns that `ext/`, as S35 has it. A verb that
 reads finds a tree with no `ext/` empty, saying nothing. Under `DESTDIR`,
