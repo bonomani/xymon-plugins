@@ -34,15 +34,12 @@ named holds the detail.
 `verify` read a client's tree (#172). For a `plugins` column of a client
 host on its Xymon server, in this order:
 
-1. `clean --client`, for the manual page links a removed client plugin
-   left, `verify --client` saying them (decided 2026-11-24: those links
-   only, until a client part has a task).
-2. `task:` renamed `server-task:`; a client part's task, `client-task:`
-   (decided 2026-11-22).
-3. `enable`/`disable --client` through the client's `clientlaunch.d` (SPEC
+1. `task:` renamed `server-task:`; a client part's task, `client-task:`
+   (decided 2026-11-22); `clean --client` then takes its task link too.
+2. `enable`/`disable --client` through the client's `clientlaunch.d` (SPEC
    first: how the link is made, and a client whose `clientlaunch.cfg` does
    not read the directory).
-4. xymon-plugin's client task sending the client's `plugins` column. To
+3. xymon-plugin's client task sending the client's `plugins` column. To
    decide then: whether each client asks GitHub, or asks its server (with
    "the code comes from a source", below).
 

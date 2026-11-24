@@ -441,8 +441,29 @@ PATH="$work/gh:$PATH" x outdated XYMONHOME="$c"
 [ "$rc" -eq 0 ] || fail "[S32] outdated, no part, on a client's tree up to date: not 0 ($rc): $out"
 assert_contains "Xymon client $c:" "$out" "[S32] outdated with no part reads a client's tree named"
 assert_contains "xymon-plugin: $version installed; up to date" "$out" "[S32] and says it up to date"
-x remove --client xymon-plugin XYMONHOME="$c"
-refused "[S35]" "clean --client" "clean does not read a client's tree yet" clean --client
+# clean --client (S31): installed, refused, naming remove; its directory
+# removed by hand, the manual page's link left is said by verify and taken
+# by clean, with --yes off a terminal, and only it: a link of another
+# tree's plugin stays.
+refused "[S31]" "clean --client of a plugin installed" "xymon-plugin is installed: ./xymon-plugin remove --client xymon-plugin" clean --client xymon-plugin XYMONHOME="$c"
+mkdir -p "$work/other/ext/gone"; : > "$work/other/ext/gone/gone.8"; ln -s "$work/other/ext/gone/gone.8" "$man/man8/gone.8"
+rm -rf "$c/ext/xymon-plugin"
+x verify --client XYMONHOME="$c"
+[ "$rc" -eq 4 ] || fail "[S30] verify --client, a manual page's link left: not 4 ($rc): $out"
+assert_contains "untidy: $man/man8/xymon-plugin.8, a manual page's link of xymon-plugin, which is gone: ./xymon-plugin clean --client xymon-plugin" "$out" "[S30] verify --client says the link left, naming clean --client"
+assert_not_contains "gone.8" "$out" "[S30] and not a link into another tree"
+x clean --client --all XYMONHOME="$c"
+[ "$rc" -eq 4 ] || fail "[S31] clean --client off a terminal without --yes: not 4 ($rc): $out"
+assert_contains "Nothing removed: off a terminal, --yes removes it." "$out" "[S31] off a terminal, clean --client removes nothing without --yes"
+[ -L "$man/man8/xymon-plugin.8" ] || fail "[S31] clean --client without --yes removed the link"
+x clean --client xymon-plugin --yes XYMONHOME="$c"
+[ "$rc" -eq 0 ] || fail "[S31] clean --client --yes failed ($rc): $out"
+assert_contains "Removed $man/man8/xymon-plugin.8." "$out" "[S31] clean --client --yes removes the link left"
+{ [ -e "$man/man8/xymon-plugin.8" ] || [ -L "$man/man8/xymon-plugin.8" ]; } && fail "[S31] clean --client left the link"
+[ -L "$man/man8/gone.8" ] || fail "[S31] clean --client took a link into another tree"
+rm -f "$man/man8/gone.8"
+x verify --client XYMONHOME="$c"
+[ "$rc" -eq 0 ] || fail "[S30] verify --client after clean: not 0 ($rc): $out"
 # enable with two parts: no command for the client part, which has no task.
 refused "[S24]" "enable, two parts" "the client part has no task" enable --server --client xymon-plugin XYMONHOME="$c"
 assert_not_contains "enable --client" "$out" "[S24] enable with two parts proposes enable --client"
