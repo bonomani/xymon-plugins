@@ -1002,6 +1002,9 @@ own_client() {
 	OWNOF=$srv XYMONHOME=$cc
 	CHOSEN="$CHOSEN, the client tree of the Xymon server $srv"
 	case $VERB in status|verify|outdated) return 0 ;; esac
+	# The server's ext/, whose owner the client tree's is held to: every
+	# Xymon server install makes it, and a server without it is broken.
+	{ [ -d "$srv/ext" ] && [ ! -L "$srv/ext" ]; } || die "$srv has no directory ext/, which every Xymon server install makes: its install is incomplete; no client part goes in its client tree until it has one"
 	# shellcheck disable=SC2012 # ls -n gives one directory's owner
 	su=$(ls -nd "$srv/ext" | awk '{ print $3 }')
 	# shellcheck disable=SC2012 # ls names one owner

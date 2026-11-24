@@ -188,6 +188,13 @@ for v in "$c/" "$work/clientlink"; do
 	{ [ -e "$link" ] || [ -L "$link" ]; } && fail "[S36] XYMONCLIENTHOME $v, respelt: remove left the link"
 done
 
+# The server without ext/: its install broken, said, nothing guessed.
+mv "$s/ext" "$work/sext.away"
+x install --client oc XYMONHOME="$s"; refused "install --client, the server without ext/"
+assert_contains "$s has no directory ext/, which every Xymon server install makes: its install is incomplete" "$out" "[S36] the server without ext/: refused, saying so"
+assert_not_contains "cannot access" "$out" "[S36] the server without ext/: no raw error"
+mv "$work/sext.away" "$s/ext"
+
 # No ext/: refused, the commands given; the read verbs find it empty.
 mv "$c/ext" "$work/ext.away"
 x install --client oc XYMONHOME="$s"; refused "install --client, no ext/"
