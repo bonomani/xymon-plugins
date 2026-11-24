@@ -61,9 +61,8 @@ rm -rf "$work/cfg"
 x status --client XYMONHOME="$c"
 [ "$rc" -eq 0 ] || fail "[S15] status --client failed: $out"
 assert_contains "Xymon client $c:" "$out" "[S15] status --client names the client's tree"
-assert_contains "  xymon-plugin: $version installed; this copy has $version" "$out" "[S15] status --client says the plugin installed and its version"
+assert_contains "  xymon-plugin: $version installed, off; this copy has $version" "$out" "[S15] status --client says the plugin installed and its version"
 assert_not_contains "Your tools" "$out" "[S15] --client keeps to the client"
-assert_not_contains ", off" "$out" "[S15] a client part has no task to be said on or off"
 
 x verify --client XYMONHOME="$c"
 assert_equal 0 "$rc" "[S30] verify --client of an install as it was left exits 0: $out"
@@ -91,15 +90,15 @@ assert_contains "broken: xymon-plugin: the link $man/man8/xymon-plugin.8 points 
 ln -sf "$d/xymon-plugin.8" "$man/man8/xymon-plugin.8"
 
 # Untidy: a file no install wrote, a .new and a .old, which cannot run;
-# the .new named as a task file, no file of the administrator's in a part
-# with no task; the .old, kept by an update (S7).
-: > "$d/tasks.cfg.new"; : > "$d/notes.old"
+# the task file's .new, this version's beside the administrator's; any
+# other .new, no file of theirs; the .old, kept by an update (S7).
+: > "$d/tasks.cfg.new"; : > "$d/xymon-plugin.new"; : > "$d/notes.old"
 x verify --client XYMONHOME="$c"
 assert_equal 4 "$rc" "[S30] a .new and a .old in a client part exit 4: $out"
-assert_contains "untidy: xymon-plugin: tasks.cfg.new is not what was installed: ./xymon-plugin update --client xymon-plugin" "$out" "[S30] a .new is untidy"
+assert_contains "untidy: xymon-plugin: tasks.cfg.new, this version's beside yours: compare, then remove it" "$out" "[S30] the task file's .new is untidy, beside the administrator's"
+assert_contains "untidy: xymon-plugin: xymon-plugin.new is not what was installed: ./xymon-plugin update --client xymon-plugin" "$out" "[S30] any other .new is untidy"
 assert_contains "untidy: xymon-plugin: notes.old, yours, kept by an update: compare, then remove it" "$out" "[S30] a .old is untidy, kept by an update"
-assert_not_contains "beside yours" "$out" "[S30] a client part with no task has no file of the administrator's"
-rm -f "$d/tasks.cfg.new" "$d/notes.old"
+rm -f "$d/tasks.cfg.new" "$d/xymon-plugin.new" "$d/notes.old"
 
 # An ext/ not the person's: read all the same, as nothing changes.
 realid=$(command -v id)
@@ -149,7 +148,7 @@ x status
 [ "$rc" -eq 0 ] || fail "[S25] status with nothing named failed: $out"
 assert_contains "Xymon server $s:" "$out" "[S25] status lists the server found"
 assert_contains "Xymon client $c:
-  xymon-plugin: $version installed; this copy has $version" "$out" "[S25] status lists the standalone client tree found, with what it holds"
+  xymon-plugin: $version installed, off; this copy has $version" "$out" "[S25] status lists the standalone client tree found, with what it holds"
 assert_contains "Its client $o/client:" "$out" "[S25] a server's own client tree is said in its server's section"
 assert_not_contains "Xymon client $o/client" "$out" "[S25] and not as a standalone client"
 assert_contains "Xymon client $q/client:

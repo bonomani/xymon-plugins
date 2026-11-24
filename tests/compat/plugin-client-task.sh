@@ -120,6 +120,11 @@ assert_equal "$c/ext/ctask/tasks.cfg" "$(readlink "$link")" "[S7] the task still
 
 # A version with no task: the link goes, the edited file kept as a .old.
 x "$v3" update --client ctask; ok "update --client to a version with no task"
+for v in enable disable; do
+	x "$v3" "$v" --client ctask
+	[ "$rc" -ne 0 ] || fail "[S24] $v --client of a plugin with no client task was taken: $out"
+	assert_contains "ctask has no task to turn on or off" "$out" "[S24] $v --client of a plugin with no client task: refused, saying so"
+done
 { [ -e "$link" ] || [ -L "$link" ]; } && fail "[S7] a version with no task left the link"
 assert_file_exists "$d/tasks.cfg.old"
 assert_contains "INTERVAL 1h" "$(cat "$d/tasks.cfg.old")" "[S7] and kept the edited task file as a .old"

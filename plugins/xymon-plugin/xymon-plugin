@@ -1703,7 +1703,7 @@ enable() {
 	old_link "$1"
 	# On already: for xymon-plugin, the way to have the column sent now,
 	# a release published since its last run among what it says (S33).
-	[ -L "$TASKDIR/$1.cfg" ] && { echo "$1 is on already"; [ "$1" != "$self" ] || [ "$TPART" != server ] || COLUMN=1; return 0; }
+	[ -L "$TASKDIR/$1.cfg" ] && { echo "$1 is on already"; [ "$1" != "$self" ] || COLUMN=1; return 0; }
 	# Before the link: a tree whose tasks.cfg, or clientlaunch.cfg, does
 	# not read the directory would not have the task, whatever is linked.
 	if ! reads_tasks; then
@@ -1715,7 +1715,7 @@ as Xymon's own $LAUNCHCFG has it; --force makes the link all the same, where xym
 	{ mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR" && ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$1.cfg"; } \
 		|| die "could not make $TASKDIR/$1.cfg: $1 stays off"
 	echo "$1 is on: xymonlaunch reads it within half a minute and starts it; one that keeps failing it holds for ten minutes after five restarts"
-	[ "$1" != "$self" ] || [ "$TPART" != server ] || COLUMN=1
+	[ "$1" != "$self" ] || COLUMN=1
 }
 disable() {
 	[ -n "$(held "$EXTROOT" "$1" "$TASKKEY")" ] || die "$1 has no task to disable"
@@ -1727,17 +1727,35 @@ disable() {
 }
 
 # column -- the plugins column sent at once, its task on, after a run that
-# changed the server's part, or enable of this plugin (S33): not up to 30
-# hours later. The installed reporter, with no wait, under the server's
+# changed the tree's part, or enable of this plugin (S33): not up to 30
+# hours later. The installed reporter, with no wait, under the tree's
 # environment, says what it sent or why not; never the command's result.
+# A client's environment lacks the host's name, which runclient.sh gives
+# its tasks: the one the task wrote in XYMONTMP, or, before any run, the
+# one in runclient.sh's pid file.
 COLUMN=
 column() {
 	[ -n "$COLUMN" ] && [ -z "$DESTDIR" ] && [ -L "$TASKDIR/$self.cfg" ] || return 0
 	r=$EXTROOT/$self/$self-report.sh
 	[ -f "$r" ] || { echo "The plugins column is not sent: $r is gone"; return 0; }
-	[ -x "$XYMONHOME/bin/xymoncmd" ] || { echo "The plugins column is not sent: no $XYMONHOME/bin/xymoncmd to give it the server's environment"; return 0; }
-	echo "The plugins column, sent now:"
-	XYMON_PLUGINS_WAIT=0 "$XYMONHOME/bin/xymoncmd" --env="$XYMONHOME/etc/xymonserver.cfg" /bin/sh "$r" </dev/null 2>&1 | sed -e 's/^/  /'
+	xc=$XYMONHOME/bin/xymoncmd
+	[ -x "$xc" ] || { echo "The plugins column is not sent: no $xc to give it the $TPART's environment"; return 0; }
+	if [ "$TPART" = server ]; then
+		echo "The plugins column, sent now:"
+		XYMON_PLUGINS_WAIT=0 "$xc" --env="$XYMONHOME/etc/xymonserver.cfg" /bin/sh "$r" </dev/null 2>&1 | sed -e 's/^/  /'
+		return 0
+	fi
+	ce=$XYMONHOME/etc/xymonclient.cfg
+	# shellcheck disable=SC2016 # expanded under xymoncmd
+	ct=$("$xc" --env="$ce" /bin/sh -c 'printf %s "$XYMONTMP"' </dev/null 2>/dev/null)
+	ch=; [ -z "$ct" ] || ch=$(sed -n 1p "$ct/xymon-plugin.host" 2>/dev/null)
+	if [ -z "$ch" ]; then
+		set -- "$XYMONHOME"/logs/clientlaunch.*.pid
+		if [ $# -eq 1 ] && [ -f "$1" ]; then ch=${1##*/clientlaunch.}; ch=${ch%.pid}; fi
+	fi
+	[ -n "$ch" ] || { echo "The plugins column is not sent: its task has not run yet to give the host's name, nor is there one $XYMONHOME/logs/clientlaunch.NAME.pid"; return 0; }
+	echo "The plugins column, sent now for $ch:"
+	MACHINEDOTS=$ch XYMON_PLUGINS_WAIT=0 "$xc" --env="$ce" /bin/sh "$r" --client </dev/null 2>&1 | sed -e 's/^/  /'
 	return 0
 }
 
@@ -2742,6 +2760,7 @@ uninstall_client() {
 	sa=$EXTROOT/.xymon-plugin.$1
 	if cut_short "$1" && marked "$sa" "$1" && aside_empty "$1"; then rm -rf "${sa:?}"; fi
 	rm -rf "$EXTROOT/$1" || die "could not remove all of $EXTROOT/$1: what is left is listed above"
+	REMOVED=1
 	if [ -e "$sa" ] || [ -L "$sa" ]; then stale "$sa" "$1"; fi
 	REMEMBER=client
 	drop_manual "$m" "$MANDIR" "$XYMONHOME/ext/$1" ""
@@ -3589,6 +3608,7 @@ EOF
 			[ -n "$NAMES" ] || LIST=$(installs client)
 			# Remembered only once something is removed.
 			REMEMBER=
+			REMOVED=
 			for n in $(deepest_first "$EXTROOT" client); do uninstall_client "$n"; done
 		else
 			[ -n "$NAMES" ] || LIST=$(with_installed "$TOOLSROOT")
@@ -3600,11 +3620,11 @@ EOF
 			fi
 		fi ;;
 esac
-# The server's part changed: install and update by a MANIFEST to write,
-# remove by a directory gone.
+# A Xymon part changed: install and update by a MANIFEST to write, remove
+# by a directory gone.
 case $PART$VERB in
-	serverinstall|serverupdate) [ -z "$MANIFESTS" ] || COLUMN=1 ;;
-	serverremove) [ -z "$REMOVED" ] || COLUMN=1 ;;
+	serverinstall|serverupdate|clientinstall|clientupdate) [ -z "$MANIFESTS" ] || COLUMN=1 ;;
+	serverremove|clientremove) [ -z "$REMOVED" ] || COLUMN=1 ;;
 esac
 column
 # The installation a run changed, remembered now that it is done (S25).

@@ -35,7 +35,7 @@ export XYMONAPI_PYTHON="$work/haspy"
 # read-back with its colour, or fails with XYMONFAIL; curl prints the
 # releases in $work/tags, or fails with CURL=fail; sleep keeps a wait asked.
 bin=$work/bin; mkdir -p "$bin"
-printf 'XYMON="%s"\nXYMSRV="0.0.0.0"\nMACHINEDOTS="srv.example.com"\nXYMONHOME="%s"\n' "$bin/xymon" "$home" >> "$home/etc/xymonserver.cfg"
+printf 'XYMON="%s"\nXYMSRV="192.0.2.1"\nMACHINEDOTS="srv.example.com"\nXYMONHOME="%s"\n' "$bin/xymon" "$home" >> "$home/etc/xymonserver.cfg"
 cat > "$home/bin/xymoncmd" <<'SH'
 #!/bin/sh
 case $1 in --env=*) f=${1#--env=}; shift ;; *) f=$(dirname "$0")/../etc/xymonserver.cfg ;; esac

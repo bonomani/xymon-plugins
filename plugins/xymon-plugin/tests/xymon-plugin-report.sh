@@ -49,11 +49,12 @@ cat > "$bin/xymon" <<'SH'
 #!/bin/sh
 [ -n "${XYMONFAIL:-}" ] && { echo "Could not connect to Xymon daemon@$1" >&2; exit 5; }
 case $2 in
-xymondboard*)
+xymondboard*test=plugins*)
 	# What xymond kept: the colour sent, unless XYMONDROP says it kept
 	# nothing, as for a host hosts.cfg does not name.
 	printf '%s\n' "$2" >> "$WORK/asked"
 	[ -n "${XYMONDROP:-}" ] || sed -n '1s/^status+[^ ]* [^ ]* \([a-z]*\) .*/\1/p' "$WORK/sent" ;;
+xymondboard*) echo some.host ;;
 *) printf '%s\n' "$2" > "$WORK/sent" ;;
 esac
 SH
@@ -82,7 +83,7 @@ export WORK=$work
 # report [REPORTER] -- the reporter run as xymonlaunch runs it.
 report() {
 	RC=0; rm -f "$work/sent"
-	PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
+	PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=192.0.2.1 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
 		XYMON_PLUGINS_WAIT="${WAIT:-0}" "${1:-$ext/xymon-plugin-report.sh}" >"$work/log" 2>&1 || RC=$?
 }
 sent() { cat "$work/sent" 2>/dev/null || :; }
@@ -165,12 +166,12 @@ assert_contains "  &yellow cannot read the plugins in /x/ext" "$(sent)" "[S33] i
 
 XYMONFAIL=1 report
 assert_equal 1 "$RC" "[S33] a status that could not be sent ends the reporter with 1"
-assert_contains "could not send green to 0.0.0.0" "$(cat "$work/log")" "and the log says so"
+assert_contains "could not send green to 192.0.2.1" "$(cat "$work/log")" "and the log says so"
 
 # MACHINEDOTS names the host, the server's name in xymonserver.cfg, the one
 # hosts.cfg knows: not MACHINE, which may be the system's name instead, as
 # with Homebrew's Xymon (localhost against bcs-Mac-mini,local).
-RC=0; PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=localhost MACHINE=bcs-Mac-mini,local \
+RC=0; PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=192.0.2.1 XYMONHOME="$home" MACHINEDOTS=localhost MACHINE=bcs-Mac-mini,local \
 	XYMON_PLUGINS_WAIT=0 "$ext/xymon-plugin-report.sh" >"$work/log" 2>&1 || RC=$?
 assert_contains "status+31h localhost.plugins green " "$(first_line "$(sent)")" "[S33] MACHINEDOTS names the host, not MACHINE"
 assert_contains "xymondboard host=localhost test=plugins" "$(cat "$work/asked")" "[S33] and the status is read back for it"
@@ -201,7 +202,7 @@ printf '#!/bin/sh\necho "new code, waited ${XYMON_PLUGINS_WAITED:-}, pid $$" >> 
 for _ in 1 2 3 4 5; do
 	rm -f "$work/slept" "$work/newcode"
 	RC=0; rm -f "$work/sent"
-	PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
+	PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=192.0.2.1 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
 		XYMON_PLUGINS_WAIT=40 SWAP="$work/reporter.new" SWAPTO="$ext/xymon-plugin-report.sh" \
 		"$ext/xymon-plugin-report.sh" >"$work/log" 2>&1 & r_pid=$!
 	wait "$r_pid" || RC=$?
@@ -212,7 +213,7 @@ rm -f "$ext/xymon-plugin-report.sh" && cp "$work/reporter.keep" "$ext/xymon-plug
 assert_equal "new code, waited $(cat "$work/slept"), pid $r_pid" "$(cat "$work/newcode")" "[S33] in the same process, told how long it waited"
 [ -s "$work/sent" ] && fail "[S33] the code replaced sent all the same"
 rm -f "$work/slept"
-RC=0; PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
+RC=0; PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=192.0.2.1 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
 	XYMON_PLUGINS_WAIT=40 XYMON_PLUGINS_WAITED=12 "$ext/xymon-plugin-report.sh" >"$work/log" 2>&1 || RC=$?
 [ -e "$work/slept" ] && fail "[S33] told it waited, the reporter waited again"
 assert_contains "waited 12s;" "$(cat "$work/log")" "[S33] and says how long it waited"
@@ -223,7 +224,7 @@ assert_contains "waited 12s;" "$(cat "$work/log")" "[S33] and says how long it w
 
 # Without the server's environment it says what is missing, and sends
 # nothing.
-RC=0; env -u XYMON PATH="$bin:$PATH" XYMSRV=0.0.0.0 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
+RC=0; env -u XYMON PATH="$bin:$PATH" XYMSRV=192.0.2.1 XYMONHOME="$home" MACHINEDOTS=srv.example.com \
 	"$ext/xymon-plugin-report.sh" >"$work/log" 2>&1 || RC=$?
 assert_equal 1 "$RC" "without XYMON: 1"
 assert_contains "XYMON is not set" "$(cat "$work/log")" "saying what is missing"

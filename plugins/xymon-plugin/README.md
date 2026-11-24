@@ -22,7 +22,7 @@ or removes a plugin runs it; installed on a Xymon server, it also sends the
 | install, update, remove plugins | `./xymon-plugin VERB --server NAME` (or `--tools`), [verbs](#reference) |
 | see where things stand, on a terminal | `./xymon-plugin` with no verb |
 | know its own version | `./xymon-plugin --version` |
-| see whether a newer release is out, every day | the `plugins` column of the server's host ([details](#the-plugins-column)) |
+| see whether a newer release is out, every day | the `plugins` column of the server's host, or a client's ([details](#the-plugins-column)) |
 | read the short version | [plugins/README.md](../README.md) |
 | read the manual page | [xymon-plugin(8)](xymon-plugin.8) |
 
@@ -55,6 +55,11 @@ go, the `plugins` column, the environment and exit statuses:
 - Besides `EXSERVICE=plugins` in `alerts.cfg`, a rule of its own can send it
   elsewhere.
 - `wget`, used where `curl` is not there, does not send `GH_TOKEN`.
+- On a standalone client, `enable --client xymon-plugin` turns on its own
+  task: the client asks GitHub itself and sends its `plugins` column to its
+  server, or to each of `XYMSERVERS`. Sent at once, it goes under the name
+  the task last ran with, or the one in `logs/clientlaunch.NAME.pid`.
+  GitHub allows 60 anonymous requests an hour from one address.
 
 ### Choosing the part and the installation
 
@@ -88,7 +93,7 @@ go, the `plugins` column, the environment and exit statuses:
 | part | puts, besides the code |
 |---|---|
 | server | its task in `ext/NAME/tasks.cfg`, off; its manual page under `MANDIR` (`/usr/share/man`, or Homebrew's `share/man` for a Xymon it installed); a copy for the API to serve at `/plugins` |
-| client | its manual page under `MANDIR`, when that can be written; nothing else |
+| client | its task in `ext/NAME/tasks.cfg`, off; its manual page under `MANDIR`, when that can be written |
 | tools | its command in `$PREFIX/bin`; its manual page in `$PREFIX/share/man/man1`. `PREFIX` is `~/.local` |
 
 - A plugin needing a newer Xymon than the server's (its `PLUGIN`'s `xymon:`

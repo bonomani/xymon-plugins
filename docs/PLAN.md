@@ -33,14 +33,12 @@ named holds the detail.
 `--client` installs, updates and removes a client part (#165); `status`,
 `verify`, `outdated` and `clean` read a client's tree (#172, #181, #182); a
 client part's task, `client-task:`, is a server part's in the client's
-tree, `enable --client` linking it from `clientlaunch.d/`. For a `plugins`
-column of a client host on its Xymon server, next:
+tree, `enable --client` linking it from `clientlaunch.d/`; xymon-plugin's
+client task sends the client's `plugins` column, each client asking GitHub.
 
-1. xymon-plugin's client task sending the client's `plugins` column. To
-   decide then: whether each client asks GitHub, or asks its server (with
-   "the code comes from a source", below).
-
-Later for the client: a server's own client tree; asking instead of refusing
+Later for the client: each client asking its server for the latest
+releases rather than GitHub (2026-11-24, with "the code comes from a
+source" and #29); a server's own client tree; asking instead of refusing
 a tree in doubt; the dialogue offering client trees; a client's
 authentication (#29); `declared()` staging `client-files:` for `/plugins`;
 an `ext/` owned but not writable (a raw `mkdir` error today).

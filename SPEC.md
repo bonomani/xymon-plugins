@@ -680,7 +680,7 @@ that, before any `VERSION` is read. Otherwise it ends with 7 when a
 of a plugin that a newer release exists, and with 0 when it said of none --
 for a script or a Xymon task to read.
 
-**S33. The plugins column says it on the server.**
+**S33. The plugins column says it on the server and on a client.**
 The `xymon-plugin` plugin installs, off as every task (S5), a task that the
 administrator turns on with `enable` (S13): once a day, after a wait drawn
 at random up to 6 hours -- after which, when it waited, it runs again from
@@ -714,6 +714,24 @@ command's own result does not depend on it. Under `DESTDIR`, with the task
 off, after a run that changed nothing, after `enable` of another plugin or
 `disable`, or once `xymon-plugin` itself is removed, nothing is sent; the
 column then goes purple once 31 hours have passed, as before.
+On a standalone client (S35), `xymon-plugin`'s client part installs the
+same script and a task of its own, `client-task:`, off until `enable
+--client xymon-plugin`: the same run, with `outdated --client`, under the
+client's environment -- `xymonclient.cfg`, and `MACHINEDOTS` as
+`runclient.sh` gives it, its `--hostname` or the system's name --, sending
+the client's status `plugins`, its log `xymon-plugin.log` in
+`XYMONCLIENTLOGS`. Each client asks GitHub itself, anonymously, which
+GitHub allows 60 times an hour from one address. Each run writes the name
+it sent under in `$XYMONTMP/xymon-plugin.host`. The column is sent at once
+as on the server, after a `--client` run that changed the client's tree
+and after `enable --client xymon-plugin`, under `xymoncmd` reading
+`xymonclient.cfg`, with the name that file holds, or, before any run, the
+one `runclient.sh` puts in its `clientlaunch.NAME.pid`; with neither,
+nothing is sent, said. On a server as on a client, a status goes to
+`XYMSRV`, or, where that is `0.0.0.0`, to each server `XYMSERVERS` names,
+each read back: one that did not keep it is said in the log and ends the
+run with 1; one that refuses to be read (xymond's `--www-senders`), its
+board read back empty for every host, is said and does not.
 
 **S34. A task says what it needs to what can wait for it, and checks the
 rest itself.**
