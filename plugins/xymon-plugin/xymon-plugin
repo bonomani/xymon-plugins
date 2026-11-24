@@ -1010,13 +1010,14 @@ own_client() {
 # own_self PLUGIN -- true when PLUGIN is xymon-plugin and XYMONHOME a
 # server's own client tree, where its client part does not go: the
 # server's copy, the same installer, manages that tree (S36). Named, it was
-# refused before anything changed (own_named); among those not named, it
-# is passed over, said once.
+# refused before anything changed (own_named); among those not named, or
+# needed by another, it is passed over, said once: the server's copy
+# stands for it, a need on it met.
 own_self() {
 	[ -n "$OWNOF" ] && [ "$1" = "$self" ] || return 1
 	case " $DONE " in *" $self "*) return 0 ;; esac
 	DONE="$DONE $self"
-	echo "$self is passed over: its client part does not go in the client tree of a Xymon server"
+	echo "$self is passed over: the server's copy stands for its client part in the client tree of a Xymon server"
 }
 # own_named -- refuse, before anything changes, a verb that changes
 # something naming xymon-plugin in a server's own client tree (S36), with
