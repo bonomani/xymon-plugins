@@ -169,6 +169,8 @@ DESTDIR=${DESTDIR:-}
 # What chose the installation, said before anything changes: --xymon-home,
 # which wins over XYMONHOME, XYMONHOME, or detection, confirmed.
 CHOSEN=
+# The server whose own client tree XYMONHOME is, once --client chose it (S36).
+OWNOF=
 if [ -n "$XH_OPT" ]; then
 	if [ -n "$XYMONHOME" ] && [ "$XYMONHOME" != "$XH_OPT" ]; then CHOSEN="named by --xymon-home, over XYMONHOME=$XYMONHOME"
 	else CHOSEN="named by --xymon-home"; fi
@@ -244,13 +246,19 @@ server_paths() {
 	# A client's tree has its tasks launched from clientlaunch.d/, which its
 	# clientlaunch.cfg reads; a server's from tasks.d/ and tasks.cfg (S6).
 	# The first call, before marks is defined, is a server's.
-	if [ -z "${1:-}" ] && [ -z "${DESTDIR:-}" ] && [ "$(marks "$XYMONHOME")" = client ]; then
+	# A server's own client tree (S36, OWNOF the server) has its tasks
+	# launched by that server's xymonlaunch: LAUNCHHOME is the tree whose
+	# launcher reads them, XYMONHOME's own but there.
+	LAUNCHHOME=${OWNOF:-$XYMONHOME}
+	if [ -n "${OWNOF:-}" ]; then
+		TPART=client TASKD=tasks.d LAUNCHCFG=tasks.cfg
+	elif [ -z "${1:-}" ] && [ -z "${DESTDIR:-}" ] && [ "$(marks "$XYMONHOME")" = client ]; then
 		TPART=client TASKD=clientlaunch.d LAUNCHCFG=clientlaunch.cfg
 	else
 		TPART=server TASKD=tasks.d LAUNCHCFG=tasks.cfg
 	fi
 	TASKKEY=$TPART-task
-	TASKDIR=$(inside "$XYMONHOME/etc/$TASKD") || exit 1
+	TASKDIR=$(inside "$LAUNCHHOME/etc/$TASKD") || exit 1
 	# What other machines install from, which the API serves at /plugins:
 	# each plugin installed on the server stages its directory here, as in
 	# the repository, beside this script and LICENSE.
@@ -533,10 +541,15 @@ EOF
 # client_home SERVER -- the client tree SERVER's xymonserver.cfg names as
 # its XYMONCLIENTHOME, as written, or nothing.
 client_home() {
-	c=$(sed -n 's/^[[:space:]]*XYMONCLIENTHOME[[:space:]]*=[[:space:]]*//p' "$1/etc/xymonserver.cfg" 2>/dev/null \
-		| tail -n 1 | sed -e 's/[[:space:]]*#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/")
+	c=$(xch "$1")
 	case $c in *'$'*) c= ;; esac
 	printf '%s\n' "$c"
+}
+# xch SERVER -- XYMONCLIENTHOME as SERVER's xymonserver.cfg writes it, a
+# variable in it or not.
+xch() {
+	sed -n 's/^[[:space:]]*XYMONCLIENTHOME[[:space:]]*=[[:space:]]*//p' "$1/etc/xymonserver.cfg" 2>/dev/null \
+		| tail -n 1 | sed -e 's/[[:space:]]*#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
 }
 
 # The repository the plugins are released from.
@@ -866,14 +879,14 @@ remember_tree() {
 	[ -z "$DESTDIR" ] || return 0
 	{ [ -n "$ROOTUSER" ] && [ -n "${SUDO_USER:-}" ]; } && return 0
 	conf=$(person_conf) || return 0
-	mkdir -p "$conf" 2>/dev/null && printf '%s\n' "$XYMONHOME" > "$conf/installation-used-last-$1" 2>/dev/null \
-		|| echo "xymon-plugin: could not remember $XYMONHOME as the installation used last in $conf" >&2
+	mkdir -p "$conf" 2>/dev/null && printf '%s\n' "$LAUNCHHOME" > "$conf/installation-used-last-$1" 2>/dev/null \
+		|| echo "xymon-plugin: could not remember $LAUNCHHOME as the installation used last in $conf" >&2
 }
 
 # hx -- --xymon-home and XYMONHOME, for a command printed, which the
 # dialogue runs by eval: quoted where a shell would split it, a quote in it
 # written '\''.
-hx() { printf ' --xymon-home %s' "$(shq "$XYMONHOME")"; }
+hx() { printf ' --xymon-home %s' "$(shq "$LAUNCHHOME")"; }
 
 # shq WORD -- WORD for a command printed, to paste or eval: quoted where a
 # shell would split it, a quote in it written '\''.
@@ -908,7 +921,7 @@ own_server() {
 # the command for it.
 own_refused() {
 	srv=$(own_server)
-	[ -z "$srv" ] || die "$XYMONHOME is the client tree of the Xymon server $srv: name the server, ./xymon-plugin $VERB --xymon-home $srv --server; a server's own client takes no client part yet"
+	[ -z "$srv" ] || die "$XYMONHOME is the client tree of the Xymon server $srv: name the server, ./xymon-plugin $VERB --xymon-home $srv --server, or --client for its client tree"
 }
 
 # client_home_ok -- refuse, before anything changes, a client's tree the
@@ -926,7 +939,7 @@ client_home_ok() {
 	[ ! -L "$XYMONHOME/ext" ] || die "$XYMONHOME/ext is a link: a client's plugins go in a directory of its tree, not elsewhere"
 	[ -d "$XYMONHOME/ext" ] || die "$XYMONHOME has no directory ext/, where a client's plugins go"
 	srv=$(own_server)
-	[ -z "$srv" ] || die "$XYMONHOME is the client tree of the Xymon server $srv: a server's own client takes no client part yet, only a standalone client's tree"
+	[ -z "$srv" ] || die "$XYMONHOME is the client tree of the Xymon server $srv: name the server, ./xymon-plugin $VERB --client --xymon-home $srv"
 	beside
 	if [ -n "$s2" ] && [ "$(marks "$s2")" = server ]; then
 		o=$(client_home "$s2")
@@ -941,6 +954,66 @@ client_home_ok() {
 		o=$(ls -ld "$XYMONHOME/ext" | awk '{ print $3 }')
 		die "$XYMONHOME/ext is $o's, not $(id -un)'s: run this as $o, who writes, updates and removes its plugins"
 	fi
+}
+
+# own_client -- --client with XYMONHOME a server's tree: the server's own
+# client tree (S36), the one its xymonserver.cfg names as XYMONCLIENTHOME,
+# a variable in it read through the server's xymoncmd. Refused, saying
+# what was read, when it names none, a directory not there, one without a
+# client's marks, or the server's own; and, for a verb that changes
+# something, when that tree's ext/ is not there, or is the owner's of
+# neither the server's ext/ nor root's, giving the commands, or is not the
+# person's running this (S35). A verb that reads finds a tree with no
+# ext/ empty, saying nothing. XYMONHOME is then that tree, OWNOF the server.
+own_client() {
+	srv=$XYMONHOME
+	c=$(xch "$srv")
+	case $c in *'$'*)
+		c=$(env -i PATH=/usr/bin:/bin "$srv/bin/xymoncmd" --env="$srv/etc/xymonserver.cfg" env 2>/dev/null \
+			| sed -n 's/^XYMONCLIENTHOME=//p' | tail -n 1) ;;
+	esac
+	[ -n "$c" ] || die "$srv's xymonserver.cfg names no XYMONCLIENTHOME it can read: the server has no client tree of its own to take a client part"
+	cc=$(canon "$c")
+	[ -n "$cc" ] || die "$srv's XYMONCLIENTHOME, $c, is not there: the server's client tree it names is missing"
+	[ "$cc" != "$(canon "$srv")" ] || die "$srv's XYMONCLIENTHOME, $c, is the server's own tree: a client part does not go there"
+	[ "$(marks "$c")" = client ] || die "$srv's XYMONCLIENTHOME, $c, is no Xymon client's tree: it has not $CLIENT_MARKS"
+	OWNOF=$srv XYMONHOME=$c
+	CHOSEN="$CHOSEN, the client tree of the Xymon server $srv"
+	case $VERB in status|verify|outdated) return 0 ;; esac
+	# shellcheck disable=SC2012 # ls -n gives one directory's owner
+	su=$(ls -nd "$srv/ext" | awk '{ print $3 }')
+	# shellcheck disable=SC2012 # ls names one owner
+	sn=$(ls -ld "$srv/ext" | awk '{ print $3 }')
+	if [ -L "$c/ext" ] || [ ! -d "$c/ext" ]; then
+		[ ! -L "$c/ext" ] || die "$c/ext is a link: the server's client parts go in a directory of its client tree, not elsewhere"
+		die "$c has no directory ext/, where the server's client parts go, as Xymon's own installs make it: as root,
+  mkdir $c/ext && chown $sn $c/ext"
+	fi
+	# shellcheck disable=SC2012 # ls -n gives one directory's owner
+	cu=$(ls -nd "$c/ext" | awk '{ print $3 }')
+	# shellcheck disable=SC2012 # ls names one owner
+	cn=$(ls -ld "$c/ext" | awk '{ print $3 }')
+	# Its tasks run as the server's launcher: a tree another may write
+	# would run that one's code as the server.
+	[ "$cu" = "$su" ] || [ "$cu" = 0 ] || die "$c/ext is $cn's, neither the server's ext/ owner $sn's nor root's: its client parts' tasks would run as the server; as root,
+  chown $sn $c/ext"
+	[ "$cu" = "$(id -u)" ] || die "$c/ext is $cn's, not $(id -un)'s: run this as $cn, who writes, updates and removes its plugins"
+}
+
+# own_self PLUGIN -- true when PLUGIN is xymon-plugin and XYMONHOME a
+# server's own client tree, where its client part does not go: the
+# server's copy, the same installer, manages that tree (S36). Named, it is
+# refused, with the commands that remove a copy left there; with none
+# named, passed over, said.
+own_self() {
+	[ -n "$OWNOF" ] && [ "$1" = "$self" ] || return 1
+	# shellcheck disable=SC2086,SC2116 # NAMES, one line
+	case " $(echo $NAMES) " in *" $self "*)
+		rmc=; [ ! -e "$EXTROOT/$self" ] || rmc="; the copy there is removed, as its owner, by:
+  rm -rf $EXTROOT/$self $TASKDIR/$(tn "$self").cfg"
+		die "$self's client part does not go in the client tree of the Xymon server $OWNOF: the server's copy manages that tree$rmc" ;;
+	esac
+	echo "$self is passed over: its client part does not go in the client tree of a Xymon server"
 }
 
 # need_home KIND -- a part goes in the tree XYMONHOME names, and only in
@@ -968,11 +1041,12 @@ need_home() {
 		esac
 	else
 		case $1 in
-			server) die "$XYMONHOME is a Xymon server's tree ($SERVER_MARKS), not a client's: a server's tree takes the server part, --server" ;;
+			# A server's tree: its own client tree (S36).
+			server) own_client ;;
 			some) shift; die "$XYMONHOME is not a whole Xymon client's tree: it has $*, and a client's has $CLIENT_MARKS" ;;
 			none) die "$XYMONHOME is no Xymon client's tree: none of $CLIENT_MARKS is there" ;;
 		esac
-		case $VERB in status|verify) client_home_ok read ;; *) client_home_ok ;; esac
+		[ -n "${OWNOF:-}" ] || case $VERB in status|verify) client_home_ok read ;; *) client_home_ok ;; esac
 	fi
 	# Its paths again, now its kind is known: a client's launches its tasks
 	# from clientlaunch.d/.
@@ -1530,7 +1604,7 @@ is_on() { [ -L "$TASKDIR/$(tn "$1").cfg" ]; }
 # nothing to look at.
 reads_tasks() {
 	[ -z "$DESTDIR" ] || return 0
-	c=$(inside "$XYMONHOME/etc/$LAUNCHCFG") || exit 1
+	c=$(inside "$LAUNCHHOME/etc/$LAUNCHCFG") || exit 1
 	[ -f "$c" ] || return 0
 	grep -q '^[[:space:]]*\(optional[[:space:]]\{1,\}\)\{0,1\}directory[[:space:]]\{1,\}\(.*/\)\{0,1\}'"$(echo "$TASKD" | sed 's/\./\\./g')"'/\{0,1\}[[:space:]]*$' "$c"
 }
@@ -1622,7 +1696,7 @@ task() {
 	on=
 	this=$AS/tasks.cfg.this
 	# @LOGDIR@, a client task's log directory (S6): the client's on a client.
-	ld=XYMONSERVERLOGS; [ "$TPART" != client ] || ld=XYMONCLIENTLOGS
+	ld=XYMONSERVERLOGS; [ "$TPART" != client ] || [ -n "${OWNOF:-}" ] || ld=XYMONCLIENTLOGS
 	sed -e "s|@XYMONHOME@|$(sedesc "$XYMONHOME")|g" -e "s|@LOGDIR@|\$$ld|g" "$ROOT/plugins/$1/$t" > "$this" || exit 1
 	if [ -f "$link" ] && [ ! -L "$link" ]; then
 		on=1
@@ -1683,6 +1757,7 @@ enable_cmd() {
 
 # enable PLUGIN, disable PLUGIN -- its task on or off, by its link.
 enable() {
+	own_self "$1" && return 0
 	[ -n "$(held "$EXTROOT" "$1" "$TASKKEY")" ] || die "$1 has no task to enable"
 	[ -f "$EXTROOT/$1/tasks.cfg" ] || die "$1 is not installed in $EXTROOT"
 	ours "$1"
@@ -1694,10 +1769,10 @@ enable() {
 	# Before the link: a tree whose tasks.cfg, or clientlaunch.cfg, does
 	# not read the directory would not have the task, whatever is linked.
 	if ! reads_tasks; then
-		[ -n "$FORCE" ] || die "$XYMONHOME/etc/$LAUNCHCFG does not read $TASKD/, so xymonlaunch would not have $1's task: add the line
-  directory $XYMONHOME/etc/$TASKD
+		[ -n "$FORCE" ] || die "$LAUNCHHOME/etc/$LAUNCHCFG does not read $TASKD/, so xymonlaunch would not have $1's task: add the line
+  directory $LAUNCHHOME/etc/$TASKD
 as Xymon's own $LAUNCHCFG has it; --force makes the link all the same, where xymonlaunch reads $TASKD/ another way"
-		echo "xymon-plugin: $XYMONHOME/etc/$LAUNCHCFG does not read $TASKD/: $1's link is made all the same, as --force asks, and its task may not start" >&2
+		echo "xymon-plugin: $LAUNCHHOME/etc/$LAUNCHCFG does not read $TASKD/: $1's link is made all the same, as --force asks, and its task may not start" >&2
 	fi
 	# Its own task file linked from TASKD/ under another name, which
 	# xymonlaunch reads all the same: a second link would read it twice.
@@ -1714,9 +1789,9 @@ EOF
 	# without it, or under DESTDIR, the file itself and every file of TASKD/
 	# xymonlaunch would read. A name as xymonlaunch takes it: after "[", up
 	# to the first "]".
-	lc=$(inside "$XYMONHOME/etc/$LAUNCHCFG") || exit 1
-	if [ -z "$DESTDIR" ] && [ -x "$XYMONHOME/bin/xymoncfg" ] && [ -f "$lc" ]; then
-		read_by=$("$XYMONHOME/bin/xymoncfg" "$lc" 2>/dev/null)
+	lc=$(inside "$LAUNCHHOME/etc/$LAUNCHCFG") || exit 1
+	if [ -z "$DESTDIR" ] && [ -x "$LAUNCHHOME/bin/xymoncfg" ] && [ -f "$lc" ]; then
+		read_by=$("$LAUNCHHOME/bin/xymoncfg" "$lc" 2>/dev/null)
 	else
 		read_by=$(cat "$lc" 2>/dev/null
 			find "$TASKDIR" \( -type f -o -type l \) ! -name '.*' ! -name '*~' ! -name '*,v' ! -name 'README*' ! -name '*.dpkg-*' ! -name '*.rpm*' -exec cat {} + 2>/dev/null)
@@ -1724,7 +1799,7 @@ EOF
 	NL='
 '
 	case "$NL$(printf '%s\n' "$read_by" | sed -n -e 's/^[[:space:]]*\[\([^]]*\)\].*/\1/p')$NL" in
-		*"$NL$k$NL"*) die "xymonlaunch reads a task named [$k] already, in $XYMONHOME/etc/$LAUNCHCFG or a file it reads, which it would merge with $1's, unsaid: $1 stays off" ;;
+		*"$NL$k$NL"*) die "xymonlaunch reads a task named [$k] already, in $LAUNCHHOME/etc/$LAUNCHCFG or a file it reads, which it would merge with $1's, unsaid: $1 stays off" ;;
 	esac
 	{ mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR" && ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$(tn "$1").cfg"; } \
 		|| die "could not make $TASKDIR/$(tn "$1").cfg: $1 stays off"
@@ -1733,7 +1808,7 @@ EOF
 	# this enable, an install or by hand -- is not read until LAUNCHCFG
 	# changes. Its time changed, not its content, it is read again; the
 	# tasks that did not change go on running.
-	lc=$XYMONHOME/etc/$LAUNCHCFG
+	lc=$LAUNCHHOME/etc/$LAUNCHCFG
 	if [ -z "$DESTDIR" ] && [ -f "$lc" ] && ! touch "$lc" 2>/dev/null; then
 		echo "$1 is on, but $lc cannot be written to have xymonlaunch read $TASKD/ again: it starts the task within half a minute only if $TASKD/ was there when it started; else restart Xymon"
 	else
@@ -1742,6 +1817,7 @@ EOF
 	[ "$1" != "$self" ] || COLUMN=1
 }
 disable() {
+	own_self "$1" && return 0
 	[ -n "$(held "$EXTROOT" "$1" "$TASKKEY")" ] || die "$1 has no task to disable"
 	ours "$1"
 	is_on "$1" || { echo "$1 is off already"; return 0; }
@@ -2486,6 +2562,7 @@ task_gone() {
 # no virtualenv, no snippet, no SELinux module.
 install_client() {
 	case " $DONE " in *" $1 "*) return 0 ;; esac
+	own_self "$1" && return 0
 	passed_over "$EXTROOT" "$1" && return 0
 	ns=$(needs "$1" client) || exit 1
 	for n in $ns; do known "$n"; install_client "$n"; done
@@ -2763,6 +2840,7 @@ client_ok() {
 }
 
 uninstall_client() {
+	own_self "$1" && return 0
 	# Its directory gone (S9): the task link into it alone goes.
 	if [ ! -d "$EXTROOT/$1" ]; then
 		if [ "$(readlink "$TASKDIR/$(tn "$1").cfg" 2>/dev/null)" = "$XYMONHOME/ext/$1/tasks.cfg" ]; then
@@ -3041,7 +3119,7 @@ left_task() {
 		case $(readlink "$l") in
 			"$XYMONHOME/ext/"*/tasks.cfg) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%/tasks.cfg}
 				plain "$t" && ! present "$t" \
-					&& echo "$t$T$l$T$XYMONHOME/etc/$TASKD/${l##*/}${T}the task link of $t${T}proved" ;;
+					&& echo "$t$T$l$T$LAUNCHHOME/etc/$TASKD/${l##*/}${T}the task link of $t${T}proved" ;;
 		esac
 	done
 }

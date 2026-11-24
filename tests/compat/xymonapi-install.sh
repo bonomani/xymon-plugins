@@ -241,7 +241,7 @@ r() { refused "$@"; }
 r "install-server is now: ./xymon-plugin install --server" install-server xymonapi
 r "uninstall-tools is now: ./xymon-plugin remove --tools" uninstall-tools xymonapi
 r "install-client is now: ./xymon-plugin install --client" install-client xymonapi
-r "a server's tree takes the server part, --server" install --client xymon-plugin
+r "names no XYMONCLIENTHOME it can read" install --client xymon-plugin
 r "names no part" install xymonapi
 r "name the plugins to install, or --all" install --server
 r "name the plugins to remove, or --all" remove --tools
