@@ -820,11 +820,13 @@ names as `XYMONCLIENTHOME`, through which the server's host is monitored.
 turns on and off, and reads a plugin's client part there, as on a
 standalone client (S35); that tree named itself is refused, giving this
 form (S25). `XYMONCLIENTHOME` is read as Xymon's installs write it, an
-absolute path, taken resolved; a server that names none, a variable --
+absolute path, spelt once as the server's `XYMONHOME` is -- its links
+kept, as Homebrew's `opt/`, which names the current version --; a server that names none, a variable --
 which nothing here runs the server's programs to read --, a path not
 absolute, a directory that is not there, one without a client's marks
 (S18), or the server's own tree, is refused, saying what it read. Before a verb changes
-anything: a tree with no `ext/` -- which Xymon's own installs make -- is
+anything: a tree with no `ext/` -- which Xymon's own installs make, a
+directory or, as Homebrew's, a link to one -- is
 refused, giving the commands that make it and give it to the server's
 `ext/` owner; an `ext/` owned by neither that owner nor root is refused,
 giving the `chown`, as the part's task runs as the server's xymonlaunch;

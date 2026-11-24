@@ -996,33 +996,35 @@ own_client() {
 		server) die "$srv's XYMONCLIENTHOME, $c, is a Xymon server's tree ($SERVER_MARKS), not a client's" ;;
 		*) die "$srv's XYMONCLIENTHOME, $c, is no Xymon client's tree: it has not $CLIENT_MARKS" ;;
 	esac
-	# Spelt once, resolved: as written, a trailing / or a link would go into
-	# the task file, its link and MANIFEST, and a value respelt later would
-	# no longer match them.
-	OWNOF=$srv XYMONHOME=$cc
+	# Spelt once, as the server's XYMONHOME is: its links kept -- Homebrew's
+	# opt/ names the package's current version, which a path resolved
+	# through it would fix, broken at its next upgrade --, a trailing / or
+	# a . taken off, which would otherwise go into the task file, its link
+	# and MANIFEST.
+	OWNOF=$srv XYMONHOME=$(CDPATH='' cd -- "$c" && pwd)
 	CHOSEN="$CHOSEN, the client tree of the Xymon server $srv"
 	case $VERB in status|verify|outdated) return 0 ;; esac
 	# The server's ext/, whose owner the client tree's is held to: every
 	# Xymon server install makes it, and a server without it is broken.
-	{ [ -d "$srv/ext" ] && [ ! -L "$srv/ext" ]; } || die "$srv has no directory ext/, which every Xymon server install makes: its install is incomplete; no client part goes in its client tree until it has one"
+	# A link to a directory is one, as Homebrew's, which keeps it in var/.
+	[ -d "$srv/ext" ] || die "$srv has no directory ext/, which every Xymon server install makes: its install is incomplete; no client part goes in its client tree until it has one"
+	# Owners of what a link names, as the files go there.
 	# shellcheck disable=SC2012 # ls -n gives one directory's owner
-	su=$(ls -nd "$srv/ext" | awk '{ print $3 }')
+	su=$(ls -nLd "$srv/ext" | awk '{ print $3 }')
 	# shellcheck disable=SC2012 # ls names one owner
-	sn=$(ls -ld "$srv/ext" | awk '{ print $3 }')
-	if [ -L "$c/ext" ] || [ ! -d "$c/ext" ]; then
-		[ ! -L "$c/ext" ] || die "$c/ext is a link: the server's client parts go in a directory of its client tree, not elsewhere"
-		die "$c has no directory ext/, where the server's client parts go, as Xymon's own installs make it: as root,
-  mkdir $c/ext && chown $sn $c/ext"
-	fi
+	sn=$(ls -lLd "$srv/ext" | awk '{ print $3 }')
+	e=$XYMONHOME/ext
+	[ -d "$e" ] || die "$XYMONHOME has no directory ext/, where the server's client parts go, as Xymon's own installs make it: as root,
+  mkdir $e && chown $sn $e"
 	# shellcheck disable=SC2012 # ls -n gives one directory's owner
-	cu=$(ls -nd "$c/ext" | awk '{ print $3 }')
+	cu=$(ls -nLd "$e" | awk '{ print $3 }')
 	# shellcheck disable=SC2012 # ls names one owner
-	cn=$(ls -ld "$c/ext" | awk '{ print $3 }')
+	cn=$(ls -lLd "$e" | awk '{ print $3 }')
 	# Its tasks run as the server's launcher: a tree another may write
 	# would run that one's code as the server.
-	[ "$cu" = "$su" ] || [ "$cu" = 0 ] || die "$c/ext is $cn's, neither the server's ext/ owner $sn's nor root's: its client parts' tasks would run as the server; as root,
-  chown $sn $c/ext"
-	[ "$cu" = "$(id -u)" ] || die "$c/ext is $cn's, not $(id -un)'s: run this as $cn, who writes, updates and removes its plugins"
+	[ "$cu" = "$su" ] || [ "$cu" = 0 ] || die "$e is $cn's, neither the server's ext/ owner $sn's nor root's: its client parts' tasks would run as the server; as root,
+  chown $sn $e"
+	[ "$cu" = "$(id -u)" ] || die "$e is $cn's, not $(id -un)'s: run this as $cn, who writes, updates and removes its plugins"
 }
 
 # own_self PLUGIN -- true when PLUGIN is xymon-plugin and XYMONHOME a

@@ -5,8 +5,8 @@
 #
 # A client part goes into a server's own client tree too (S36): named by
 # its server, XYMONHOME=<server> --client, the tree its xymonserver.cfg
-# names as XYMONCLIENTHOME, an absolute path, taken resolved, a variable
-# refused. The part's files go in that tree's ext/, @XYMONHOME@ that
+# names as XYMONCLIENTHOME, an absolute path spelt once, a variable
+# refused; an ext/ that is a link, as Homebrew's, followed. The part's files go in that tree's ext/, @XYMONHOME@ that
 # tree; its task, installed off, is linked from the server's tasks.d/ as
 # NAME-client.cfg, beside a server part's NAME-server.cfg, its log in the
 # server's logs; the server's tasks.cfg, not the client's
@@ -174,19 +174,41 @@ mkdir -p "$work/other/bin" "$work/other/etc"
 case_refused "XYMONCLIENTHOME=\"$work/other\"" "a tree with both pairs of marks" "$work/other, is a Xymon server's tree"
 cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
 
-# A trailing / and a link: the tree taken resolved, as nothing written
-# names it otherwise.
-ln -s "$c" "$work/clientlink"
-for v in "$c/" "$work/clientlink"; do
+# A trailing / and a /.: taken off, as the server's XYMONHOME has them,
+# nothing written naming the tree otherwise.
+for v in "$c/" "$c/."; do
 	{ grep -v '^XYMONCLIENTHOME=' "$work/xymonserver.cfg"; printf 'XYMONCLIENTHOME="%s"\n' "$v"; } > "$s/etc/xymonserver.cfg"
 	x install --client oc XYMONHOME="$s"; ok "install --client, XYMONCLIENTHOME $v"
-	assert_contains "CMD $c/ext/oc/check.sh" "$(cat "$c/ext/oc/tasks.cfg")" "[S36] XYMONCLIENTHOME $v: the tree as resolved in the task file"
+	assert_contains "CMD $c/ext/oc/check.sh" "$(cat "$c/ext/oc/tasks.cfg")" "[S36] XYMONCLIENTHOME $v: the tree spelt once in the task file"
 	x enable --client oc XYMONHOME="$s"; ok "enable --client, XYMONCLIENTHOME $v"
-	assert_equal "$c/ext/oc/tasks.cfg" "$(readlink "$link")" "[S36] XYMONCLIENTHOME $v: the link names the tree as resolved"
+	assert_equal "$c/ext/oc/tasks.cfg" "$(readlink "$link")" "[S36] XYMONCLIENTHOME $v: the link names the tree spelt once"
 	cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
 	x remove --client oc XYMONHOME="$s"; ok "remove --client, XYMONCLIENTHOME respelt"
 	{ [ -e "$link" ] || [ -L "$link" ]; } && fail "[S36] XYMONCLIENTHOME $v, respelt: remove left the link"
 done
+
+# Homebrew's layout: the package's opt/ a link to its current version in
+# Cellar/, ext/ (the server's and its client's) links into var/. Accepted,
+# the files in var/, and every path written through opt/, not the version,
+# which the next upgrade replaces.
+hb=$work/hb
+mkdir -p "$hb/Cellar/xs/1.0/server/bin" "$hb/Cellar/xs/1.0/server/etc/tasks.d" "$hb/Cellar/xs/1.0/client/bin" "$hb/Cellar/xs/1.0/client/etc" "$hb/var/ext" "$hb/var/client/ext" "$hb/opt"
+ln -s "$hb/Cellar/xs/1.0" "$hb/opt/xs"
+hs=$hb/opt/xs/server hc=$hb/opt/xs/client
+: > "$hs/bin/xymond"; printf 'XYMONCLIENTHOME="%s"\n' "$hc" > "$hs/etc/xymonserver.cfg"
+printf 'directory %s/etc/tasks.d\n' "$hs" > "$hs/etc/tasks.cfg"
+: > "$hc/bin/xymonclient.sh"; : > "$hc/etc/xymonclient.cfg"
+ln -s "$hb/var/ext" "$hs/ext"; ln -s "$hb/var/client/ext" "$hc/ext"
+x install --client oc XYMONHOME="$hs"; ok "install --client on Homebrew's layout"
+assert_file_exists "$hb/var/client/ext/oc/tasks.cfg"
+assert_contains "CMD $hc/ext/oc/check.sh" "$(cat "$hb/var/client/ext/oc/tasks.cfg")" "[S36] Homebrew: the task file names the tree through opt/"
+assert_not_contains "Cellar" "$(cat "$hb/var/client/ext/oc/tasks.cfg" "$hb/var/client/ext/oc/MANIFEST")" "[S36] Homebrew: nothing written names the version"
+x enable --client oc XYMONHOME="$hs"; ok "enable --client on Homebrew's layout"
+assert_equal "$hc/ext/oc/tasks.cfg" "$(readlink "$hs/etc/tasks.d/oc-client.cfg")" "[S36] Homebrew: the link names the task file through opt/"
+x status --client XYMONHOME="$hs"; ok "status --client on Homebrew's layout"
+assert_contains "oc: 1.0.0 installed, on" "$out" "[S36] Homebrew: status reads through the linked ext/"
+x remove --client oc XYMONHOME="$hs"; ok "remove --client on Homebrew's layout"
+[ ! -e "$hb/var/client/ext/oc" ] || fail "[S36] Homebrew: remove left the directory"
 
 # The server without ext/: its install broken, said, nothing guessed.
 mv "$s/ext" "$work/sext.away"
