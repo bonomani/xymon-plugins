@@ -21,8 +21,8 @@
 # cover every part, outdated the server part and the tools, not yet a
 # client's tree. --client takes a standalone client's tree, whose ext/ the
 # person running it owns, and installs, updates and removes there only the
-# files and manual page of a plugin's client-* lines: no task, no
-# virtualenv yet; status and verify read it, whoever owns it.
+# files, manual page and task of a plugin's client-* lines, the task as a
+# server part's; no virtualenv yet; status and verify read it, whoever owns it.
 # Run as root, a verb that changes the tools is refused unless DESTDIR or
 # PREFIX is given; status --tools under sudo reads the tools of the person
 # who typed it, SUDO_USER.
@@ -112,12 +112,12 @@ case $VERB in
 	dialogue) ;;
 	install|update|enable|disable|remove|status|verify|outdated|clean) ;;
 	venv) die "venv is now part of install and update: ./xymon-plugin update --server --venv, or --tools --venv" ;;
-	install-server|install-tools|uninstall-server|uninstall-tools|enable-server|disable-server|status-server|status-tools|venv-server|venv-tools)
+	install-server|install-tools|uninstall-server|uninstall-tools|enable-server|disable-server|enable-client|disable-client|status-server|status-tools|venv-server|venv-tools)
 		v=${VERB%-*}; [ "$v" = uninstall ] && v=remove
 		[ "$v" = venv ] && die "$VERB is now: ./xymon-plugin update --${VERB##*-} --venv"
 		die "$VERB is now: ./xymon-plugin $v --${VERB##*-}" ;;
 	install-client|uninstall-client|status-client) v=${VERB%-*}; [ "$v" = uninstall ] && v=remove; die "$VERB is now: ./xymon-plugin $v --client" ;;
-	*-client) die "$VERB: a client part has no task nor virtualenv; install, update, remove, status and verify take --client" ;;
+	*-client) die "$VERB: a client part has no virtualenv; install, update, remove, status and verify take --client" ;;
 	*) usage ;;
 esac
 NAMES=
@@ -1535,7 +1535,8 @@ old_link() {
 	echo "$o is now $n: a packaged Xymon may read only the files of $TASKD/ that end in .cfg"
 }
 
-# reads_tasks -- true when the server's tasks.cfg reads tasks.d/, by a
+# reads_tasks -- true when the tree's LAUNCHCFG reads TASKD/ -- a server's
+# tasks.cfg tasks.d/, a client's clientlaunch.cfg clientlaunch.d/ -- by a
 # directory line naming it, as Xymon's own has it: xymonlaunch then has a
 # task whose link is there. With no tasks.cfg, and under DESTDIR, there is
 # nothing to look at.
@@ -1742,7 +1743,7 @@ column() {
 
 # status SIDE ROOT PLUGIN -- one line for the plugin on that side: the
 # version installed, from its VERSION -- a release tag, NAME/vX.Y.Z, read as
-# its X.Y.Z -- or that it is not; on the server, whether its task is on; and
+# its X.Y.Z -- or that it is not; whether its task is on, when it has one; and
 # the version in this copy -- a checkout or unpacked releases --, with "newer" when it is, or that the
 # checkout has it no more. The side and the task are read from the
 # installed copy of its PLUGIN file. A plugin that has nothing on that
@@ -2312,19 +2313,7 @@ EOF
 	dist "$1"
 	[ "$was_manual" = "$(field "$1" server-manual)" ] && [ -z "$legacy" ] || drop_manual "$was_manual" "$MANDIR" "$XYMONHOME/ext/$1" "$legacy"
 	manual "$1" "$(field "$1" server-manual)" "$ext" "$MANDIR" "$XYMONHOME/ext/$1"
-	# A task this version has no more -- by the record, or the link to it,
-	# the record a run cut short may have written anew: its link goes; the
-	# task file, set aside, is kept by aside_back, edited; and so is a file
-	# in the link's place, xymonlaunch's, edited.
-	if [ -z "$(field "$1" server-task)" ] && { [ -n "$was_task" ] || [ "$(readlink "$TASKDIR/$1.cfg" 2>/dev/null)" = "$XYMONHOME/ext/$1/tasks.cfg" ]; }; then
-		for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
-			if [ -f "$l" ] && [ ! -L "$l" ] && ! cmp -s "$l" "$AS/.shipped/tasks.cfg"; then
-				put_aside "$l" tasks.cfg
-				echo "$l, edited, read by xymonlaunch in the link's place, is kept with $1's task file"
-			fi
-		done
-		drop_task "$1"
-	fi
+	task_gone "$1"
 	task "$1"
 	conf "$1"
 	# What is left set aside goes back, the .old files among it, last: one
@@ -2395,9 +2384,26 @@ install_tools() {
 	DONE="$DONE $1"
 }
 
+# task_gone PLUGIN -- a task this version has no more, by the record
+# (was_task) or the link to it, the record a run cut short may have written
+# anew: its link goes; the task file, set aside, is kept by aside_back,
+# edited; and so is a file in the link's place, xymonlaunch's, edited.
+task_gone() {
+	[ -z "$(field "$1" "$TASKKEY")" ] || return 0
+	[ -n "$was_task" ] || [ "$(readlink "$TASKDIR/$1.cfg" 2>/dev/null)" = "$XYMONHOME/ext/$1/tasks.cfg" ] || return 0
+	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
+		if [ -f "$l" ] && [ ! -L "$l" ] && ! cmp -s "$l" "$AS/.shipped/tasks.cfg"; then
+			put_aside "$l" tasks.cfg
+			echo "$l, edited, read by xymonlaunch in the link's place, is kept with $1's task file"
+		fi
+	done
+	drop_task "$1"
+}
+
 # install_client PLUGIN -- its client part in the client's tree: its
 # files, VERSION, PLUGIN copy, and its manual page, linked from MANDIR only
-# when that can be written. Nothing else: no task, no stage for /plugins,
+# when that can be written; its task, off until enabled, as the server's.
+# Nothing else: no stage for /plugins,
 # no virtualenv, no snippet, no SELinux module.
 install_client() {
 	case " $DONE " in *" $1 "*) return 0 ;; esac
@@ -2450,11 +2456,7 @@ EOF
 		[ -n "$mr" ] || echo "$sec cannot be written: $1's manual page is not linked from it, and is read as man $XYMONHOME/ext/$1/$pg"
 	fi
 	manual "$1" "$pg" "$dir" "$mr" "$XYMONHOME/ext/$1"
-	# A task this version has no more: its link goes, the task file, set
-	# aside, kept by aside_back, edited.
-	if [ -z "$(field "$1" client-task)" ] && { [ -n "$was_task" ] || [ "$(readlink "$TASKDIR/$1.cfg" 2>/dev/null)" = "$XYMONHOME/ext/$1/tasks.cfg" ]; }; then
-		drop_task "$1"
-	fi
+	task_gone "$1"
 	task "$1" || exit 1
 	aside_back || exit 1
 	version "$1" "$dir"
@@ -2690,6 +2692,8 @@ uninstall_client() {
 		else
 			echo "$1 is not installed in $XYMONHOME/ext: nothing removed."
 		fi
+		sa=$EXTROOT/.xymon-plugin.$1
+		if [ -e "$sa" ] || [ -L "$sa" ]; then stale "$sa" "$1"; fi
 		return 0
 	fi
 	needed "$1" client "$EXTROOT"
@@ -2819,16 +2823,18 @@ verify_plugin() {
 		while IFS= read -r f; do
 			[ -n "$f" ] || continue
 			case $named in *"$NL$f$NL"*) continue ;; esac
-			# A client part has no file of the administrator's.
-			adm=" tasks.cfg $(held "$root" "$n" conf) "; [ "$part" != client ] || adm=' '
+			# A client part's one file of the administrator's is its task's,
+			# when it has one.
+			adm=" tasks.cfg $(held "$root" "$n" conf) "
+			[ "$part" != client ] || { adm=' '; [ -z "$(held "$root" "$n" client-task)" ] || adm=' tasks.cfg '; }
 			case $adm in
 				*" ${f%.new} "*) [ "$f" != "${f%.new}" ] && { v_untidy "$n: $f, this version's beside yours: compare, then remove it"; continue; } ;;
 			esac
 			case $adm in
 				*" ${f%.old} "*) [ "$f" != "${f%.old}" ] && [ -e "$dir/${f%.old}" ] && { v_untidy "$n: $f, yours before the merge: compare, then remove it"; continue; } ;;
 			esac
-			# Any other .old on the server, which an update keeps (S7).
-			case $part$f in server*.old|server*.old/*) v_untidy "$n: $f, yours, kept by an update: compare, then remove it"; continue ;; esac
+			# Any other .old, which an update keeps (S7).
+			case $part$f in tools*) ;; *.old|*.old/*) v_untidy "$n: $f, yours, kept by an update: compare, then remove it"; continue ;; esac
 			case $f in
 				__pycache__|*/__pycache__) v_broken "$n: $f, bytecode no install wrote: $fix" ;;
 				*/__pycache__/*|__pycache__/*) ;;
@@ -2972,7 +2978,7 @@ left_man() {
 # verify_left PART -- what is left, untidy, each naming clean.
 verify_left() {
 	# A set-aside directory of a plugin whose directory is gone (S7).
-	if [ "$1" = server ]; then
+	if [ "$1" != tools ]; then
 		for sa in "$EXTROOT"/.xymon-plugin.*; do
 			{ [ -e "$sa" ] || [ -L "$sa" ]; } || continue
 			sn=${sa##*/.xymon-plugin.}
@@ -3247,7 +3253,6 @@ if [ "$(( ${SEL_SERVER:-0} + ${SEL_CLIENT:-0} + ${SEL_TOOLS:-0} ))" -gt 1 ]; the
 	cmds=
 	[ -z "$SEL_SERVER" ] || cmds="$cmds
   ./xymon-plugin $VERB --server${rest:+ $rest}"
-	# enable and disable: the client part has no task, so no command.
 	[ -z "$SEL_CLIENT" ] || cmds="$cmds
   ./xymon-plugin $VERB --client${rest:+ $rest}"
 	[ -z "$SEL_TOOLS" ] || cmds="$cmds

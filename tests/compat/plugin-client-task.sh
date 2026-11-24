@@ -87,17 +87,24 @@ x "$v1" status --client; assert_contains "ctask: 1.0.0 installed, on" "$out" "[S
 # the task stays on.
 sed 's/INTERVAL 5m/INTERVAL 1h/' "$d/tasks.cfg" > "$work/edited"; cat "$work/edited" > "$d/tasks.cfg"
 x "$v1" verify --client; assert_contains "edited: ctask: tasks.cfg, the administrator's" "$out" "[S30] verify says the task file edited"
+printf '#!/bin/sh\n' > "$d/mine.sh.old"; chmod +x "$d/mine.sh.old"
 x "$v2" update --client ctask; ok "update --client to 1.1.0"
 assert_contains "INTERVAL 1h" "$(cat "$d/tasks.cfg")" "[S7] the update kept the task file as edited"
 assert_file_exists "$d/tasks.cfg.new"
 assert_contains "LOGFILE" "$(cat "$d/tasks.cfg.new")" "[S7] and wrote this version's beside it"
 assert_contains "$d/tasks.cfg is kept as yours" "$out" "[S7] and says so"
 assert_equal "$c/ext/ctask/tasks.cfg" "$(readlink "$link")" "[S7] the task stays on"
-rm -f "$d/tasks.cfg.new"
+[ -f "$d/mine.sh.old" ] || fail "[S7] the update took a NAME.old"
+x "$v2" verify --client
+assert_contains "tasks.cfg.new, this version's beside yours: compare, then remove it" "$out" "[S30] verify says the .new beside the task file"
+assert_contains "mine.sh.old, yours, kept by an update: compare, then remove it" "$out" "[S30] and a NAME.old an update keeps"
+assert_not_contains "is not what was installed" "$out" "[S30] neither as for an update to fix"
+rm -f "$d/tasks.cfg.new" "$d/mine.sh.old"
 
 # Cut short after the directory is emptied: the edited task file set aside,
 # said; the next update resumes with it.
 cutr=$work/cut; repo "$cutr" 1.1.0
+# shellcheck disable=SC2016 # the installer's line, as it is written
 line='	fresh "$dir" "$keep" || exit 1'
 [ "$(grep -cxF -- "$line" "$ROOT/plugins/xymon-plugin/xymon-plugin")" -eq 1 ] || fail "the installer has not once the line: $line"
 awk -v l="$line" '{ print } $0 == l { print "\tkill -TERM $$" }' "$ROOT/plugins/xymon-plugin/xymon-plugin" > "$cutr/plugins/xymon-plugin/xymon-plugin"
@@ -116,11 +123,25 @@ x "$v3" update --client ctask; ok "update --client to a version with no task"
 { [ -e "$link" ] || [ -L "$link" ]; } && fail "[S7] a version with no task left the link"
 assert_file_exists "$d/tasks.cfg.old"
 assert_contains "INTERVAL 1h" "$(cat "$d/tasks.cfg.old")" "[S7] and kept the edited task file as a .old"
+x "$v3" verify --client
+assert_contains "tasks.cfg.old, yours, kept by an update: compare, then remove it" "$out" "[S30] verify says the .old kept"
 rm -f "$d/tasks.cfg.old"
 
 # remove takes the link.
 x "$v1" update --client ctask; ok "update --client back to a version with a task"
 x "$v1" enable --client ctask; ok "enable --client again"
+
+# A file in the link's place, edited, and a version with no task: kept
+# with the task file, said (S6).
+cp "$d/tasks.cfg" "$work/t"; rm "$link"
+sed 's/INTERVAL 5m/INTERVAL 2h/' "$work/t" > "$link"
+x "$v3" update --client ctask; ok "update --client to no task, a file in the link's place"
+assert_contains "$link, edited, read by xymonlaunch in the link's place, is kept with ctask's task file" "$out" "[S6] the file in the link's place is kept, said"
+{ [ -e "$link" ] || [ -L "$link" ]; } && fail "[S7] the file in the link's place stayed"
+grep -l 'INTERVAL 2h' "$d"/*.old > /dev/null 2>&1 || fail "[S6] the edited file in the link's place was lost: $(ls -A "$d")"
+rm -f "$d"/*.old
+x "$v1" update --client ctask; ok "update --client back to a task, again"
+x "$v1" enable --client ctask; ok "enable --client, again"
 x "$v1" remove --client ctask; ok "remove --client"
 { [ -e "$link" ] || [ -L "$link" ]; } && fail "[S8] remove --client left the task link"
 
@@ -140,5 +161,17 @@ x "$v1" verify --client
 assert_contains "the task link of ctask, which is gone: ./xymon-plugin clean --client ctask" "$out" "[S30] verify says the task link left"
 x "$v1" clean --client ctask --yes; ok "clean --client"
 { [ -e "$link" ] || [ -L "$link" ]; } && fail "[S31] clean --client left the task link"
+
+# A cut update, then the directory removed by hand: the set-aside
+# directory said by verify with no name, and by remove (S7, S30).
+x "$v1" install --client ctask; ok "install --client, to cut"
+x "$cutr" update --client ctask
+[ "$rc" -ne 0 ] || fail "[S7] the cut update succeeded: $out"
+rm -rf "$d"
+x "$v1" verify --client
+[ "$rc" -eq 4 ] || fail "[S30] verify --client with a set-aside directory left: not 4 ($rc): $out"
+assert_contains "$c/ext/.xymon-plugin.ctask, set aside on" "$out" "[S30] verify says the set-aside directory left"
+x "$v1" remove --client ctask; ok "remove --client, the directory gone, set aside"
+assert_contains "$c/ext/.xymon-plugin.ctask, set aside on" "$out" "[S7] remove says it too"
 
 pass "a client part's task, as a server part's: installed off with the client's tree filled in, enable through clientlaunch.d refused unless clientlaunch.cfg reads it or --force, edits and on kept by an update, a cut update resumed, a version with no task taking the link and keeping the edit, remove and clean taking the link"

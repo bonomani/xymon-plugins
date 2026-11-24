@@ -412,7 +412,7 @@ from those `MANIFEST` says were installed (S29), naming the update. A name that 
 says them by section, each always there, empty or not: the Xymon server,
 its own client tree -- the one its `XYMONCLIENTHOME` names -- and the
 person's tools; `--server` and `--tools` keep to theirs. A standalone
-client's tree (S35) is said as a server's, without the task: with no
+client's tree (S35) is said as a server's: with no
 part named, one `XYMONHOME` names stands for the server's sections, and
 without `XYMONHOME` each one found (S25) has its own after the servers';
 `--client` keeps to them. One found that a client verb refuses -- a
@@ -525,8 +525,8 @@ An install writes a plugin's files under its directory, and outside it
 only: its task link, `etc/tasks.d/NAME.cfg` (S13); the link to its manual page
 in `MANDIR` (S20); its command in `$PREFIX/bin` (S4); its copy in the stage
 `/plugins` serves (S19); the virtualenv beside the plugins (S26); and its
-SELinux module (S23); a client part, only its directory and its manual
-page's link (S35). The command itself writes, besides, only the
+SELinux module (S23); a client part, only its directory, its manual
+page's link and its task's link (S35). The command itself writes, besides, only the
 installations used last (S25), and while an install or an update runs
 the directory `ext/.xymon-plugin.NAME` where it sets files aside, and
 `ext/NAME/.xymon-plugin-in-progress`, left after one cut short until the
@@ -596,7 +596,7 @@ a `NAME.new` or `NAME.old` an update left beside an administrator's file
 (S7), "this version's beside yours" or "yours before the merge", to
 compare and remove; a stale set-aside directory of the plugin, or of
 one whose directory is gone, or one at its name not marked (S7); any
-other `NAME.old` on the server, at any depth, which an update keeps
+other `NAME.old`, at any depth, which an update keeps
 (S7); any other file in the plugin's directory that the
 manifest does not name;
 and a plugin with no `MANIFEST`, installed before it was kept, which an

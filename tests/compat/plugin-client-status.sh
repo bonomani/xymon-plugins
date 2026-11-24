@@ -91,13 +91,14 @@ assert_contains "broken: xymon-plugin: the link $man/man8/xymon-plugin.8 points 
 ln -sf "$d/xymon-plugin.8" "$man/man8/xymon-plugin.8"
 
 # Untidy: a file no install wrote, a .new and a .old, which cannot run;
-# named as the server's task file, still no file of the administrator's.
+# the .new named as a task file, no file of the administrator's in a part
+# with no task; the .old, kept by an update (S7).
 : > "$d/tasks.cfg.new"; : > "$d/notes.old"
 x verify --client XYMONHOME="$c"
 assert_equal 4 "$rc" "[S30] a .new and a .old in a client part exit 4: $out"
 assert_contains "untidy: xymon-plugin: tasks.cfg.new is not what was installed: ./xymon-plugin update --client xymon-plugin" "$out" "[S30] a .new is untidy"
-assert_contains "untidy: xymon-plugin: notes.old is not what was installed" "$out" "[S30] a .old is untidy"
-assert_not_contains "yours" "$out" "[S30] a client part has no file of the administrator's"
+assert_contains "untidy: xymon-plugin: notes.old, yours, kept by an update: compare, then remove it" "$out" "[S30] a .old is untidy, kept by an update"
+assert_not_contains "beside yours" "$out" "[S30] a client part with no task has no file of the administrator's"
 rm -f "$d/tasks.cfg.new" "$d/notes.old"
 
 # An ext/ not the person's: read all the same, as nothing changes.
