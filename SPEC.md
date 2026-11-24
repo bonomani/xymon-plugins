@@ -811,9 +811,9 @@ changes, the run is refused unless the person running it owns the tree's
 written by whoever owns its tree, so that the same person updates and
 removes them. `status` and `verify`, which change nothing, read a
 client's tree as a server's (S15, S30), whoever owns its `ext/`, and
-refuse the trees the other verbs refuse: one of another kind, a server's
-own named as a client's tree, one in doubt; a server's own is read
-through its server (S36). `outdated` reads a client's tree as a server's (S32),
+refuse the trees the other verbs refuse: a server's tree naming no client
+tree of its own, a server's own client tree named as a client's, one in
+doubt; a server's own is read through its server (S36). `outdated` reads a client's tree as a server's (S32),
 and `clean --client` takes away what `verify` says is left there (S31),
 run as the other verbs that change something.
 
@@ -833,9 +833,14 @@ anything: a server with no `ext/` of its own, which every Xymon server
 install makes, is refused as an install incomplete; a client tree with no
 `ext/` -- which Xymon's own installs make, a directory or, as Homebrew's, a
 link to one -- is refused, giving the commands that make it, or what a
-link names, and give it to the server's `ext/` owner; an `ext/` owned by neither that owner nor root is refused,
-giving the `chown`, as the part's task runs as the server's xymonlaunch;
-and the person running it owns that `ext/`, as S35 has it. A verb that
+link names; one that is the server's own `ext/` under another name is
+refused, as the client part would take the server part's directory; an
+`ext/` -- what a link names -- owned by another than the owner of the
+server's `tasks.d/`, where its task's link is written, is refused: one
+person writes both, as S35 has it, and the part's task runs as the
+server's xymonlaunch; a `chown` is given only for a directory, not for
+what a link names, which the client tree's owner chose. That person
+runs it. A verb that
 reads finds a tree with no `ext/` empty, saying nothing. Under `DESTDIR`,
 as S35, a client part is refused.
 Its task is started by the server's xymonlaunch, which does not read the
@@ -846,7 +851,9 @@ its `@XYMONHOME@` is the client tree, and its `@LOGDIR@` the server's
 logs, `$XYMONSERVERLOGS`, as Xymon's own task for that client has them.
 `xymon-plugin`'s client part does not go there: the server's copy, the
 same installer, manages that tree. Named, it is refused, with the
-commands that remove a copy left there; with none named, passed over.
+commands that remove a copy left there; with none named, passed over. A
+client part there needing it is installed only while the server has
+its copy, and that copy is not removed while one there needs it.
 
 ### Getting the code
 

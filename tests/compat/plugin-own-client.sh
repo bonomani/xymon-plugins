@@ -290,15 +290,15 @@ assert_not_contains "oc-client.cfg" "$out" "[S36] verify --server says nothing o
 x clean --server --all --yes XYMONHOME="$s"; ok "clean --server --all"
 [ -L "$link" ] || fail "[S36] clean --server took the client part's link"
 
-# XYMONCLIENTHOME respelt through a link to the same tree: the links made
-# under the first spelling are still the plugin's, taken by remove.
+# XYMONCLIENTHOME respelt through a link to the same tree: links are
+# compared as written, so verify says the task link points elsewhere, with
+# what puts it right.
 ln -s "$c" "$work/respelt"
 { grep -v '^XYMONCLIENTHOME=' "$work/xymonserver.cfg"; printf 'XYMONCLIENTHOME="%s"\n' "$work/respelt"; } > "$s/etc/xymonserver.cfg"
 x verify --client oc XYMONHOME="$s"
-assert_not_contains "broken" "$out" "[S36] respelt: the link made before is still oc's"
-x remove --client oc XYMONHOME="$s"; ok "remove --client, XYMONCLIENTHOME respelt through a link"
-{ [ -e "$link" ] || [ -L "$link" ]; } && fail "[S36] respelt: remove left the task link"
+assert_contains "points to $c/ext/oc/tasks.cfg, not its task file: ./xymon-plugin disable --client oc, then enable" "$out" "[S36] respelt: verify says the link as written, and what puts it right"
 cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
+x remove --client oc XYMONHOME="$s"; ok "remove --client, spelt back"
 
 # XYMONCLIENTHOME's rarer forms: blanks after it, export before it, set in
 # xymonserver.d/ last.
@@ -324,8 +324,13 @@ mkdir -p "$c/etc/clientlaunch.d"; ln -s "$c/ext/oc/tasks.cfg" "$c/etc/clientlaun
 x verify --client XYMONHOME="$s"
 assert_contains "a task link in clientlaunch.d/, which the server's xymonlaunch does not read" "$out" "[S36] verify says a link left in clientlaunch.d/"
 assert_contains "clean --client --xymon-home $s --all" "$out" "[S36] with clean, the server named"
+ln -s "$c/ext/admin.sh" "$c/etc/clientlaunch.d/admin.cfg"; ln -s "$c/ext/admin.sh" "$c/etc/clientlaunch.d/mine-client.cfg"
 x clean --client --all --yes XYMONHOME="$s"; ok "clean --client, clientlaunch.d/"
 [ ! -L "$c/etc/clientlaunch.d/oc-client.cfg" ] || fail "[S36] clean left the link in clientlaunch.d/"
+for f in admin.cfg mine-client.cfg; do
+	[ -L "$c/etc/clientlaunch.d/$f" ] || fail "[S36] clean took the administrator's own link $f in clientlaunch.d/"
+done
+rm -f "$c/etc/clientlaunch.d/admin.cfg" "$c/etc/clientlaunch.d/mine-client.cfg"
 x remove --client oc XYMONHOME="$s"; ok "remove --client, after clientlaunch.d"
 rmdir "$c/etc/clientlaunch.d"
 
@@ -359,29 +364,65 @@ cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
 x install --client oc; refused "install --client with no XYMONHOME"
 assert_contains "or a server's for its own client tree" "$out" "[S36] the server's form said"
 
+# A need on xymon-plugin written xymon-plugin:client keeps the server's
+# copy too.
+x install --server xymon-plugin XYMONHOME="$s"; ok "install --server xymon-plugin, for dep2"
+mkdir -p "$r/plugins/dep2"
+printf 'name: dep2\nversion: 1.0.0\nsummary: a test\nclient-files: d.sh\nclient-needs: xymon-plugin:client\n' > "$r/plugins/dep2/PLUGIN"
+cp "$r/plugins/dep/d.sh" "$r/plugins/dep2/d.sh"
+x install --client dep2 XYMONHOME="$s"; ok "install --client dep2"
+x remove --server xymon-plugin XYMONHOME="$s"; refused "remove --server xymon-plugin, needed as xymon-plugin:client"
+assert_contains "xymon-plugin is needed by dep2" "$out" "[S36] a need written NAME:PART read as every need is"
+x remove --client dep2 XYMONHOME="$s"; ok "remove --client dep2"
+x remove --server xymon-plugin XYMONHOME="$s"; ok "remove --server xymon-plugin, after dep2"
+rm -rf "$r/plugins/dep2"
+
+# The client tree's ext/ the server's own under another name: refused.
+mv "$c/ext" "$work/cext.away"; ln -s "$s/ext" "$c/ext"
+x install --client oc XYMONHOME="$s"; refused "install --client, the client's ext/ the server's"
+assert_contains "is the server's own ext/" "$out" "[S36] the server's ext/ under another name: refused"
+rm "$c/ext"; mv "$work/cext.away" "$c/ext"
+
 # An ext/ owned by another: refused, the chown given. The owner is read
 # through ls, here a stand-in, as a test is not root.
 mkdir -p "$work/bin"
 cat > "$work/bin/ls" <<SH
 #!/bin/sh
 for a; do last=\$a; done
-if [ "\$last" = "$c/ext" ]; then $(command -v ls) "\$@" | awk -v u="\${FAKEUID:-4242}" '{ \$3 = u; print }'; else exec $(command -v ls) "\$@"; fi
+if [ "\$last" = "$c/ext" ] || [ "\$last" = "$hc/ext" ]; then $(command -v ls) "\$@" | awk -v u="\${FAKEUID:-4242}" '{ \$3 = u; print }'
+elif [ -n "\${FAKETD:-}" ] && [ "\$last" = "$s/etc/tasks.d" ]; then $(command -v ls) "\$@" | awk -v u="\$FAKETD" '{ \$3 = u; print }'
+else exec $(command -v ls) "\$@"; fi
 SH
 chmod 755 "$work/bin/ls"
 op=$PATH; PATH=$work/bin:$PATH
 x install --client oc XYMONHOME="$s"
 PATH=$op
 refused "install --client, ext/ another's"
-assert_contains "neither the server's ext/ owner" "$out" "[S36] an ext/ owned by another: refused, saying why"
-assert_contains "chown" "$out" "[S36] and gives the chown"
+assert_contains "$c/ext is 4242's, not $(id -un)'s, who owns the server's $s/etc/tasks.d" "$out" "[S36] an ext/ owned by another than the server's tasks.d/: refused, saying why"
+assert_contains "make them one owner's" "$out" "[S36] and what puts it right"
 [ ! -e "$c/ext/oc" ] || fail "[S36] ext/ another's: installed all the same"
-# Root's: as the server's owner's, accepted for the tasks; but the person
+# Root's both, as Debian has them: accepted for the tasks; but the person
 # running it does not own it, as S35 has it: run by root.
+op=$PATH; PATH=$work/bin:$PATH
+FAKEUID=0 FAKETD=0 x install --client oc XYMONHOME="$s"
+PATH=$op
+refused "install --client, ext/ and tasks.d/ root's, run by another"
+assert_not_contains "who owns the server's" "$out" "[S36] ext/ and tasks.d/ of one owner: the tasks' owner allowed"
+assert_contains "run this as 0" "$out" "[S35] and is run by its owner"
+# Root's ext/, the server's tasks.d/ another's: refused, root not taken
+# apart, as a link to any root's directory would otherwise pass.
 op=$PATH; PATH=$work/bin:$PATH
 FAKEUID=0 x install --client oc XYMONHOME="$s"
 PATH=$op
-refused "install --client, ext/ root's, run by another"
-assert_not_contains "neither the server's ext/ owner" "$out" "[S36] an ext/ of root's is the tasks' owner allowed"
-assert_contains "run this as 0" "$out" "[S35] and is run by its owner"
+refused "install --client, ext/ root's, the server's tasks.d/ not"
+assert_contains "$c/ext is 0's, not $(id -un)'s, who owns the server's" "$out" "[S36] root's ext/ held to the server's tasks.d/ owner too"
+# A linked ext/ whose target another owns, as on a layout given another's
+# directory: refused, no chown given for what the link names.
+op=$PATH; PATH=$work/bin:$PATH
+x install --client oc XYMONHOME="$hs"
+PATH=$op
+refused "install --client, a linked ext/ another's"
+assert_contains "$hc/ext is a link to" "$out" "[S36] a linked ext/ another's: refused, saying so"
+assert_not_contains "chown" "$out" "[S36] and no chown for what the link names"
 
 pass "a client part in a server's own client tree, named by its server: files in that tree, its task linked from the server's tasks.d/ as NAME-client.cfg beside NAME-server.cfg, the server's tasks.cfg read and touched, its log in the server's; status and verify read it; refused, saying what was read: the client tree named directly, XYMONCLIENTHOME naming nothing, a missing or unmarked tree or the server's own, no ext/ (read verbs finding it empty), an ext/ another's, xymon-plugin"

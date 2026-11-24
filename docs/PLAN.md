@@ -212,6 +212,15 @@ Each becomes a numbered rule with the pull request that brings its test.
 
 ## Refused
 
+- **A server's client tree's ext/ held to the server's ext/ owner, or
+  root**: RPM gives client/ext to xymon and the server's tree to root, so
+  it was refused with a chown against the package, and root accepted let a
+  link to any root's directory pass (2026-11-24); held to the owner of the
+  server's tasks.d/ instead, where the task's link is written.
+- **Comparing task links through any spelling of the tree** (a link to it):
+  a relative target was resolved against the current directory, not the
+  link's, and it served only a respelling of XYMONCLIENTHOME no install
+  makes (2026-11-24); a respelling shows in verify: disable, then enable.
 - **CI running only the tests a change touches**: a test would not run on
   every lane (2026-11-21); CI went from about 7 to 2 minutes with every test
   on every lane.
