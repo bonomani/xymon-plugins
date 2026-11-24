@@ -13,7 +13,7 @@
 # to the link: a copy in tasks.d is moved into the plugin's directory as it
 # was, and linked unless it was DISABLED; a task file in ext/PLUGIN with a
 # DISABLED line, linked or not, loses the line and the link. A link to
-# something else at tasks.d/PLUGIN.cfg is left alone, by install and enable
+# something else at tasks.d/PLUGIN-server.cfg is left alone, by install and enable
 # alike. Under DESTDIR, the link names the installed task file.
 #
 # Installed into a scratch directory; xymonlaunch is the one built in the
@@ -168,11 +168,38 @@ mv "$old" "$link"
 switch enable || fail "enable once moved failed: $(cat "$work/enable.log")"
 assert_contains "on already" "$(cat "$work/enable.log")" "[S6] once moved, the task is on already"
 switch disable || fail "disable failed: $(cat "$work/disable.log")"
-printf '[xymonapi-server]\n\tCMD /bin/true\n' > "$home/etc/tasks.d/mine.cfg"
+# A task of its name read already, as xymonlaunch reads it: a comment
+# after the name, a file of tasks.d/ without .cfg, the launcher's own file.
+for f in mine.cfg mine; do
+	printf '[xymonapi-server] # mine\n\tCMD /bin/true\n' > "$home/etc/tasks.d/$f"
+	rc=0; switch enable || rc=$?
+	[ "$rc" -ne 0 ] || fail "[S6] enable made a link beside another task of the same name, in tasks.d/$f"
+	assert_contains "xymonlaunch reads a task named [xymonapi-server] already" "$(cat "$work/enable.log")" "[S6] tasks.d/$f: and says so"
+	rm -f "$home/etc/tasks.d/$f"
+done
+cp "$home/etc/tasks.cfg" "$work/tasks.cfg"
+printf '[xymonapi-server]\n\tCMD /bin/true\n' >> "$home/etc/tasks.cfg"
 rc=0; switch enable || rc=$?
-[ "$rc" -ne 0 ] || fail "[S6] enable made a link beside another task of the same name"
-assert_contains "$home/etc/tasks.d/mine.cfg has a task named [xymonapi-server] already" "$(cat "$work/enable.log")" "[S6] and names the file"
-rm -f "$home/etc/tasks.d/mine.cfg"
+[ "$rc" -ne 0 ] || fail "[S6] enable made a link beside a task of the same name in tasks.cfg"
+cp "$work/tasks.cfg" "$home/etc/tasks.cfg"
+# Through Xymon's xymoncfg, a file an include line names is read too.
+mkdir -p "$home/bin"; ln -s "$XYMON_SRC/common/xymoncfg" "$home/bin/xymoncfg"
+printf '[xymonapi-server]\n\tCMD /bin/true\n' > "$work/included.cfg"
+printf 'include %s\n' "$work/included.cfg" >> "$home/etc/tasks.cfg"
+rc=0; switch enable || rc=$?
+[ "$rc" -ne 0 ] || fail "[S6] enable made a link beside a task of the same name an include line reads"
+cp "$work/tasks.cfg" "$home/etc/tasks.cfg"
+switch enable || fail "enable with xymoncfg and no other task of its name failed: $(cat "$work/enable.log")"
+switch disable || fail "disable failed: $(cat "$work/disable.log")"
+rm -f "$home/bin/xymoncfg"
+# Its own task file linked under another name, its section the one before
+# (an edited file keeps it): refused all the same, the mv named.
+ln -s "$tf" "$old"
+sed 's/^\[xymonapi-server\]$/[xymonapi]/' "$tf" > "$work/edited"; cat "$work/edited" > "$tf"
+rc=0; switch enable || rc=$?
+[ "$rc" -ne 0 ] || fail "[S6] enable made a second link to its task file linked under another name, its section the old one"
+assert_contains "$old is xymonapi's task file linked under another name: mv $old $link" "$(cat "$work/enable.log")" "[S6] and names the mv"
+rm -f "$old"
 
 # enable looks at how the server reads tasks.d/ before it makes the link:
 # a tasks.cfg that does not read it would leave the task unread, whatever

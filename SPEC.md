@@ -148,13 +148,16 @@ has the one section `[NAME-server]`, and on the server
 `etc/tasks.d/NAME-server.cfg`, when there, is a link to it; a client part's
 has `[NAME-client]`, linked as `NAME-client.cfg`; the installer's own
 server task alone keeps `[xymon-plugin]` and `xymon-plugin.cfg`. Two tasks
-of one name, xymonlaunch makes one of them, unsaid: `enable` refuses a link
-whose task's name the launcher's file or another file of its task
-directory already has, its own task file linked under another name among
-them, naming the `mv` that renames that link. A test of the repository
+of one name, xymonlaunch makes one of them, unsaid: `enable` refuses a task
+whose name xymonlaunch reads already -- through Xymon's `xymoncfg`, its
+`include` and `directory` lines followed, or, without it and under
+`DESTDIR`, the launcher's file and every file of its task directory --, and
+a second link to its own task file, naming the `mv` that renames the
+first. A test of the repository
 holds each shipped task file to its one section of that name, with no
 `include` or `directory` line, and refuses a plugin named with a
-`-server` or `-client` ending; the file installed, the administrator's, is
+`-server` or `-client` ending, so that a part's names are never another
+plugin's; the file installed, the administrator's, is
 not refused for its section. Under `DESTDIR` the link names the installed
 file. The link ends in `.cfg` because a packaged Xymon may read only the
 files of `tasks.d/` that do, where Xymon's own `tasks.cfg` reads them all.

@@ -7,7 +7,7 @@
 # scratch client tree, with a plugin of the test's own whose client-task:
 # names its task file: installed off in ext/NAME/tasks.cfg, @XYMONHOME@
 # the client's tree, with no link; turned on by enable --client, a link
-# etc/clientlaunch.d/NAME.cfg, refused where clientlaunch.cfg does not read
+# etc/clientlaunch.d/NAME-client.cfg, refused where clientlaunch.cfg does not read
 # that directory unless --force; the file as the administrator edited it
 # kept by an update, the change of a new version beside it off a terminal,
 # the task kept on; a version with no task taking the link, the edited

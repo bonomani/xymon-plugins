@@ -282,8 +282,6 @@ held() {
 
 # sedesc TEXT -- TEXT escaped for the right-hand side of a sed s|||.
 sedesc() { printf '%s\n' "$1" | sed -e 's/[\\&|]/\\&/g'; }
-# rxesc WORD -- WORD as a basic regular expression matching it alone.
-rxesc() { printf '%s\n' "$1" | sed -e 's/[].[^$*\\]/\\&/g'; }
 
 # say PLUGIN KEY -- print the plugin's message KEY, its placeholders filled
 # with the paths of the installed system, never the stage's under DESTDIR:
@@ -1539,13 +1537,13 @@ reads_tasks() {
 
 # task PLUGIN -- its xymonlaunch task file, @XYMONHOME@ replaced, kept in
 # the plugin's directory as ext/PLUGIN/tasks.cfg. The task is on when
-# tasks.d/PLUGIN.cfg, a link to that file, is there: removing ext/PLUGIN by hand
+# its link in tasks.d/ (tn) is there: removing ext/PLUGIN by hand
 # then takes the task with it, since xymonlaunch skips a link that points
 # nowhere and stops the task at its next reload, where a copy in tasks.d
 # would have it log that it cannot start the task, forever. A first install
 # makes no link. A later one keeps the task file as the admin left it --
 # install_server sets it aside before it replaces the directory -- and
-# whether the task is on. A regular file at tasks.d/PLUGIN.cfg wins over the
+# whether the task is on. A regular file at the link's name wins over the
 # one set aside, as it is the one xymonlaunch was reading: the copy an older
 # install made there, or what an editor that writes by renaming, "sed -i"
 # among them, left where the link was. It is moved into the directory, and
@@ -1701,17 +1699,33 @@ enable() {
 as Xymon's own $LAUNCHCFG has it; --force makes the link all the same, where xymonlaunch reads $TASKD/ another way"
 		echo "xymon-plugin: $XYMONHOME/etc/$LAUNCHCFG does not read $TASKD/: $1's link is made all the same, as --force asks, and its task may not start" >&2
 	fi
-	# A task of its name its launcher reads already, in LAUNCHCFG or a file
-	# of TASKD/ -- its own task file linked under another name among them:
-	# xymonlaunch would make one task of both, unsaid (S6). ponytail: the
-	# files an include or directory line names elsewhere are not read.
+	# Its own task file linked from TASKD/ under another name, which
+	# xymonlaunch reads all the same: a second link would read it twice.
 	k=$(tn "$1")
-	for c in "$XYMONHOME/etc/$LAUNCHCFG" "$TASKDIR"/*.cfg; do
-		if ! [ -f "$c" ] || ! grep -q "^[[:space:]]*\[$(rxesc "$k")\][[:space:]]*\$" "$c"; then continue; fi
-		[ "$(readlink "$c" 2>/dev/null)" != "$XYMONHOME/ext/$1/tasks.cfg" ] \
-			|| die "$c is $1's task file linked under another name: mv $c $TASKDIR/$k.cfg"
-		die "$c has a task named [$k] already, which xymonlaunch would merge with $1's, unsaid: $1 stays off"
-	done
+	while IFS= read -r o; do
+		[ -z "$o" ] || [ "$(readlink "$o")" != "$XYMONHOME/ext/$1/tasks.cfg" ] \
+			|| die "$o is $1's task file linked under another name: mv $o $TASKDIR/$k.cfg"
+	done <<EOF
+$(find "$TASKDIR" -type l 2>/dev/null)
+EOF
+	# A task of its name the launcher reads already: xymonlaunch would
+	# make one task of both, unsaid (S6). Read as xymonlaunch reads it,
+	# through Xymon's xymoncfg, its include and directory lines followed;
+	# without it, or under DESTDIR, the file itself and every file of TASKD/
+	# xymonlaunch would read. A name as xymonlaunch takes it: after "[", up
+	# to the first "]".
+	lc=$(inside "$XYMONHOME/etc/$LAUNCHCFG") || exit 1
+	if [ -z "$DESTDIR" ] && [ -x "$XYMONHOME/bin/xymoncfg" ] && [ -f "$lc" ]; then
+		read_by=$("$XYMONHOME/bin/xymoncfg" "$lc" 2>/dev/null)
+	else
+		read_by=$(cat "$lc" 2>/dev/null
+			find "$TASKDIR" \( -type f -o -type l \) ! -name '.*' ! -name '*~' ! -name '*,v' ! -name 'README*' ! -name '*.dpkg-*' ! -name '*.rpm*' -exec cat {} + 2>/dev/null)
+	fi
+	NL='
+'
+	case "$NL$(printf '%s\n' "$read_by" | sed -n -e 's/^[[:space:]]*\[\([^]]*\)\].*/\1/p')$NL" in
+		*"$NL$k$NL"*) die "xymonlaunch reads a task named [$k] already, in $XYMONHOME/etc/$LAUNCHCFG or a file it reads, which it would merge with $1's, unsaid: $1 stays off" ;;
+	esac
 	{ mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR" && ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$(tn "$1").cfg"; } \
 		|| die "could not make $TASKDIR/$(tn "$1").cfg: $1 stays off"
 	# xymonlaunch watches a directory line's directory only if it was there
@@ -2602,8 +2616,8 @@ drop_command() {
 	return 0
 }
 
-# drop_task PLUGIN -- remove tasks.d/PLUGIN.cfg, and the tasks.d/PLUGIN an
-# install before that name made: the link to the plugin's task file, or
+# drop_task PLUGIN -- remove its task link in tasks.d/ (tn): the link to
+# the plugin's task file, or
 # the file there, a copy an older install made or the task an editor left
 # in the link's place; never a link to something else. With ABSENT, the
 # plugin's directory not there, a file there is no install's surely, and

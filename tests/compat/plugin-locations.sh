@@ -50,7 +50,7 @@ allowed() {
 	esac
 	for n in $plugins; do
 		case $p in
-			"$home/ext/$n"|"$home/ext/$n/"*|"$home/etc/tasks.d/$n.cfg") return 0 ;;
+			"$home/ext/$n"|"$home/ext/$n/"*|"$home/etc/tasks.d/$n-server.cfg"|"$home/etc/tasks.d/$n.cfg") return 0 ;;
 			"$PREFIX/bin/"*) return 0 ;;
 			"$PREFIX/share/man/man1/"*) return 0 ;;
 		esac
