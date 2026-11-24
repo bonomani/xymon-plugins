@@ -172,7 +172,9 @@ refused. A client part's task is the same in its client's tree, with
 xymonlaunch reads, in place of `etc/tasks.d/` and `tasks.cfg`, here and in
 S7, S9 and S13; `enable --client` and `disable --client` turn it on and
 off. In a client part's task file, `@LOGDIR@` is its log directory,
-written at install as `$XYMONCLIENTLOGS`, which xymonlaunch expands.
+written at install as `$XYMONCLIENTLOGS` on a standalone client and
+`$XYMONSERVERLOGS` in a server's own client tree (S36), which xymonlaunch
+expands.
 
 **S7. An update replaces the code and keeps the choices.**
 `update` replaces the plugin's directory as a whole, so a file a
@@ -773,7 +775,7 @@ task that stops by itself at each update (S7) would stop the one needing it; a t
 comes, one of that part's launcher (`clientlaunch.cfg`'s `client` on a
 client), or none where its launcher has no such thing (cron, launchd).
 A `NEEDS` in a client part's task is the plugin's choice, its pitfalls said
-in CONTRIBUTING.md: once a server's own client tree takes client parts,
+in CONTRIBUTING.md: a server's own client tree taking client parts (S36),
 one file is read by two launchers that know different tasks, a task only
 one knows dropped by the other; and `NAME-client.cfg` is read before
 `NAME-server.cfg`, so its own server task is unknown at the first load.

@@ -19,7 +19,8 @@
 # client's tree named is refused, the command with --client given; off a
 # terminal, a verb that changes something needs one; status and verify
 # cover every part, outdated the server part and the tools, not yet a
-# client's tree. --client takes a standalone client's tree, whose ext/ the
+# client's tree. --client takes a standalone client's tree, or, XYMONHOME
+# naming a server, that server's own client tree (S36), whose ext/ the
 # person running it owns, and installs, updates and removes there only the
 # files, manual page and task of a plugin's client-* lines, the task as a
 # server part's; no virtualenv yet; status and verify read it, whoever owns it.

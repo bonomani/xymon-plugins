@@ -103,6 +103,29 @@ x remove --client both XYMONHOME="$s"; ok "remove --client both"
 { [ -e "$s/etc/tasks.d/both-client.cfg" ] || [ -L "$s/etc/tasks.d/both-client.cfg" ]; } && fail "[S36] remove --client left the client part's link"
 [ -d "$s/ext/both" ] || fail "[S36] remove --client took the server part"
 
+# The server's tasks.cfg is the one enable reads: one that does not read
+# tasks.d/, or that has a task of the name already, refused (S13, S6).
+x disable --client oc XYMONHOME="$s"; ok "disable --client"
+cp "$s/etc/tasks.cfg" "$work/tasks.cfg"
+echo '# no directory line' > "$s/etc/tasks.cfg"
+x enable --client oc XYMONHOME="$s"; refused "enable --client, the server's tasks.cfg not reading tasks.d/"
+assert_contains "$s/etc/tasks.cfg does not read tasks.d/" "$out" "[S36] the server's tasks.cfg is the one read, and named"
+cp "$work/tasks.cfg" "$s/etc/tasks.cfg"; printf '[oc-client]\n\tCMD /bin/true\n' >> "$s/etc/tasks.cfg"
+x enable --client oc XYMONHOME="$s"; refused "enable --client, a task of its name in the server's tasks.cfg"
+assert_contains "reads a task named [oc-client] already, in $s/etc/tasks.cfg" "$out" "[S36] a task of its name the server's launcher reads: refused"
+cp "$work/tasks.cfg" "$s/etc/tasks.cfg"
+x enable --client oc XYMONHOME="$s"; ok "enable --client again"
+
+# The plugin's directory removed by hand, its task on: the link left in
+# the server's tasks.d/, named so by verify, taken by clean (S30, S31).
+cp -R "$c/ext/oc" "$work/oc.kept"; rm -rf "$c/ext/oc"
+x verify --client XYMONHOME="$s"
+assert_contains "$s/etc/tasks.d/oc-client.cfg" "$out" "[S36] verify names the task link left in the server's tasks.d/"
+x clean --client --all --yes XYMONHOME="$s"; ok "clean --client"
+{ [ -e "$link" ] || [ -L "$link" ]; } && fail "[S36] clean --client left the task link in the server's tasks.d/"
+cp -R "$work/oc.kept" "$c/ext/oc"
+x enable --client oc XYMONHOME="$s"; ok "enable --client, the directory back"
+
 # disable and remove of oc.
 x disable --client oc XYMONHOME="$s"; ok "disable --client"
 { [ -e "$link" ] || [ -L "$link" ]; } && fail "[S36] disable left the link"
@@ -223,6 +246,11 @@ x install --client oc XYMONHOME="$s"; refused "install --client, no ext/"
 assert_contains "$c has no directory ext/" "$out" "[S36] no ext/: refused, saying so"
 assert_contains "mkdir $c/ext && chown" "$out" "[S36] and gives the commands"
 x status --client XYMONHOME="$s"; ok "status --client, no ext/"
+mkdir -p "$work/net"; printf '#!/bin/sh\necho "[]"\n' > "$work/net/curl"; chmod 755 "$work/net/curl"
+op=$PATH; PATH=$work/net:$PATH
+XYMON_PLUGINS_NO_GH=1 x outdated --client XYMONHOME="$s"
+PATH=$op
+ok "outdated --client, no ext/"
 x verify --client XYMONHOME="$s"; ok "verify --client, no ext/"
 mv "$work/ext.away" "$c/ext"
 
@@ -232,7 +260,7 @@ mkdir -p "$work/bin"
 cat > "$work/bin/ls" <<SH
 #!/bin/sh
 for a; do last=\$a; done
-if [ "\$last" = "$c/ext" ]; then $(command -v ls) "\$@" | awk '{ \$3 = "4242"; print }'; else exec $(command -v ls) "\$@"; fi
+if [ "\$last" = "$c/ext" ]; then $(command -v ls) "\$@" | awk -v u="\${FAKEUID:-4242}" '{ \$3 = u; print }'; else exec $(command -v ls) "\$@"; fi
 SH
 chmod 755 "$work/bin/ls"
 op=$PATH; PATH=$work/bin:$PATH
@@ -242,5 +270,13 @@ refused "install --client, ext/ another's"
 assert_contains "neither the server's ext/ owner" "$out" "[S36] an ext/ owned by another: refused, saying why"
 assert_contains "chown" "$out" "[S36] and gives the chown"
 [ ! -e "$c/ext/oc" ] || fail "[S36] ext/ another's: installed all the same"
+# Root's: as the server's owner's, accepted for the tasks; but the person
+# running it does not own it, as S35 has it: run by root.
+op=$PATH; PATH=$work/bin:$PATH
+FAKEUID=0 x install --client oc XYMONHOME="$s"
+PATH=$op
+refused "install --client, ext/ root's, run by another"
+assert_not_contains "neither the server's ext/ owner" "$out" "[S36] an ext/ of root's is the tasks' owner allowed"
+assert_contains "run this as 0" "$out" "[S35] and is run by its owner"
 
 pass "a client part in a server's own client tree, named by its server: files in that tree, its task linked from the server's tasks.d/ as NAME-client.cfg beside NAME-server.cfg, the server's tasks.cfg read and touched, its log in the server's; status and verify read it; refused, saying what was read: the client tree named directly, XYMONCLIENTHOME naming nothing, a missing or unmarked tree or the server's own, no ext/ (read verbs finding it empty), an ext/ another's, xymon-plugin"
