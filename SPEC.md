@@ -274,6 +274,12 @@ made there: an install or update is refused before anything is
 replaced; `enable` and `disable` fail, the task as it was; `remove`
 fails after the plugin's directory is gone, the link left for `clean`;
 each says which.
+Having made the link, `enable` changes the time of the `tasks.cfg` that
+reads `tasks.d/`, not its content, so that xymonlaunch reads it again: it
+watches a directory only if it was there when it read that file, and a
+`tasks.d/` made since -- by this `enable`, an install, or by hand -- would
+not be read until then; one that cannot be written is said, with the
+restart that does it.
 Before it makes the link, `enable` looks for the line by which the
 server's `tasks.cfg` reads `tasks.d/`, a `directory` line naming it, as
 Xymon's own has it. Where there is none, it refuses, makes no link, and
