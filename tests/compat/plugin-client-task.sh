@@ -7,7 +7,7 @@
 # scratch client tree, with a plugin of the test's own whose client-task:
 # names its task file: installed off in ext/NAME/tasks.cfg, @XYMONHOME@
 # the client's tree, with no link; turned on by enable --client, a link
-# etc/clientlaunch.d/NAME.cfg, refused where clientlaunch.cfg does not read
+# etc/clientlaunch.d/NAME-client.cfg, refused where clientlaunch.cfg does not read
 # that directory unless --force; the file as the administrator edited it
 # kept by an update, the change of a new version beside it off a terminal,
 # the task kept on; a version with no task taking the link, the edited
@@ -42,7 +42,7 @@ repo() {
 	printf 'name: ctask\nversion: %s\nsummary: a test\nclient-files: check.sh\n' "$2" > "$1/plugins/ctask/PLUGIN"
 	[ -n "${3:-}" ] || echo "client-task: ctask.tasks" >> "$1/plugins/ctask/PLUGIN"
 	printf '#!/bin/sh\nexit 0\n' > "$1/plugins/ctask/check.sh"
-	printf '[ctask]\n\tENVFILE @XYMONHOME@/etc/xymonclient.cfg\n\tCMD @XYMONHOME@/ext/ctask/check.sh\n\tINTERVAL 5m\n' > "$1/plugins/ctask/ctask.tasks"
+	printf '[ctask-client]\n\tENVFILE @XYMONHOME@/etc/xymonclient.cfg\n\tCMD @XYMONHOME@/ext/ctask/check.sh\n\tINTERVAL 5m\n' > "$1/plugins/ctask/ctask.tasks"
 	[ "$2" = 1.0.0 ] || printf '\tLOGFILE @XYMONHOME@/ctask.log\n' >> "$1/plugins/ctask/ctask.tasks"
 }
 v1=$work/v1 v2=$work/v2 v3=$work/v3
@@ -51,7 +51,7 @@ repo "$v1" 1.0.0; repo "$v2" 1.1.0; repo "$v3" 1.2.0 notask
 # x REPO ARG... -- that copy's xymon-plugin, off a terminal, on the client.
 x() { r=$1; shift; rc=0; out=$("$r/xymon-plugin" "$@" XYMONHOME="$c" MANDIR="$work/man" </dev/null 2>&1) || rc=$?; }
 ok() { [ "$rc" -eq 0 ] || fail "$1 failed ($rc): $out"; }
-d=$c/ext/ctask link=$c/etc/clientlaunch.d/ctask.cfg
+d=$c/ext/ctask link=$c/etc/clientlaunch.d/ctask-client.cfg
 
 # Installed off: the task file, @XYMONHOME@ the client's, and no link --
 # nor clientlaunch.d/ made: a client's etc/ may be the system's, which its
@@ -93,7 +93,7 @@ x "$v1" disable --client ctask; ok "disable --client"
 op=$PATH; PATH=$work/notouch:$PATH; x "$v1" enable --client ctask; PATH=$op; ok "enable --client, clientlaunch.cfg not writable"
 assert_contains "ctask is on, but $c/etc/clientlaunch.cfg cannot be written to have xymonlaunch read clientlaunch.d/ again" "$out" "[S13] a clientlaunch.cfg not writable is said"
 [ -L "$link" ] || fail "[S13] enable with clientlaunch.cfg not writable made no link"
-assert_equal "$c/ext/ctask/tasks.cfg" "$(readlink "$link")" "[S13] enable links clientlaunch.d/ctask.cfg to the task file"
+assert_equal "$c/ext/ctask/tasks.cfg" "$(readlink "$link")" "[S13] enable links clientlaunch.d/ctask-client.cfg to the task file"
 x "$v1" status --client; assert_contains "ctask: 1.0.0 installed, on" "$out" "[S13] status says it on"
 
 # Edited, then updated to a version that changes another line: off a
@@ -190,13 +190,7 @@ ro "$v1" enable --client ctask
 assert_contains "could not make $link: ctask stays off" "$out" "[S13] and says why"
 { [ -e "$link" ] || [ -L "$link" ]; } && fail "[S13] the refused enable made a link"
 x "$v1" enable --client ctask; ok "enable --client"
-# The name of before, to rename; a task DISABLED, its link to take.
-rm "$link"; ln -s "$d/tasks.cfg" "$c/etc/clientlaunch.d/ctask"
-ro "$v2" update --client ctask
-[ "$rc" -ne 0 ] || fail "[S7] an update that must rename the link of before, not writable, succeeded: $out"
-assert_contains "cannot be written, where ctask's update must change $link: nothing is replaced" "$out" "[S7] the link of before: refused, saying why"
-[ ! -e "$c/ext/.xymon-plugin.ctask" ] || fail "[S7] the update with a link of before was cut short: $out"
-rm "$c/etc/clientlaunch.d/ctask"; ln -s "$d/tasks.cfg" "$link"
+# A task DISABLED, its link to take.
 cp "$d/tasks.cfg" "$work/t"; printf '\tDISABLED\n' >> "$d/tasks.cfg"
 ro "$v1" update --client ctask
 [ "$rc" -ne 0 ] || fail "[S7] an update of a task DISABLED, its link not removable, succeeded: $out"

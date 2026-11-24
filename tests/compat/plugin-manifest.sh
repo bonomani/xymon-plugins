@@ -62,7 +62,7 @@ for step in install update; do
 done
 assert_contains "${TAB}tasks.cfg${TAB}admin" "$(cat "$home/ext/xymonapi/MANIFEST")" "[S29] the task file is marked the administrator's"
 assert_not_contains "tasks.d" "$(cat "$home/ext/xymonapi/MANIFEST")" "[S29] the task link, a state, is not in it"
-[ -L "$home/etc/tasks.d/xymonapi.cfg" ] || fail "the task was not on"
+[ -L "$home/etc/tasks.d/xymonapi-server.cfg" ] || fail "the task was not on"
 
 # The same code updated again: MANIFEST, the same lines, is left as it is,
 # so that what watches it -- the API, by its inode -- goes on (S29). From

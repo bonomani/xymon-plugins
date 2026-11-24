@@ -36,7 +36,7 @@ export HOME="$work/home" XDG_CONFIG_HOME="$work/cfg" XYMON_PLUGINS_TREES_ONLY=1 
 mkdir -p "$HOME" "$work/man"
 s=$work/server
 server_tree "$s"
-e=$s/ext d=$e/xymonapi link=$s/etc/tasks.d/xymonapi.cfg
+e=$s/ext d=$e/xymonapi link=$s/etc/tasks.d/xymonapi-server.cfg
 
 copy() { mkdir -p "$1"; cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$1/"; }
 v2=$work/v2; copy "$v2"

@@ -4,7 +4,7 @@
 # tests/compat/plugin-task-link.sh
 #
 # A plugin's task file lives in its directory, ext/PLUGIN/tasks.cfg, and the
-# task is on when tasks.d/PLUGIN.cfg, a link to it, is there: an install makes no
+# task is on when tasks.d/PLUGIN-server.cfg, a link to it, is there: an install makes no
 # link, enable-server makes it and disable-server removes it, and
 # xymonlaunch, reading tasks.d as its tasks.cfg says, has the task exactly
 # when the link is there. Removing ext/PLUGIN by hand takes the task with
@@ -13,7 +13,7 @@
 # to the link: a copy in tasks.d is moved into the plugin's directory as it
 # was, and linked unless it was DISABLED; a task file in ext/PLUGIN with a
 # DISABLED line, linked or not, loses the line and the link. A link to
-# something else at tasks.d/PLUGIN.cfg is left alone, by install and enable
+# something else at tasks.d/PLUGIN-server.cfg is left alone, by install and enable
 # alike. Under DESTDIR, the link names the installed task file.
 #
 # Installed into a scratch directory; xymonlaunch is the one built in the
@@ -45,17 +45,17 @@ tasks() { "$launch" --config="$home/etc/tasks.cfg" --dump 2>"$work/dump.err" | g
 
 mkdir -p "$home/etc"
 printf 'directory %s/etc/tasks.d\n' "$home" > "$home/etc/tasks.cfg"
-link=$home/etc/tasks.d/xymonapi.cfg
+link=$home/etc/tasks.d/xymonapi-server.cfg
 tf=$home/ext/xymonapi/tasks.cfg
 
 install first
-if [ -e "$link" ] || [ -L "$link" ]; then fail "[S13] the install made tasks.d/xymonapi.cfg"; fi
-assert_not_contains "[xymonapi]" "$(tasks)" "[S13] xymonlaunch has no task of a plugin only installed"
+if [ -e "$link" ] || [ -L "$link" ]; then fail "[S13] the install made tasks.d/xymonapi-server.cfg"; fi
+assert_not_contains "[xymonapi-server]" "$(tasks)" "[S13] xymonlaunch has no task of a plugin only installed"
 
 switch enable || fail "enable-server failed: $(cat "$work/enable.log")"
-[ -L "$link" ] || fail "[S13] enable-server made no link at tasks.d/xymonapi.cfg"
-assert_equal "$tf" "$(readlink "$link")" "[S6] tasks.d/xymonapi.cfg links to the plugin's tasks.cfg"
-assert_contains "[xymonapi]" "$(tasks)" "[S13] xymonlaunch reads the task through the link once enabled"
+[ -L "$link" ] || fail "[S13] enable-server made no link at tasks.d/xymonapi-server.cfg"
+assert_equal "$tf" "$(readlink "$link")" "[S6] tasks.d/xymonapi-server.cfg links to the plugin's tasks.cfg"
+assert_contains "[xymonapi-server]" "$(tasks)" "[S13] xymonlaunch reads the task through the link once enabled"
 switch enable || fail "enable-server a second time failed: $(cat "$work/enable.log")"
 assert_contains "on already" "$(cat "$work/enable.log")" "[S13] enabling a task on says so"
 
@@ -65,8 +65,8 @@ assert_contains "xymonapi's task is on, as it was" "$(cat "$work/again.log")" "[
 assert_not_contains "is off" "$(cat "$work/again.log")" "[S13] and not that it is off"
 
 switch disable || fail "disable-server failed: $(cat "$work/disable.log")"
-if [ -e "$link" ] || [ -L "$link" ]; then fail "[S13] disable-server left tasks.d/xymonapi.cfg"; fi
-assert_not_contains "[xymonapi]" "$(tasks)" "[S13] xymonlaunch no longer has the task once disabled"
+if [ -e "$link" ] || [ -L "$link" ]; then fail "[S13] disable-server left tasks.d/xymonapi-server.cfg"; fi
+assert_not_contains "[xymonapi-server]" "$(tasks)" "[S13] xymonlaunch no longer has the task once disabled"
 install off
 if [ -e "$link" ] || [ -L "$link" ]; then fail "[S13] an install turned on the task the admin had disabled"; fi
 
@@ -74,7 +74,7 @@ switch enable || fail "enable-server failed: $(cat "$work/enable.log")"
 rm -rf "$home/ext/xymonapi"
 if [ ! -L "$link" ] || [ -e "$link" ]; then fail "removing ext/xymonapi did not leave the link pointing nowhere"; fi
 seen=$(tasks)
-assert_not_contains "[xymonapi]" "$seen" "[S9] xymonlaunch no longer has the task once ext/xymonapi is gone"
+assert_not_contains "[xymonapi-server]" "$seen" "[S9] xymonlaunch no longer has the task once ext/xymonapi is gone"
 # xymonlaunch always says it loads the configuration; anything else would be
 # about the link.
 other=$(grep -v 'Loading tasklist configuration' "$work/dump.err" || true)
@@ -95,7 +95,7 @@ cmp -s "$work/enabled" "$tf" || fail "[S6] the older install's task file was not
 assert_contains "copied to" "$(cat "$work/migrate.log")" "the install says it took the task file into the plugin's directory"
 
 "$ROOT/xymon-plugin" remove --server xymonapi XYMONHOME="$home" MANDIR="$work/man" >/dev/null 2>&1
-awk '{ print } /^\[xymonapi\]$/ { print "\tDISABLED" }' "$work/enabled" > "$link"
+awk '{ print } /^\[xymonapi-server\]$/ { print "\tDISABLED" }' "$work/enabled" > "$link"
 grep -q DISABLED "$link" || fail "the test's DISABLED copy has no DISABLED line"
 install migrate-off
 if [ -e "$link" ] || [ -L "$link" ]; then fail "[S13] an older install's DISABLED task file was left on"; fi
@@ -104,7 +104,7 @@ assert_contains "enable --server xymonapi" "$(cat "$work/migrate-off.log")" "[S1
 
 # A task file in ext/ with a DISABLED line and its link, as the install
 # before this one left it: off, the line taken out.
-awk '{ print } /^\[xymonapi\]$/ { print "\tDISABLED" }' "$work/enabled" > "$tf"
+awk '{ print } /^\[xymonapi-server\]$/ { print "\tDISABLED" }' "$work/enabled" > "$tf"
 ln -s "$tf" "$link"
 install linked-disabled
 if [ -e "$link" ] || [ -L "$link" ]; then fail "[S13] a DISABLED task file with its link was left on"; fi
@@ -148,29 +148,58 @@ assert_equal /elsewhere "$(readlink "$link")" "[S6] the link to something else i
 # Staged for a package: the link names where the task file will be, not
 # where DESTDIR puts it.
 
-# The link an install before the .cfg name made, tasks.d/xymonapi, takes
-# the new name, the task staying on: by an update, and by enable.
-home=$work/older; server_tree "$home"; link=$home/etc/tasks.d/xymonapi.cfg; tf=$home/ext/xymonapi/tasks.cfg
+# The task file linked under the name of before the names by part,
+# tasks.d/xymonapi.cfg: read all the same, but not the plugin's link.
+# verify says it untidy, with the mv; enable refuses to make a second
+# link to it, naming the mv; once moved, the task is on already. A task of
+# its name in another file is refused too: xymonlaunch would merge them.
+home=$work/older; server_tree "$home"; link=$home/etc/tasks.d/xymonapi-server.cfg; tf=$home/ext/xymonapi/tasks.cfg
 mkdir -p "$home/etc"; printf 'directory %s/etc/tasks.d\n' "$home" > "$home/etc/tasks.cfg"
 install fresh
-ln -s "$tf" "$home/etc/tasks.d/xymonapi"
-install rename
-[ -L "$link" ] || fail "[S6] an update did not rename the older link to tasks.d/xymonapi.cfg: $(cat "$work/rename.log")"
-if [ -e "$home/etc/tasks.d/xymonapi" ] || [ -L "$home/etc/tasks.d/xymonapi" ]; then fail "[S6] the older link tasks.d/xymonapi stayed after an update"; fi
-assert_contains "xymonapi's task is on, as it was" "$(cat "$work/rename.log")" "[S6] and the task stays on"
-assert_contains "[xymonapi]" "$(tasks)" "[S6] xymonlaunch has the task under the new name"
-rm -f "$link"; ln -s "$tf" "$home/etc/tasks.d/xymonapi"
-switch enable || fail "enable over an older link failed: $(cat "$work/enable.log")"
-[ -L "$link" ] && [ ! -L "$home/etc/tasks.d/xymonapi" ] || fail "[S6] enable did not rename the older link"
-assert_contains "on already" "$(cat "$work/enable.log")" "[S6] and says the task is on already"
-ln -s "$tf" "$home/etc/tasks.d/xymonapi"
-switch disable || fail "disable with both links failed: $(cat "$work/disable.log")"
-if [ -L "$link" ] || [ -L "$home/etc/tasks.d/xymonapi" ]; then fail "[S13] disable left a link, under one name or the other"; fi
-# A link at the older name to something else is not ours either.
-ln -s /dev/null "$home/etc/tasks.d/xymonapi"
-if switch enable; then fail "[S6] enable went over a foreign link at the older name"; fi
-assert_contains "not xymonapi's task: left alone" "$(cat "$work/enable.log")" "[S6] and says it is left alone"
-rm -f "$home/etc/tasks.d/xymonapi"
+old=$home/etc/tasks.d/xymonapi.cfg
+ln -s "$tf" "$old"
+rc=0; out=$("$ROOT/xymon-plugin" verify --server xymonapi XYMONHOME="$home" </dev/null 2>&1) || rc=$?
+assert_contains "untidy: xymonapi: its task linked as xymonapi.cfg, not xymonapi-server.cfg: mv $old $link" "$out" "[S30] verify says the link under another name, with the mv"
+rc=0; switch enable || rc=$?
+[ "$rc" -ne 0 ] || fail "[S6] enable made a second link to a task file linked under another name"
+assert_contains "$old is xymonapi's task file linked under another name: mv $old $link" "$(cat "$work/enable.log")" "[S6] and names the mv"
+[ ! -e "$link" ] || fail "[S6] the refused enable made the link"
+mv "$old" "$link"
+switch enable || fail "enable once moved failed: $(cat "$work/enable.log")"
+assert_contains "on already" "$(cat "$work/enable.log")" "[S6] once moved, the task is on already"
+switch disable || fail "disable failed: $(cat "$work/disable.log")"
+# A task of its name read already, as xymonlaunch reads it: a comment
+# after the name, a file of tasks.d/ without .cfg, the launcher's own file.
+for f in mine.cfg mine; do
+	printf '[xymonapi-server] # mine\n\tCMD /bin/true\n' > "$home/etc/tasks.d/$f"
+	rc=0; switch enable || rc=$?
+	[ "$rc" -ne 0 ] || fail "[S6] enable made a link beside another task of the same name, in tasks.d/$f"
+	assert_contains "xymonlaunch reads a task named [xymonapi-server] already" "$(cat "$work/enable.log")" "[S6] tasks.d/$f: and says so"
+	rm -f "$home/etc/tasks.d/$f"
+done
+cp "$home/etc/tasks.cfg" "$work/tasks.cfg"
+printf '[xymonapi-server]\n\tCMD /bin/true\n' >> "$home/etc/tasks.cfg"
+rc=0; switch enable || rc=$?
+[ "$rc" -ne 0 ] || fail "[S6] enable made a link beside a task of the same name in tasks.cfg"
+cp "$work/tasks.cfg" "$home/etc/tasks.cfg"
+# Through Xymon's xymoncfg, a file an include line names is read too.
+mkdir -p "$home/bin"; ln -s "$XYMON_SRC/common/xymoncfg" "$home/bin/xymoncfg"
+printf '[xymonapi-server]\n\tCMD /bin/true\n' > "$work/included.cfg"
+printf 'include %s\n' "$work/included.cfg" >> "$home/etc/tasks.cfg"
+rc=0; switch enable || rc=$?
+[ "$rc" -ne 0 ] || fail "[S6] enable made a link beside a task of the same name an include line reads"
+cp "$work/tasks.cfg" "$home/etc/tasks.cfg"
+switch enable || fail "enable with xymoncfg and no other task of its name failed: $(cat "$work/enable.log")"
+switch disable || fail "disable failed: $(cat "$work/disable.log")"
+rm -f "$home/bin/xymoncfg"
+# Its own task file linked under another name, its section the one before
+# (an edited file keeps it): refused all the same, the mv named.
+ln -s "$tf" "$old"
+sed 's/^\[xymonapi-server\]$/[xymonapi]/' "$tf" > "$work/edited"; cat "$work/edited" > "$tf"
+rc=0; switch enable || rc=$?
+[ "$rc" -ne 0 ] || fail "[S6] enable made a second link to its task file linked under another name, its section the old one"
+assert_contains "$old is xymonapi's task file linked under another name: mv $old $link" "$(cat "$work/enable.log")" "[S6] and names the mv"
+rm -f "$old"
 
 # enable looks at how the server reads tasks.d/ before it makes the link:
 # a tasks.cfg that does not read it would leave the task unread, whatever
@@ -193,7 +222,7 @@ switch enable || fail "[S13] enable refused where there is no tasks.cfg to look 
 	|| fail "install-server with DESTDIR failed: $(tail -n 5 "$work/stage.log")"
 "$ROOT/xymon-plugin" enable --server xymonapi XYMONHOME=/usr/lib/xymon/server DESTDIR="$work/stage" >"$work/stage-on.log" 2>&1 \
 	|| fail "enable-server with DESTDIR failed: $(tail -n 5 "$work/stage-on.log")"
-assert_equal /usr/lib/xymon/server/ext/xymonapi/tasks.cfg "$(readlink "$work/stage/usr/lib/xymon/server/etc/tasks.d/xymonapi.cfg")" \
+assert_equal /usr/lib/xymon/server/ext/xymonapi/tasks.cfg "$(readlink "$work/stage/usr/lib/xymon/server/etc/tasks.d/xymonapi-server.cfg")" \
 	"[S6] under DESTDIR the link names the installed task file"
 
-pass "a plugin's task lives in ext/PLUGIN and is on when tasks.d links to it: install leaves it off, enable-server and disable-server switch it and installs keep the choice, removing ext/PLUGIN takes it from xymonlaunch silently, older installs move to the link and an older link to its .cfg name, a foreign link is left alone, enable refuses a tasks.cfg that does not read tasks.d, and under DESTDIR the link names the installed path"
+pass "a plugin's task lives in ext/PLUGIN and is on when tasks.d links to it: install leaves it off, enable-server and disable-server switch it and installs keep the choice, removing ext/PLUGIN takes it from xymonlaunch silently, older installs move to the link, a link under the name of before the names by part said by verify and refused by enable with the mv, a task of the same name elsewhere refused, a foreign link is left alone, enable refuses a tasks.cfg that does not read tasks.d, and under DESTDIR the link names the installed path"

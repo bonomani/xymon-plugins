@@ -5,6 +5,41 @@ its version, what breaks, and what to do. Every other change needs nothing
 but installing the new code (see each plugin's README). CI refuses a change
 that breaks the API's contract without a line here.
 
+## A task is named after its part, from the next xymon-plugin
+
+A task's file has one section named after its part, and its link the same
+name: `[NAME-server]` and `etc/tasks.d/NAME-server.cfg` for a server part,
+`[NAME-client]` and `NAME-client.cfg` for a client part -- xymon-plugin's
+own server task alone keeps `[xymon-plugin]` and `xymon-plugin.cfg`. A
+task linked under the name before, `tasks.d/xymonapi.cfg`, still runs, but
+`status` says it off, `disable` finds nothing to remove, and `enable`
+refuses to link it twice. Its task restarts once, under its new name.
+
+- **On a server**, for xymonapi and xymonapi-rag, each on: turn it off
+  with the installer installed now, update, then turn it on with the new
+  one -- the API is down for about a minute:
+
+  ```sh
+  old/xymon-plugin disable --server xymonapi XYMONHOME=...   # the installer of the version installed
+  ./xymon-plugin update --server XYMONHOME=...
+  ./xymon-plugin enable --server xymonapi XYMONHOME=...
+  ```
+
+  Not the other way round: updated first, the task's section renamed, the
+  old link restarts the API while it still holds its port.
+- **On a standalone client** with xymon-plugin's client task on: update,
+  then rename its link, which `verify --client` names --
+  `mv etc/clientlaunch.d/xymon-plugin.cfg etc/clientlaunch.d/xymon-plugin-client.cfg`.
+  Its log becomes `xymon-plugin-client.log`; the old `xymon-plugin.log` is
+  left, to remove.
+- A task file you edited keeps its section through the update, with this
+  version's beside it as a `.new`: it runs as before, under its old name.
+- A link `tasks.d/NAME`, from before the `.cfg` ending, is no longer
+  renamed: rename it by hand to its new name.
+- A plugin of your own: name its task file's section after its part, and
+  its plugin not with a `-server` or `-client` ending.
+- Under `DESTDIR`, the staged link is `tasks.d/NAME-server.cfg`.
+
 ## The task line is `server-task:`, from xymon-plugin 0.2.7
 
 A plugin's `PLUGIN` file names its server task with `server-task:`, where

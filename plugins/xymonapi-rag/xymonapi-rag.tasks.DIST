@@ -6,7 +6,7 @@
 # ./xymon-plugin enable --server xymonapi-rag.
 # NEEDS xymond, whose files it reads, a task of Xymon's tasks.cfg: known when
 # tasks.d/ is read, as one of another plugin may not be yet (S34).
-[xymonapi-rag]
+[xymonapi-rag-server]
 	ENVFILE @XYMONHOME@/etc/xymonserver.cfg
 	NEEDS xymond
 	INTERVAL 1d

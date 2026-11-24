@@ -122,7 +122,7 @@ tf=$c/ext/xymon-plugin/tasks.cfg
 assert_contains "ENVFILE $c/etc/xymonclient.cfg" "$(cat "$tf")" "[S33] the task under the client's environment"
 assert_contains "CMD $c/ext/xymon-plugin/xymon-plugin-report.sh --client" "$(cat "$tf")" "[S33] the reporter with --client"
 assert_not_contains "NEEDS" "$(cat "$tf")" "[S33] no xymond to wait for on a client"
-assert_contains "LOGFILE \$XYMONCLIENTLOGS/xymon-plugin.log" "$(cat "$tf")" "[S33] its log among the client's"
+assert_contains "LOGFILE \$XYMONCLIENTLOGS/xymon-plugin-client.log" "$(cat "$tf")" "[S33] its log among the client's"
 [ -z "$(sends)" ] || fail "[S33] the install of a task off sent: $(sends)"
 
 # enable, the task never run, no pid file, or two: nothing sent, said.

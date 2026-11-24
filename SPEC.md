@@ -143,22 +143,35 @@ to turn it on.
 **S6. A plugin's task lives in its directory.**
 The `server-task:` line of its `PLUGIN` names the server part's file,
 `client-task:` the client part's; installed, it is `ext/NAME/tasks.cfg` in
-that part's tree. On the server, `etc/tasks.d/NAME.cfg`, when there, is
-a link to it; under `DESTDIR` the link names the installed file. The link
-ends in `.cfg` because a packaged Xymon may read only the files of
-`tasks.d/` that do, where Xymon's own `tasks.cfg` reads them all. A link
-`tasks.d/NAME`, as an install before this name made it, is renamed by the
-next install or update, and by `enable`, the task staying on. A regular
-file at `tasks.d/NAME.cfg` or `tasks.d/NAME` -- a copy an older install
-made, or the file an editor left in place of the link -- is the one
-xymonlaunch reads: it is moved into the plugin's directory as it was, and
-linked unless it was `DISABLED`. A link at either name to something else
-is left as it is, and the install, before it installs anything, `enable`
-and `disable` refused. A client part's task is the same in its client's
-tree, with `etc/clientlaunch.d/` and the client's `clientlaunch.cfg`, which
-its xymonlaunch reads, in place of `etc/tasks.d/` and `tasks.cfg`, here
-and in S7, S9 and S13; `enable --client` and `disable --client` turn it
-on and off.
+that part's tree. A task is named after its part: a server part's file
+has the one section `[NAME-server]`, and on the server
+`etc/tasks.d/NAME-server.cfg`, when there, is a link to it; a client part's
+has `[NAME-client]`, linked as `NAME-client.cfg`; the installer's own
+server task alone keeps `[xymon-plugin]` and `xymon-plugin.cfg`. Two tasks
+of one name, xymonlaunch makes one of them, unsaid: `enable` refuses a task
+whose name xymonlaunch reads already -- through Xymon's `xymoncfg`, its
+`include` and `directory` lines followed, or, without it and under
+`DESTDIR`, the launcher's file and every file of its task directory --, and
+a second link to its own task file, naming the `mv` that renames the
+first. A test of the repository
+holds each shipped task file to its one section of that name, with no
+`include` or `directory` line, and refuses a plugin named with a
+`-server` or `-client` ending, so that a part's names are never another
+plugin's; the file installed, the administrator's, is
+not refused for its section. Under `DESTDIR` the link names the installed
+file. The link ends in `.cfg` because a packaged Xymon may read only the
+files of `tasks.d/` that do, where Xymon's own `tasks.cfg` reads them all.
+A regular file at the link's name -- a copy an older install made, or the
+file an editor left in place of the link -- is the one xymonlaunch reads:
+it is moved into the plugin's directory as it was, and linked unless it
+was `DISABLED`. A link at that name to something else is left as it is,
+and the install, before it installs anything, `enable` and `disable`
+refused. A client part's task is the same in its client's tree, with
+`etc/clientlaunch.d/` and the client's `clientlaunch.cfg`, which its
+xymonlaunch reads, in place of `etc/tasks.d/` and `tasks.cfg`, here and in
+S7, S9 and S13; `enable --client` and `disable --client` turn it on and
+off. In a client part's task file, `@LOGDIR@` is its log directory,
+written at install as `$XYMONCLIENTLOGS`, which xymonlaunch expands.
 
 **S7. An update replaces the code and keeps the choices.**
 `update` replaces the plugin's directory as a whole, so a file a
@@ -261,8 +274,8 @@ never through a link, symbolic or hard; one kept as edited that does not
 name Xymon's runtime directory is said to.
 
 **S13. A plugin is on when its link is there, and read.**
-A plugin's task is on when `etc/tasks.d/NAME.cfg` links to its task file
-and the server's `tasks.cfg` reads `tasks.d/`, and off when the link is
+A plugin's task is on when its link in `etc/tasks.d/` (S6) names its task
+file and the server's `tasks.cfg` reads `tasks.d/`, and off when the link is
 absent: xymonlaunch has the task exactly then. `enable` makes the link,
 `disable` removes it, and each says so when there is nothing to do.
 An install or update keeps the link and the file it names in place
@@ -533,7 +546,8 @@ runs them with exactly those.
 
 **S28. A plugin writes only where this rule says.**
 An install writes a plugin's files under its directory, and outside it
-only: its task link, `etc/tasks.d/NAME.cfg` (S13); the link to its manual page
+only: its task link, `etc/tasks.d/NAME-server.cfg` or a client's
+`etc/clientlaunch.d/NAME-client.cfg` (S6, S13); the link to its manual page
 in `MANDIR` (S20); its command in `$PREFIX/bin` (S4); its copy in the stage
 `/plugins` serves (S19); the virtualenv beside the plugins (S26); and its
 SELinux module (S23); a client part, only its directory, its manual
@@ -609,7 +623,8 @@ compare and remove; a stale set-aside directory of the plugin, or of
 one whose directory is gone, or one at its name not marked (S7); any
 other `NAME.old`, at any depth, which an update keeps
 (S7); any other file in the plugin's directory that the
-manifest does not name;
+manifest does not name; a link to its task file under another name than
+its own (S6), read all the same, to rename with the `mv` it says;
 and a plugin with no `MANIFEST`, installed before it was kept, which an
 update records. A file the manifest marks the administrator's is said
 edited, and is neither. Then, with no plugin named, what is left in the
@@ -725,7 +740,7 @@ same script and a task of its own, `client-task:`, off until `enable
 --client xymon-plugin`: the same run, with `outdated --client`, under the
 client's environment -- `xymonclient.cfg`, and `MACHINEDOTS` as
 `runclient.sh` gives it, its `--hostname` or the system's name --, sending
-the client's status `plugins`, its log `xymon-plugin.log` in
+the client's status `plugins`, its log `xymon-plugin-client.log` in
 `XYMONCLIENTLOGS`. Each client asks GitHub itself, anonymously, which
 GitHub allows 60 times an hour from one address. The task writes, each
 run before it waits, the name it was given in
@@ -753,6 +768,11 @@ dependency then dropped, "unknown dependency" logged --, and, resolved, a
 task that stops by itself at each update (S7) would stop the one needing it; a task of another part, when one
 comes, one of that part's launcher (`clientlaunch.cfg`'s `client` on a
 client), or none where its launcher has no such thing (cron, launchd).
+A `NEEDS` in a client part's task is the plugin's choice, its pitfalls said
+in CONTRIBUTING.md: once a server's own client tree takes client parts,
+one file is read by two launchers that know different tasks, a task only
+one knows dropped by the other; and `NAME-client.cfg` is read before
+`NAME-server.cfg`, so its own server task is unknown at the first load.
 What no launcher can wait for -- a server or an API elsewhere, files that
 may not be there -- the task checks itself before its work: what is
 missing is said, and the run ends with 1, for its launcher to start it

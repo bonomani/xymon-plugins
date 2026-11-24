@@ -67,7 +67,7 @@ assert_contains "passwords: $home/etc/xymonpasswd," "$(cat "$work/run.log")" "[S
 assert_not_contains "$stage" "$(grep 'xymonpasswd' "$work/run.log")" "[S21] not the stage's"
 run enable server
 check "etc an absolute link"
-assert_equal "$home/ext/xymonapi/tasks.cfg" "$(readlink "$stage$host/etc/tasks.d/xymonapi.cfg")" \
+assert_equal "$home/ext/xymonapi/tasks.cfg" "$(readlink "$stage$host/etc/tasks.d/xymonapi-server.cfg")" \
 	"[S21] the task link lies where etc's link points inside DESTDIR, naming the task as installed"
 cycle "etc an absolute link"
 
@@ -75,7 +75,7 @@ cycle "etc an absolute link"
 fresh; ln -s "../../../../../../../../../../../..$host/etc" "$stage$home/etc"
 cycle "etc a relative link climbing out"
 run install server; run enable server
-[ -L "$stage$host/etc/tasks.d/xymonapi.cfg" ] || fail "[S21] a relative link climbing out is not followed inside DESTDIR"
+[ -L "$stage$host/etc/tasks.d/xymonapi-server.cfg" ] || fail "[S21] a relative link climbing out is not followed inside DESTDIR"
 
 # A chain: etc to /stage-etc, which in the stage links to the host's.
 fresh; mkdir -p "$stage/stage-etc"; ln -s /stage-etc "$stage$home/etc"
@@ -146,11 +146,19 @@ rc=0; "$ROOT/xymon-plugin" update --server --venv XYMONHOME="$home" DESTDIR="$st
 assert_contains "Under DESTDIR no virtualenv is made or used" "$(cat "$work/venv.log")" "[S21] under DESTDIR --venv makes no virtualenv, and says so"
 check "update --server --venv under DESTDIR"
 
-# A directory at tasks.d/NAME is no task link: enable refuses it.
+# A directory at the task link's name is no task link: enable refuses it.
 fresh; run install server
-mkdir -p "$stage$home/etc/tasks.d/xymonapi.cfg"
+mkdir -p "$stage$home/etc/tasks.d/xymonapi-server.cfg"
 rc=0; "$ROOT/xymon-plugin" enable --server xymonapi XYMONHOME="$home" DESTDIR="$stage" </dev/null >"$work/en.log" 2>&1 || rc=$?
-[ "$rc" -ne 0 ] || fail "enable-server over a directory at tasks.d/xymonapi succeeded"
+[ "$rc" -ne 0 ] || fail "enable-server over a directory at tasks.d/xymonapi-server.cfg succeeded"
 assert_contains "is a directory" "$(cat "$work/en.log")" "and says why"
+
+# A task of the same name in the staged tasks.cfg: enable reads the stage's,
+# not the build host's (S6, S21).
+fresh; run install server
+mkdir -p "$stage$home/etc"; printf '[xymonapi-server]\n\tCMD /bin/true\n' > "$stage$home/etc/tasks.cfg"
+rc=0; "$ROOT/xymon-plugin" enable --server xymonapi XYMONHOME="$home" DESTDIR="$stage" </dev/null >"$work/en.log" 2>&1 || rc=$?
+[ "$rc" -ne 0 ] || fail "[S21] enable under DESTDIR did not read the staged tasks.cfg: $(cat "$work/en.log")"
+assert_contains "reads a task named [xymonapi-server] already" "$(cat "$work/en.log")" "[S21] and says so"
 
 pass "under DESTDIR nothing is written outside it: absolute, relative, chained and higher links to etc, ext, MANDIR, libexec and bin are followed inside DESTDIR; a link at a plugin directory is refused and left, links at a set-aside file or the stage's plugins/ are removed, not followed; a link at a command's name is left, not followed; no virtualenv is made"

@@ -67,6 +67,38 @@ without it, checked by reverting what makes it true.
 What a plugin is, and what the installer guarantees, are the rules of
 [`SPEC.md`](SPEC.md); how its rules are numbered and tested is at its top.
 
+A plugin has up to three parts, each declared by its own lines of
+`PLUGIN` (`SPEC.md` S4, S35). Which part a piece goes in is a question of
+where it runs:
+
+| part | lines | runs | for example |
+|---|---|---|---|
+| server | `server-*` | on the Xymon server, beside xymond: reads its data, serves it, adds to its pages | the API (`xymonapi`), the plugins column of the server |
+| client | `client-*` | on a monitored host, in a Xymon client's tree: measures the host and reports it to its server | a check sending a status column |
+| tools | `tools-*` | on a person's own machine, as themselves, under `~/.local` | a command reading the API (`xymonapi-mcp`, `xymonapi-agent`) |
+
+- A check of a monitored host is a client part, even one that should run
+  on the Xymon server too: the server's host is monitored through its own
+  client tree, which is planned to take client parts (`docs/PLAN.md`). Do
+  not copy it into the server part.
+- A part's task is named after it (S6): its task file has the one section
+  `[NAME-server]` or `[NAME-client]`, and the installer links it under the
+  same name, `NAME-server.cfg` or `NAME-client.cfg`. Only xymon-plugin's own
+  server task keeps `[xymon-plugin]`. A test refuses a shipped task file
+  with another section, a second one, or an `include` or `directory` line,
+  and a plugin whose name ends in `-server` or `-client`.
+- In a client part, `@XYMONHOME@` is the client's tree and its task's
+  `ENVFILE` is `@XYMONHOME@/etc/xymonclient.cfg`; its `LOGFILE` is
+  `@LOGDIR@/NAME-client.log`, `@LOGDIR@` written at install as the
+  client's log directory. In a server part, `@XYMONHOME@` is the server's
+  tree, its `ENVFILE` `xymonserver.cfg`, its log in `$XYMONSERVERLOGS`.
+- A `NEEDS` in a client part's task names a task of the client's own
+  launcher (`client`); once a server's own client tree takes client parts,
+  the same file is also read by the server's launcher, which knows
+  `xymonclient` and `xymond` instead, and drops, with a line in its log, a
+  task it does not know, the task running all the same. Its own server
+  task is read after it, so unknown to it at the first load (S34).
+
 Code shared by two plugins lives in one of them, the one
 it belongs to, and the other installs that one: the API's client,
 `xymonapi_client.py`, is `xymonapi`'s. A plugin's README and manual page name the
