@@ -169,6 +169,9 @@ case_refused "XYMONCLIENTHOME=\"$work/none\"" "a missing directory" "$work/none,
 mkdir -p "$work/plain"
 case_refused "XYMONCLIENTHOME=\"$work/plain\"" "no client's marks" "is no Xymon client's tree"
 case_refused "XYMONCLIENTHOME=\"$s\"" "the server's own tree" "is the server's own tree"
+mkdir -p "$work/other/bin" "$work/other/etc"
+: > "$work/other/bin/xymond"; : > "$work/other/etc/xymonserver.cfg"; : > "$work/other/bin/xymonclient.sh"; : > "$work/other/etc/xymonclient.cfg"
+case_refused "XYMONCLIENTHOME=\"$work/other\"" "a tree with both pairs of marks" "$work/other, is a Xymon server's tree"
 cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
 
 # A trailing / and a link: the tree taken resolved, as nothing written

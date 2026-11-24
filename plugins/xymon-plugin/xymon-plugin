@@ -991,7 +991,11 @@ own_client() {
 	cc=$(canon "$c")
 	[ -n "$cc" ] || die "$srv's XYMONCLIENTHOME, $c, is not there: the server's client tree it names is missing"
 	[ "$cc" != "$(canon "$srv")" ] || die "$srv's XYMONCLIENTHOME, $c, is the server's own tree: a client part does not go there"
-	[ "$(marks "$c")" = client ] || die "$srv's XYMONCLIENTHOME, $c, is no Xymon client's tree: it has not $CLIENT_MARKS"
+	case $(marks "$c") in
+		client) ;;
+		server) die "$srv's XYMONCLIENTHOME, $c, is a Xymon server's tree ($SERVER_MARKS), not a client's" ;;
+		*) die "$srv's XYMONCLIENTHOME, $c, is no Xymon client's tree: it has not $CLIENT_MARKS" ;;
+	esac
 	# Spelt once, resolved: as written, a trailing / or a link would go into
 	# the task file, its link and MANIFEST, and a value respelt later would
 	# no longer match them.
