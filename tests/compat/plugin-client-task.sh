@@ -78,7 +78,21 @@ x "$v1" enable --client ctask --force; ok "enable --client --force"
 x "$v1" disable --client ctask; ok "disable --client"
 { [ -e "$link" ] || [ -L "$link" ]; } && fail "[S13] disable left the link"
 cp "$work/clientlaunch.cfg" "$c/etc/clientlaunch.cfg"
+# enable changes clientlaunch.cfg's time, not its content: xymonlaunch
+# reads clientlaunch.d/, made since it started, only once that file changed.
+touch -t 200001010000 "$c/etc/clientlaunch.cfg"; : > "$work/ref"; touch -t 200101010000 "$work/ref"
 x "$v1" enable --client ctask; ok "enable --client"
+[ -n "$(find "$c/etc/clientlaunch.cfg" -newer "$work/ref")" ] || fail "[S13] enable left clientlaunch.cfg's time: xymonlaunch would not read clientlaunch.d/ made since it started"
+cmp -s "$work/clientlaunch.cfg" "$c/etc/clientlaunch.cfg" || fail "[S13] enable changed clientlaunch.cfg's content"
+# One that cannot be written: the task on all the same, said.
+mkdir -p "$work/notouch"
+# shellcheck disable=SC2016 # the shim's own $a and $@
+printf '#!/bin/sh\nfor a; do case $a in %s) echo "touch: $a: Permission denied" >&2; exit 1 ;; esac; done\nexec %s "$@"\n' "$c/etc/clientlaunch.cfg" "$(command -v touch)" > "$work/notouch/touch"
+chmod 755 "$work/notouch/touch"
+x "$v1" disable --client ctask; ok "disable --client"
+op=$PATH; PATH=$work/notouch:$PATH; x "$v1" enable --client ctask; PATH=$op; ok "enable --client, clientlaunch.cfg not writable"
+assert_contains "ctask is on, but $c/etc/clientlaunch.cfg cannot be written to have xymonlaunch read clientlaunch.d/ again" "$out" "[S13] a clientlaunch.cfg not writable is said"
+[ -L "$link" ] || fail "[S13] enable with clientlaunch.cfg not writable made no link"
 assert_equal "$c/ext/ctask/tasks.cfg" "$(readlink "$link")" "[S13] enable links clientlaunch.d/ctask.cfg to the task file"
 x "$v1" status --client; assert_contains "ctask: 1.0.0 installed, on" "$out" "[S13] status says it on"
 

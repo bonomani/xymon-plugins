@@ -1714,7 +1714,17 @@ as Xymon's own $LAUNCHCFG has it; --force makes the link all the same, where xym
 	fi
 	{ mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR" && ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$1.cfg"; } \
 		|| die "could not make $TASKDIR/$1.cfg: $1 stays off"
-	echo "$1 is on: xymonlaunch reads it within half a minute and starts it; one that keeps failing it holds for ten minutes after five restarts"
+	# xymonlaunch watches a directory line's directory only if it was there
+	# when it read LAUNCHCFG (Xymon's lib/stackio.c): one made since -- by
+	# this enable, an install or by hand -- is not read until LAUNCHCFG
+	# changes. Its time changed, not its content, it is read again; the
+	# tasks that did not change go on running.
+	lc=$XYMONHOME/etc/$LAUNCHCFG
+	if [ -z "$DESTDIR" ] && [ -f "$lc" ] && ! touch "$lc" 2>/dev/null; then
+		echo "$1 is on, but $lc cannot be written to have xymonlaunch read $TASKD/ again: it starts the task within half a minute only if $TASKD/ was there when it started; else restart Xymon"
+	else
+		echo "$1 is on: xymonlaunch reads it within half a minute and starts it; one that keeps failing it holds for ten minutes after five restarts"
+	fi
 	[ "$1" != "$self" ] || COLUMN=1
 }
 disable() {
