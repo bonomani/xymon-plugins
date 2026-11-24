@@ -141,9 +141,10 @@ A plugin's task is installed off, with no link (S13); the install says how
 to turn it on.
 
 **S6. A plugin's task lives in its directory.**
-The `server-task:` line of its `PLUGIN` names the file; installed, it is
-`ext/NAME/tasks.cfg`, and `etc/tasks.d/NAME.cfg`, when there, is a
-link to it; under `DESTDIR` the link names the installed file. The link
+The `server-task:` line of its `PLUGIN` names the server part's file,
+`client-task:` the client part's; installed, it is `ext/NAME/tasks.cfg` in
+that part's tree. On the server, `etc/tasks.d/NAME.cfg`, when there, is
+a link to it; under `DESTDIR` the link names the installed file. The link
 ends in `.cfg` because a packaged Xymon may read only the files of
 `tasks.d/` that do, where Xymon's own `tasks.cfg` reads them all. A link
 `tasks.d/NAME`, as an install before this name made it, is renamed by the
@@ -153,7 +154,11 @@ made, or the file an editor left in place of the link -- is the one
 xymonlaunch reads: it is moved into the plugin's directory as it was, and
 linked unless it was `DISABLED`. A link at either name to something else
 is left as it is, and the install, before it installs anything, `enable`
-and `disable` refused.
+and `disable` refused. A client part's task is the same in its client's
+tree, with `etc/clientlaunch.d/` and the client's `clientlaunch.cfg`, which
+its xymonlaunch reads, in place of `etc/tasks.d/` and `tasks.cfg`, here
+and in S7, S9 and S13; `enable --client` and `disable --client` turn it
+on and off.
 
 **S7. An update replaces the code and keeps the choices.**
 `update` replaces the plugin's directory as a whole, so a file a
@@ -455,8 +460,8 @@ something is refused; `status`, `verify` and `outdated` cover every part,
 the server's, a standalone client's tree and the tools. `install`, `remove` and `clean` need a
 plugin named, or `--all`. `install` refuses a plugin installed already, and
 `update` one that is not; `--all`, and a plugin one needs, pass over those
-installed, saying so. `enable` and `disable` refuse the tools and the
-client part, which have no task, and a plugin named with no task. Run as
+installed, saying so. `enable` and `disable` refuse the tools, which have
+no task, and a plugin named with no task in the part. Run as
 root, a verb that changes the tools is refused
 unless `DESTDIR` or `PREFIX` is given; `verify` and `outdated`, which change
 nothing, are not. Two parts named together are refused, `status`, `verify` and `outdated` saying
@@ -609,10 +614,10 @@ or untidy, 3 when something is broken, whatever else is untidy, and 4 when
 something is untidy and nothing broken. It needs no terminal, and, as
 `status`, covers every installation found when none is named (S25),
 the standalone clients' too. In a client's tree (S35) it checks the
-same, but what a client part never has: a task link, a copy `/plugins`
-serves, a virtualenv, a SELinux module, a set-aside directory, a file of
-the administrator's; what is left there is a manual page's link that
-points into the directory of a plugin of that tree that is gone.
+same, but what a client part never has: a copy `/plugins` serves, a
+virtualenv, a SELinux module, a web server snippet; what is left there is
+a task link or a manual page's link that points into the directory of a
+plugin of that tree that is gone.
 `MANIFEST` lying where the Xymon user can write, `verify` finds what was
 changed by mistake or left behind, not what someone able to write there
 and to rewrite `MANIFEST` too has hidden.
@@ -728,7 +733,9 @@ under `ext/NAME/`, with `VERSION`, its `PLUGIN` copy and its `MANIFEST`
 (S20, S29); its manual page, `client-manual:`, kept there and linked from
 `MANDIR` when that can be written and the page's name is free there
 (S20), else not, the command saying so.
-Nothing else is written: no task, no copy in the stage `/plugins` serves,
+Its task, `client-task:`, is installed off and turned on by `enable
+--client`, as a server part's (S5, S6, S7, S13).
+Nothing else is written: no copy in the stage `/plugins` serves,
 no virtualenv (`--venv` with `--client` is refused), no web server snippet
 and no SELinux module; nor is a client part staged under `DESTDIR`, which
 is refused. A plugin named with no client part is refused, and one whose
@@ -795,9 +802,6 @@ brings its test.
   move under `plugins/` as a client part when they get a `PLUGIN` file.
 - **A standalone client's part, the first client step (S35)**; still to
   come:
-  - a client part's task, named by a `client-task:` line, as the server
-    part's by `server-task:` (S6): until then a `PLUGIN` file with one is
-    refused by `install --client` and `update --client`, saying so;
   - a server's own client tree comes after;
   - a client tree that may be a server's own (S25) is asked about, once
     the command can ask, rather than refused.

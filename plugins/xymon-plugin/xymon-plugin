@@ -241,13 +241,22 @@ inside() {
 server_paths() {
 	EXTROOT=$(inside "$XYMONHOME/ext") || exit 1
 	ETC=$(inside "$XYMONHOME/etc") || exit 1
-	TASKDIR=$(inside "$XYMONHOME/etc/tasks.d") || exit 1
+	# A client's tree has its tasks launched from clientlaunch.d/, which its
+	# clientlaunch.cfg reads; a server's from tasks.d/ and tasks.cfg (S6).
+	# The first call, before marks is defined, is a server's.
+	if [ -z "${1:-}" ] && [ -z "${DESTDIR:-}" ] && [ "$(marks "$XYMONHOME")" = client ]; then
+		TPART=client TASKD=clientlaunch.d LAUNCHCFG=clientlaunch.cfg
+	else
+		TPART=server TASKD=tasks.d LAUNCHCFG=tasks.cfg
+	fi
+	TASKKEY=$TPART-task
+	TASKDIR=$(inside "$XYMONHOME/etc/$TASKD") || exit 1
 	# What other machines install from, which the API serves at /plugins:
 	# each plugin installed on the server stages its directory here, as in
 	# the repository, beside this script and LICENSE.
 	DIST=$EXTROOT/xymon-plugins-dist
 }
-server_paths
+server_paths early
 TOOLSROOT=$(inside "$PREFIX/libexec/xymon-plugins") || exit 1
 BIN=$(inside "$PREFIX/bin") || exit 1
 TOOLSMAN1=$(inside "$PREFIX/share/man/man1") || exit 1
@@ -965,6 +974,9 @@ need_home() {
 		esac
 		case $VERB in status|verify) client_home_ok read ;; *) client_home_ok ;; esac
 	fi
+	# Its paths again, now its kind is known: a client's launches its tasks
+	# from clientlaunch.d/.
+	server_paths
 	# Before anything changes: the target, the part, and what chose them.
 	# It is remembered once the run has done its work, and not by a verb
 	# that changes nothing: a refusal leaves no trace (S25).
@@ -1339,7 +1351,7 @@ manifest_ext() {
 				mf_file "$DIST/plugins/$1/$f" "$XYMONHOME/ext/xymon-plugins-dist/plugins/$1/$f"
 			done
 		else
-			mf_dir "$EXTROOT/$1" ""
+			mf_dir "$EXTROOT/$1" "tasks.cfg"
 		fi
 		pg=$(field "$1" "$PART-manual")
 		if [ -n "$pg" ]; then
@@ -1520,7 +1532,7 @@ old_link() {
 		return 0
 	fi
 	mv "$o" "$n" || exit 1
-	echo "$o is now $n: a packaged Xymon may read only the files of tasks.d/ that end in .cfg"
+	echo "$o is now $n: a packaged Xymon may read only the files of $TASKD/ that end in .cfg"
 }
 
 # reads_tasks -- true when the server's tasks.cfg reads tasks.d/, by a
@@ -1529,9 +1541,9 @@ old_link() {
 # nothing to look at.
 reads_tasks() {
 	[ -z "$DESTDIR" ] || return 0
-	c=$(inside "$XYMONHOME/etc/tasks.cfg") || exit 1
+	c=$(inside "$XYMONHOME/etc/$LAUNCHCFG") || exit 1
 	[ -f "$c" ] || return 0
-	grep -q '^[[:space:]]*\(optional[[:space:]]\{1,\}\)\{0,1\}directory[[:space:]]\{1,\}\(.*/\)\{0,1\}tasks\.d/\{0,1\}[[:space:]]*$' "$c"
+	grep -q '^[[:space:]]*\(optional[[:space:]]\{1,\}\)\{0,1\}directory[[:space:]]\{1,\}\(.*/\)\{0,1\}'"$(echo "$TASKD" | sed 's/\./\\./g')"'/\{0,1\}[[:space:]]*$' "$c"
 }
 
 # task PLUGIN -- its xymonlaunch task file, @XYMONHOME@ replaced, kept in
@@ -1611,11 +1623,13 @@ merge() {
 }
 
 task() {
-	t=$(field "$1" server-task); [ -n "$t" ] || return 0
+	t=$(field "$1" "$TASKKEY"); [ -n "$t" ] || return 0
 	tf=$EXTROOT/$1/tasks.cfg
 	link=$TASKDIR/$1.cfg
 	ours "$1"
-	mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"
+	# The server's tasks.d/ made at once; a client's clientlaunch.d/ only
+	# for a link, its etc/ maybe the system's, not its owner's.
+	[ "$TPART" != server ] || { mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"; }
 	old_link "$1"
 	on=
 	this=$AS/tasks.cfg.this
@@ -1656,6 +1670,9 @@ task() {
 	elif [ -n "$on" ]; then
 		# Made under a name xymonlaunch skips, a dot first, and renamed
 		# over what is there: tasks.d/ never lacks it.
+		# The directory made only for a link: a task off writes nothing
+		# there, where a client's etc/ may be the system's, not its owner's.
+		mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"
 		lt=$TASKDIR/.$1.cfg.tmp
 		# mv would put it inside a directory, or one a link names: a link
 		# goes first, a directory stops the install.
@@ -1664,13 +1681,19 @@ task() {
 		echo "$1's task is on, as it was"
 	else
 		rm -f "$link"
-		echo "$1's task is off: XYMONHOME=$XYMONHOME ./xymon-plugin enable --server $1 turns it on"
+		echo "$1's task is off: $(enable_cmd "$1") turns it on"
 	fi
+}
+
+# enable_cmd PLUGIN -- the command that turns its task on in this tree.
+enable_cmd() {
+	if [ "$TPART" = client ]; then echo "./xymon-plugin enable --client$(hx) $1"
+	else echo "XYMONHOME=$XYMONHOME ./xymon-plugin enable --server $1"; fi
 }
 
 # enable PLUGIN, disable PLUGIN -- its task on or off, by its link.
 enable() {
-	[ -n "$(held "$EXTROOT" "$1" server-task)" ] || die "$1 has no task to enable"
+	[ -n "$(held "$EXTROOT" "$1" "$TASKKEY")" ] || die "$1 has no task to enable"
 	[ -f "$EXTROOT/$1/tasks.cfg" ] || die "$1 is not installed in $EXTROOT"
 	ours "$1"
 	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
@@ -1679,22 +1702,22 @@ enable() {
 	old_link "$1"
 	# On already: for xymon-plugin, the way to have the column sent now,
 	# a release published since its last run among what it says (S33).
-	[ -L "$TASKDIR/$1.cfg" ] && { echo "$1 is on already"; [ "$1" != "$self" ] || COLUMN=1; return 0; }
-	# Before the link: a server whose tasks.cfg does not read tasks.d/
-	# would not have the task, whatever is linked there.
+	[ -L "$TASKDIR/$1.cfg" ] && { echo "$1 is on already"; [ "$1" != "$self" ] || [ "$TPART" != server ] || COLUMN=1; return 0; }
+	# Before the link: a tree whose tasks.cfg, or clientlaunch.cfg, does
+	# not read the directory would not have the task, whatever is linked.
 	if ! reads_tasks; then
-		[ -n "$FORCE" ] || die "$XYMONHOME/etc/tasks.cfg does not read tasks.d/, so xymonlaunch would not have $1's task: add the line
-  directory $XYMONHOME/etc/tasks.d
-as Xymon's own tasks.cfg has it; --force makes the link all the same, where the server reads tasks.d/ another way"
-		echo "xymon-plugin: $XYMONHOME/etc/tasks.cfg does not read tasks.d/: $1's link is made all the same, as --force asks, and its task may not start" >&2
+		[ -n "$FORCE" ] || die "$XYMONHOME/etc/$LAUNCHCFG does not read $TASKD/, so xymonlaunch would not have $1's task: add the line
+  directory $XYMONHOME/etc/$TASKD
+as Xymon's own $LAUNCHCFG has it; --force makes the link all the same, where xymonlaunch reads $TASKD/ another way"
+		echo "xymon-plugin: $XYMONHOME/etc/$LAUNCHCFG does not read $TASKD/: $1's link is made all the same, as --force asks, and its task may not start" >&2
 	fi
 	mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"
 	ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$1.cfg" || exit 1
 	echo "$1 is on: xymonlaunch reads it within half a minute and starts it; one that keeps failing it holds for ten minutes after five restarts"
-	[ "$1" != "$self" ] || COLUMN=1
+	[ "$1" != "$self" ] || [ "$TPART" != server ] || COLUMN=1
 }
 disable() {
-	[ -n "$(held "$EXTROOT" "$1" server-task)" ] || die "$1 has no task to disable"
+	[ -n "$(held "$EXTROOT" "$1" "$TASKKEY")" ] || die "$1 has no task to disable"
 	ours "$1"
 	is_on "$1" || { echo "$1 is off already"; return 0; }
 	rm -f "$TASKDIR/$1.cfg"
@@ -1751,7 +1774,7 @@ status() {
 	fi
 	v=$(sed -e 's|^.*/v||' "$2/$3/VERSION")
 	state=
-	if [ "$1" = server ] && [ -n "$(held "$2" "$3" server-task)" ]; then
+	if [ "$1" != tools ] && [ -n "$(held "$2" "$3" "$1-task")" ]; then
 		if is_on "$3"; then state=", on"; else state=", off"; fi
 	fi
 	# A server part whose Python lacks its modules is said, as enable
@@ -1774,7 +1797,7 @@ status() {
 # installed_tasks -- the plugins named, or every one installed with a task.
 installed_tasks() {
 	for n in $LIST; do
-		if [ -n "$NAMES" ] || { [ -n "$(held "$EXTROOT" "$n" server-task)" ] && [ -d "$EXTROOT/$n" ]; }; then echo "$n"; fi
+		if [ -n "$NAMES" ] || { [ -n "$(held "$EXTROOT" "$n" "$TASKKEY")" ] && [ -d "$EXTROOT/$n" ]; }; then echo "$n"; fi
 	done
 }
 
@@ -2382,11 +2405,32 @@ install_client() {
 	ns=$(needs "$1" client) || exit 1
 	for n in $ns; do known "$n"; install_client "$n"; done
 	[ -n "$(field "$1" client-files)" ] || die "$1 has no client part"
-	[ -z "$(field "$1" client-task)" ] || die "$1's PLUGIN file has a client-task: line: a client part's task is not installed yet"
-	dir=$EXTROOT/$1
+	dir=$EXTROOT/$1 ext=$EXTROOT/$1
 	was_manual=$(held "$EXTROOT" "$1" client-manual)
+	was_task=$(held "$EXTROOT" "$1" client-task)
+	# Refused before anything is replaced, not halfway through.
+	[ -z "$(field "$1" client-task)" ] || ours "$1"
+	[ ! -L "$dir" ] || die "$dir is a link: left as it is"
 	progress "$1"
-	fresh "$dir" "$PROG MANIFEST" || exit 1
+	# The task file, which the admin may have edited and enabled, and each
+	# NAME.old, set aside as on the server (install_server, S7).
+	aside "$1" || exit 1
+	keep="$PROG PLUGIN MANIFEST"
+	if [ -f "$dir/tasks.cfg" ] && [ ! -L "$dir/tasks.cfg" ] && [ -n "$(field "$1" client-task)" ]; then
+		put_aside "$dir/tasks.cfg" tasks.cfg cp
+		keep="$keep tasks.cfg"
+	elif [ -f "$dir/tasks.cfg" ]; then
+		put_aside "$dir/tasks.cfg" tasks.cfg
+	fi
+	if [ -d "$dir/.shipped" ] && [ ! -L "$dir/.shipped" ] && [ -f "$dir/.shipped/tasks.cfg" ] && [ ! -L "$dir/.shipped/tasks.cfg" ] && [ ! -e "$AS/.shipped/tasks.cfg" ]; then
+		mv "$dir/.shipped/tasks.cfg" "$AS/.shipped/tasks.cfg" || exit 1
+	fi
+	while IFS= read -r f; do
+		[ -z "$f" ] || put_aside "$dir/$f" "$f"
+	done <<EOF
+$(olds "$dir")
+EOF
+	fresh "$dir" "$keep" || exit 1
 	# PLUGIN first, VERSION last, as on the server.
 	record "$1" "$dir"
 	copy "$1" client "$dir"
@@ -2406,6 +2450,13 @@ install_client() {
 		[ -n "$mr" ] || echo "$sec cannot be written: $1's manual page is not linked from it, and is read as man $XYMONHOME/ext/$1/$pg"
 	fi
 	manual "$1" "$pg" "$dir" "$mr" "$XYMONHOME/ext/$1"
+	# A task this version has no more: its link goes, the task file, set
+	# aside, kept by aside_back, edited.
+	if [ -z "$(field "$1" client-task)" ] && { [ -n "$was_task" ] || [ "$(readlink "$TASKDIR/$1.cfg" 2>/dev/null)" = "$XYMONHOME/ext/$1/tasks.cfg" ]; }; then
+		drop_task "$1"
+	fi
+	task "$1" || exit 1
+	aside_back || exit 1
 	version "$1" "$dir"
 	progress_done "$1"
 	MANIFESTS="$MANIFESTS $1"
@@ -2627,16 +2678,30 @@ client_ok() {
 	ns=$(needs "$1" client) || exit 1
 	for m in $ns; do client_ok "$m"; done
 	part_left client "$1"
-	running_ok "$1"
+	aside_ok "$1"
 }
 
 uninstall_client() {
-	[ -d "$EXTROOT/$1" ] || { echo "$1 is not installed in $XYMONHOME/ext: nothing removed."; return 0; }
+	# Its directory gone (S9): the task link into it alone goes.
+	if [ ! -d "$EXTROOT/$1" ]; then
+		if [ "$(readlink "$TASKDIR/$1.cfg" 2>/dev/null)" = "$XYMONHOME/ext/$1/tasks.cfg" ]; then
+			drop_task "$1" absent
+			echo "$1 is not installed in $XYMONHOME/ext: its task link, left, is removed."
+		else
+			echo "$1 is not installed in $XYMONHOME/ext: nothing removed."
+		fi
+		return 0
+	fi
 	needed "$1" client "$EXTROOT"
 	m=$(held "$EXTROOT" "$1" client-manual)
+	t=$(held "$EXTROOT" "$1" client-task)
+	sa=$EXTROOT/.xymon-plugin.$1
+	if cut_short "$1" && marked "$sa" "$1" && aside_empty "$1"; then rm -rf "${sa:?}"; fi
 	rm -rf "$EXTROOT/$1" || die "could not remove all of $EXTROOT/$1: what is left is listed above"
+	if [ -e "$sa" ] || [ -L "$sa" ]; then stale "$sa" "$1"; fi
 	REMEMBER=client
 	drop_manual "$m" "$MANDIR" "$XYMONHOME/ext/$1" ""
+	[ -z "$t" ] || drop_task "$1"
 	echo "Uninstalled $1 from $XYMONHOME/ext/$1."
 }
 
@@ -2717,7 +2782,7 @@ verify_plugin() {
 	part=$1 root=$2 n=$3 dir=$2/$3 fix="./xymon-plugin update --$1 $3" bad=0 before=$((BROKEN + UNTIDY))
 	# A set-aside directory beside a complete install, which no run takes
 	# up (S7): untidy, to compare and remove.
-	if [ "$part" = server ] && server_installed "$n" && { [ -e "$EXTROOT/.xymon-plugin.$n" ] || [ -L "$EXTROOT/.xymon-plugin.$n" ]; }; then
+	if [ "$part" != tools ] && "${part}_installed" "$n" && { [ -e "$EXTROOT/.xymon-plugin.$n" ] || [ -L "$EXTROOT/.xymon-plugin.$n" ]; }; then
 		v_untidy "$n: $(stale "$EXTROOT/.xymon-plugin.$n" "$n")"
 	fi
 	if [ "$part" != tools ] && ! "${part}_installed" "$n"; then
@@ -2782,14 +2847,16 @@ EOF
 			done
 		fi
 	fi
-	if [ "$part" = server ]; then
+	if [ "$part" != tools ]; then
 		# The task link, a state MANIFEST leaves out (S29): there, it is the
 		# plugin's.
 		for l in "$TASKDIR/$n.cfg" "$TASKDIR/$n"; do
 			[ -L "$l" ] || continue
 			[ "$(readlink "$l")" = "$XYMONHOME/ext/$n/tasks.cfg" ] \
-				|| v_broken "$n: its task link ${l##*/} points to $(readlink "$l"), not its task file: ./xymon-plugin disable --server $n, then enable"
+				|| v_broken "$n: its task link ${l##*/} points to $(readlink "$l"), not its task file: ./xymon-plugin disable --$part $n, then enable"
 		done
+	fi
+	if [ "$part" = server ]; then
 		# Its SELinux module, loaded where SELinux is active.
 		if [ -n "$(held "$root" "$n" selinux)" ] && [ -z "$DESTDIR" ] && command -v selinuxenabled >/dev/null 2>&1 \
 			&& selinuxenabled && command -v semodule >/dev/null 2>&1; then
@@ -2834,16 +2901,10 @@ present() { [ -f "$EXTROOT/$1/VERSION" ] || cut_short "$1"; }
 left() {
 	T=$(printf '\t')
 	if [ "$1" = client ]; then
+		left_task
 		left_man
 	elif [ "$1" = server ]; then
-		for l in "$TASKDIR"/*; do
-			[ -L "$l" ] || continue
-			case $(readlink "$l") in
-				"$XYMONHOME/ext/"*/tasks.cfg) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%/tasks.cfg}
-					plain "$t" && ! present "$t" \
-						&& echo "$t$T$l$T$XYMONHOME/etc/tasks.d/${l##*/}${T}the task link of $t${T}proved" ;;
-			esac
-		done
+		left_task
 		left_man
 		for d in "$DIST/plugins"/*; do
 			[ -d "$d" ] && [ ! -L "$d" ] || continue
@@ -2878,6 +2939,20 @@ left() {
 		[ -n "$any" ] || [ ! -d "$TOOLSROOT/venv" ] \
 			|| echo "*$T$TOOLSROOT/venv$T$PREFIX/libexec/xymon-plugins/venv${T}the virtualenv, with no plugin installed${T}proved"
 	fi
+}
+
+# left_task -- left's lines for the task links in tasks.d/, or a client's
+# clientlaunch.d/, that point into the directory, gone, of a plugin of
+# this tree.
+left_task() {
+	for l in "$TASKDIR"/*; do
+		[ -L "$l" ] || continue
+		case $(readlink "$l") in
+			"$XYMONHOME/ext/"*/tasks.cfg) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%/tasks.cfg}
+				plain "$t" && ! present "$t" \
+					&& echo "$t$T$l$T$XYMONHOME/etc/$TASKD/${l##*/}${T}the task link of $t${T}proved" ;;
+		esac
+	done
 }
 
 # left_man -- left's lines for the manual page links in MANDIR that point
@@ -2973,7 +3048,7 @@ verify_part() {
 		else
 			echo "$n: not installed"
 			# What a run cut short set aside, its directory gone since.
-			if [ "$1" = server ] && { [ -e "$EXTROOT/.xymon-plugin.$n" ] || [ -L "$EXTROOT/.xymon-plugin.$n" ]; }; then
+			if [ "$1" != tools ] && { [ -e "$EXTROOT/.xymon-plugin.$n" ] || [ -L "$EXTROOT/.xymon-plugin.$n" ]; }; then
 				v_untidy "$n: $(stale "$EXTROOT/.xymon-plugin.$n" "$n")"
 			fi
 		fi
@@ -3173,9 +3248,8 @@ if [ "$(( ${SEL_SERVER:-0} + ${SEL_CLIENT:-0} + ${SEL_TOOLS:-0} ))" -gt 1 ]; the
 	[ -z "$SEL_SERVER" ] || cmds="$cmds
   ./xymon-plugin $VERB --server${rest:+ $rest}"
 	# enable and disable: the client part has no task, so no command.
-	case $SEL_CLIENT$VERB in 1enable|1disable) cmds="$cmds
-  (the client part has no task to turn on or off)" ;; 1*) cmds="$cmds
-  ./xymon-plugin $VERB --client${rest:+ $rest}" ;; esac
+	[ -z "$SEL_CLIENT" ] || cmds="$cmds
+  ./xymon-plugin $VERB --client${rest:+ $rest}"
 	[ -z "$SEL_TOOLS" ] || cmds="$cmds
   ./xymon-plugin $VERB --tools${rest:+ $rest}"
 	die "one part at a time, as the tools are the person's and a Xymon part its tree's owner's: run$cmds"
@@ -3185,9 +3259,6 @@ case $VERB in status|verify|outdated) ;; *)
 		# A server's own client tree: the server named, as with --server.
 		own_refused
 		rest=$(echo $NAMES)${ALL:+ --all}
-		case $VERB in
-			enable|disable) die "$XYMONHOME is a Xymon client's tree, and the client part has no task to turn on or off yet" ;;
-		esac
 		die "$XYMONHOME is a Xymon client's tree, whose part is named: ./xymon-plugin $VERB --client$(hx)${rest:+ $rest}"
 	fi ;;
 esac
@@ -3199,9 +3270,6 @@ elif [ -t 0 ] && [ -t 1 ]; then PART=server; echo "Part: server, as none is name
 else die "$VERB names no part, and there is no terminal to say it: --server, --client, or --tools"
 fi
 if [ "$PART" = client ]; then
-	case $VERB in
-		enable|disable) die "the client part has no task to turn on or off yet" ;;
-	esac
 	[ -z "$VENV_FETCH" ] || die "--venv: a client part has no virtualenv"
 	[ -z "$DESTDIR" ] || die "DESTDIR: a client part is not staged yet, only installed in a client's tree"
 fi
@@ -3303,12 +3371,12 @@ case $VERB in
 		# A plugin named with no task is refused; with none named, those
 		# with no task are passed over.
 		for n in $NAMES; do
-			[ -n "$(held "$EXTROOT" "$n" server-task)" ] || die "$n has no task to turn on or off"
+			[ -n "$(held "$EXTROOT" "$n" "$TASKKEY")" ] || die "$n has no task to turn on or off"
 		done
 		[ -n "$NAMES" ] || LIST=$(with_installed "$EXTROOT")
 		# enable refuses a plugin whose Python lacks the modules it needs,
 		# before any is turned on.
-		if [ "$VERB" = enable ]; then
+		if [ "$VERB" = enable ] && [ "$PART" = server ]; then
 			for n in $(installed_tasks); do
 				m=$(missing_modules "$n")
 				[ -z "$m" ] || die "$n needs the Python modules $m, which the Python it runs with lacks: ./xymon-plugin update --server --venv $n makes them, or XYMONAPI_PYTHON names a Python that has them"
