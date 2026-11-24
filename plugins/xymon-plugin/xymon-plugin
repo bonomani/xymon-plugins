@@ -877,10 +877,14 @@ none_chosen() { [ -n "${SOFT:-}" ] || die "no installation chosen: nothing done"
 # it only.
 remember_tree() {
 	[ -z "$DESTDIR" ] || return 0
+	# Not a server's own client tree, which no proposal offers: named by
+	# its server always, it would only take the place of the standalone
+	# client used last (S25, S36).
+	[ -z "$OWNOF" ] || return 0
 	{ [ -n "$ROOTUSER" ] && [ -n "${SUDO_USER:-}" ]; } && return 0
 	conf=$(person_conf) || return 0
-	mkdir -p "$conf" 2>/dev/null && printf '%s\n' "$LAUNCHHOME" > "$conf/installation-used-last-$1" 2>/dev/null \
-		|| echo "xymon-plugin: could not remember $LAUNCHHOME as the installation used last in $conf" >&2
+	mkdir -p "$conf" 2>/dev/null && printf '%s\n' "$XYMONHOME" > "$conf/installation-used-last-$1" 2>/dev/null \
+		|| echo "xymon-plugin: could not remember $XYMONHOME as the installation used last in $conf" >&2
 }
 
 # hx -- --xymon-home and XYMONHOME, for a command printed, which the

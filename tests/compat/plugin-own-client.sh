@@ -63,8 +63,11 @@ refused() { [ "$rc" -ne 0 ] || fail "$1 was taken: $out"; }
 dump() { "$XYMON_SRC/common/xymonlaunch" --config="$s/etc/tasks.cfg" --dump 2>/dev/null | grep '^\[' || true; }
 link=$s/etc/tasks.d/oc-client.cfg
 
-# Installed off, in the client tree, named by its server.
+# Installed off, in the client tree, named by its server; the standalone
+# client used last stays the one remembered.
+mkdir -p "$XDG_CONFIG_HOME/xymon-plugin"; echo /a/standalone/client > "$XDG_CONFIG_HOME/xymon-plugin/installation-used-last-client"
 x install --client oc XYMONHOME="$s"; ok "install --client named by the server"
+assert_equal /a/standalone/client "$(cat "$XDG_CONFIG_HOME/xymon-plugin/installation-used-last-client")" "[S25] a server's own client tree is not remembered over the standalone client used last"
 assert_contains "Target: $c (named by XYMONHOME, the client tree of the Xymon server $s), part: client" "$out" "[S36] the target is the server's client tree, said"
 assert_file_exists "$c/ext/oc/tasks.cfg"
 assert_contains "CMD $c/ext/oc/check.sh" "$(cat "$c/ext/oc/tasks.cfg")" "[S36] @XYMONHOME@ is the client tree"
