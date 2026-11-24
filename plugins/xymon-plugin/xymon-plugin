@@ -1528,10 +1528,10 @@ old_link() {
 	o=$TASKDIR/$1 n=$TASKDIR/$1.cfg
 	[ -L "$o" ] || [ -f "$o" ] || return 0
 	if [ -e "$n" ] || [ -L "$n" ]; then
-		if [ -L "$o" ]; then rm -f "$o"; else echo "xymon-plugin: $o is left as it is: $n is $1's task" >&2; fi
+		if [ -L "$o" ]; then rm -f "$o" || die "could not remove $o: left as it is"; else echo "xymon-plugin: $o is left as it is: $n is $1's task" >&2; fi
 		return 0
 	fi
-	mv "$o" "$n" || exit 1
+	mv "$o" "$n" || die "could not rename $o to $n: left as it is"
 	echo "$o is now $n: a packaged Xymon may read only the files of $TASKD/ that end in .cfg"
 }
 
@@ -1681,7 +1681,7 @@ task() {
 		rm -f "$lt" && ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$lt" && mv -f "$lt" "$link" || exit 1
 		echo "$1's task is on, as it was"
 	else
-		rm -f "$link"
+		rm -f "$link" || die "could not remove $link: $1's task stays on"
 		echo "$1's task is off: $(enable_cmd "$1") turns it on"
 	fi
 }
@@ -1712,8 +1712,8 @@ enable() {
 as Xymon's own $LAUNCHCFG has it; --force makes the link all the same, where xymonlaunch reads $TASKD/ another way"
 		echo "xymon-plugin: $XYMONHOME/etc/$LAUNCHCFG does not read $TASKD/: $1's link is made all the same, as --force asks, and its task may not start" >&2
 	fi
-	mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR"
-	ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$1.cfg" || exit 1
+	{ mkdir -p "$TASKDIR" && open_dir -1 "$TASKDIR" && ln -s "$XYMONHOME/ext/$1/tasks.cfg" "$TASKDIR/$1.cfg"; } \
+		|| die "could not make $TASKDIR/$1.cfg: $1 stays off"
 	echo "$1 is on: xymonlaunch reads it within half a minute and starts it; one that keeps failing it holds for ten minutes after five restarts"
 	[ "$1" != "$self" ] || [ "$TPART" != server ] || COLUMN=1
 }
@@ -1721,8 +1721,8 @@ disable() {
 	[ -n "$(held "$EXTROOT" "$1" "$TASKKEY")" ] || die "$1 has no task to disable"
 	ours "$1"
 	is_on "$1" || { echo "$1 is off already"; return 0; }
-	rm -f "$TASKDIR/$1.cfg"
-	[ ! -L "$TASKDIR/$1" ] || rm -f "$TASKDIR/$1"
+	rm -f "$TASKDIR/$1.cfg" || die "could not remove $TASKDIR/$1.cfg: $1 stays on"
+	[ ! -L "$TASKDIR/$1" ] || rm -f "$TASKDIR/$1" || die "could not remove $TASKDIR/$1: $1 stays on"
 	echo "$1 is off: xymonlaunch stops it within half a minute"
 }
 
@@ -2246,6 +2246,7 @@ install_server() {
 	was_selinux=$(held "$EXTROOT" "$1" selinux)
 	# Refused before anything is replaced, not halfway through.
 	[ -z "$(field "$1" server-task)" ] || ours "$1"
+	task_writes "$1"
 	# The task file an admin may have enabled, the web server snippets an
 	# admin may have edited, and each NAME.old outlive the directory: set
 	# aside in AS, the one a run cut short left taken up (aside), and
@@ -2384,6 +2385,44 @@ install_tools() {
 	DONE="$DONE $1"
 }
 
+# task_writes PLUGIN -- refused before anything is replaced, rather than
+# cut short halfway, and every resume with it: this version changes what
+# TASKDIR holds -- a file in the link's place made a link, the link or the
+# file of a task gone taken -- and nothing can be made there, as in a
+# client's etc/ that is the system's. Tried, not read from a mode bit,
+# which stops nothing for root.
+task_writes() {
+	l=$TASKDIR/$1.cfg
+	tw=$(field "$1" "$TASKKEY")
+	# The server's tasks.d/, made for any task, made now.
+	if [ -n "$tw" ] && [ "$TPART" = server ] && [ ! -d "$TASKDIR" ]; then
+		mkdir -p "$TASKDIR" 2>/dev/null || die "could not make $TASKDIR, where $1's task goes: nothing is replaced"
+	fi
+	dis='^[[:space:]]*DISABLED[[:space:]]*$'
+	if [ -n "$tw" ]; then
+		# A file in the link's place made a link; the name of before
+		# renamed; a task DISABLED, in this version's file or the one in
+		# place, its link taken.
+		{ [ -f "$l" ] && [ ! -L "$l" ]; } || [ -L "$TASKDIR/$1" ] || [ -f "$TASKDIR/$1" ] \
+			|| { is_on "$1" && { grep -q "$dis" "$ROOT/plugins/$1/$tw" || grep -q "$dis" "$EXTROOT/$1/tasks.cfg"; } 2>/dev/null; } \
+			|| return 0
+	elif [ -L "$l" ]; then
+		[ "$(readlink "$l")" = "$XYMONHOME/ext/$1/tasks.cfg" ] || return 0
+	else
+		[ -f "$l" ] && [ -n "$(held "$EXTROOT" "$1" "$TASKKEY")" ] || return 0
+	fi
+	lt=$TASKDIR/.$1.cfg.tmp
+	{ rm -f "$lt" && ln -s "$l" "$lt" && rm -f "$lt"; } 2>/dev/null \
+		|| die "$TASKDIR cannot be written, where $1's update must change $l: nothing is replaced"
+}
+
+# link_left PLUGIN -- drop_task could not remove $l, the plugin's
+# directory gone: said, with what takes it.
+link_left() {
+	if [ -L "$l" ]; then die "could not remove $l: left, pointing to the removed task file; ./xymon-plugin clean --$TPART$(hx) $1 takes it once it can be written"
+	else die "could not remove $l: left, xymonlaunch reading it still; remove it once it can be written"; fi
+}
+
 # task_gone PLUGIN -- a task this version has no more, by the record
 # (was_task) or the link to it, the record a run cut short may have written
 # anew: its link goes; the task file, set aside, is kept by aside_back,
@@ -2397,7 +2436,7 @@ task_gone() {
 			echo "$l, edited, read by xymonlaunch in the link's place, is kept with $1's task file"
 		fi
 	done
-	drop_task "$1"
+	drop_task "$1" || die "could not remove $l: $1's task stays on"
 }
 
 # install_client PLUGIN -- its client part in the client's tree: its
@@ -2416,6 +2455,7 @@ install_client() {
 	was_task=$(held "$EXTROOT" "$1" client-task)
 	# Refused before anything is replaced, not halfway through.
 	[ -z "$(field "$1" client-task)" ] || ours "$1"
+	task_writes "$1"
 	[ ! -L "$dir" ] || die "$dir is a link: left as it is"
 	progress "$1"
 	# The task file, which the admin may have edited and enabled, and each
@@ -2545,11 +2585,11 @@ drop_command() {
 drop_task() {
 	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
 		if [ -L "$l" ]; then
-			[ "$(readlink "$l")" = "$XYMONHOME/ext/$1/tasks.cfg" ] && rm -f "$l"
+			[ "$(readlink "$l")" != "$XYMONHOME/ext/$1/tasks.cfg" ] || rm -f "$l" || return 1
 		elif [ -n "${2:-}" ] && [ -f "$l" ]; then
 			echo "$l is left as it is: $1 is not installed, so it may be no install's"
 		elif [ ! -d "$l" ]; then
-			rm -f "$l"
+			rm -f "$l" || return 1
 		fi
 	done
 	rm -f "$TASKDIR/.$1.cfg.tmp"
@@ -2687,7 +2727,7 @@ uninstall_client() {
 	# Its directory gone (S9): the task link into it alone goes.
 	if [ ! -d "$EXTROOT/$1" ]; then
 		if [ "$(readlink "$TASKDIR/$1.cfg" 2>/dev/null)" = "$XYMONHOME/ext/$1/tasks.cfg" ]; then
-			drop_task "$1" absent
+			drop_task "$1" absent || link_left "$1"
 			echo "$1 is not installed in $XYMONHOME/ext: its task link, left, is removed."
 		else
 			echo "$1 is not installed in $XYMONHOME/ext: nothing removed."
@@ -2705,7 +2745,7 @@ uninstall_client() {
 	if [ -e "$sa" ] || [ -L "$sa" ]; then stale "$sa" "$1"; fi
 	REMEMBER=client
 	drop_manual "$m" "$MANDIR" "$XYMONHOME/ext/$1" ""
-	[ -z "$t" ] || drop_task "$1"
+	[ -z "$t" ] || drop_task "$1" || link_left "$1"
 	echo "Uninstalled $1 from $XYMONHOME/ext/$1."
 }
 
@@ -2744,7 +2784,7 @@ uninstall_server() {
 	# Any other: the admin's, said, never taken.
 	if [ -e "$sa" ] || [ -L "$sa" ]; then stale "$sa" "$1"; fi
 	drop_manual "$m" "$MANDIR" "$XYMONHOME/ext/$1" "$legacy"
-	[ -z "$t" ] || drop_task "$1" "$absent"
+	[ -z "$t" ] || drop_task "$1" "$absent" || link_left "$1"
 	# Its SELinux module, the one named after it (S23).
 	if [ -n "$se" ] && [ -z "$absent" ] && [ -z "$DESTDIR" ] && command -v semodule >/dev/null 2>&1; then
 		semodule -r "$1" >/dev/null 2>&1 || :
