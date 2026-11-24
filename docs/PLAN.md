@@ -147,12 +147,6 @@ Each becomes a numbered rule with the pull request that brings its test.
 - `xymon-setup`, a tool of its own to install Xymon itself (server or
   client, from packages, Homebrew or a build), then calling `xymon-plugin`.
   Nothing to prepare now.
-- **An update at the same version restarts the API**: `manifest()` always
-  writes a new `MANIFEST` (a new inode), and the API restarts when its own
-  or xymonapi-rag's changes, whether the code did or not. An update of a
-  plugin updates those it needs with it, so `update xymonapi-mcp` alone
-  restarts it too. Write `MANIFEST` only when its content changes. (#136 tried it by passing over `restart:`,
-  since gone, and was closed.)
 - **A review by another provider** of what only Claude read: the API's
   `MANIFEST` watch (`app.py`) and the `plugins` column
   (`xymon-plugin-report.sh`), unchanged since #151-#160.
