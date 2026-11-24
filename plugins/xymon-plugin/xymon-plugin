@@ -958,8 +958,9 @@ client_home_ok() {
 
 # own_client -- --client with XYMONHOME a server's tree: the server's own
 # client tree (S36), the one its xymonserver.cfg names as XYMONCLIENTHOME,
-# a variable in it read through the server's xymoncmd. Refused, saying
-# what was read, when it names none, a directory not there, one without a
+# a variable in it read through the server's xymoncmd, taken resolved.
+# Refused, saying what was read, when it names none, a path not absolute,
+# a directory not there, one without a
 # client's marks, or the server's own; and, for a verb that changes
 # something, when that tree's ext/ is not there, or is the owner's of
 # neither the server's ext/ nor root's, giving the commands, or is not the
@@ -973,11 +974,17 @@ own_client() {
 			| sed -n 's/^XYMONCLIENTHOME=//p' | tail -n 1) ;;
 	esac
 	[ -n "$c" ] || die "$srv's xymonserver.cfg names no XYMONCLIENTHOME it can read: the server has no client tree of its own to take a client part"
+	# Absolute: a relative one would be read against the current directory,
+	# and written so into the task file and its link.
+	case $c in /*) ;; *) die "$srv's XYMONCLIENTHOME, $c, is not an absolute path: write the client tree's path from /" ;; esac
 	cc=$(canon "$c")
 	[ -n "$cc" ] || die "$srv's XYMONCLIENTHOME, $c, is not there: the server's client tree it names is missing"
 	[ "$cc" != "$(canon "$srv")" ] || die "$srv's XYMONCLIENTHOME, $c, is the server's own tree: a client part does not go there"
 	[ "$(marks "$c")" = client ] || die "$srv's XYMONCLIENTHOME, $c, is no Xymon client's tree: it has not $CLIENT_MARKS"
-	OWNOF=$srv XYMONHOME=$c
+	# Spelt once, resolved: as written, a trailing / or a link would go into
+	# the task file, its link and MANIFEST, and a value respelt later would
+	# no longer match them.
+	OWNOF=$srv XYMONHOME=$cc
 	CHOSEN="$CHOSEN, the client tree of the Xymon server $srv"
 	case $VERB in status|verify|outdated) return 0 ;; esac
 	# shellcheck disable=SC2012 # ls -n gives one directory's owner

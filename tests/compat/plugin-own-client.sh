@@ -141,11 +141,26 @@ case_refused() {   # case_refused LINE WHY EXPECTED
 	[ ! -e "$c/ext/oc" ] || fail "[S36] $2: installed all the same"
 }
 case_refused "" "no XYMONCLIENTHOME" "names no XYMONCLIENTHOME it can read"
+case_refused "XYMONCLIENTHOME=\"client\"" "a relative path" "XYMONCLIENTHOME, client, is not an absolute path"
 case_refused "XYMONCLIENTHOME=\"$work/none\"" "a missing directory" "$work/none, is not there"
 mkdir -p "$work/plain"
 case_refused "XYMONCLIENTHOME=\"$work/plain\"" "no client's marks" "is no Xymon client's tree"
 case_refused "XYMONCLIENTHOME=\"$s\"" "the server's own tree" "is the server's own tree"
 cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
+
+# A trailing / and a link: the tree taken resolved, as nothing written
+# names it otherwise.
+ln -s "$c" "$work/clientlink"
+for v in "$c/" "$work/clientlink"; do
+	{ grep -v '^XYMONCLIENTHOME=' "$work/xymonserver.cfg"; printf 'XYMONCLIENTHOME="%s"\n' "$v"; } > "$s/etc/xymonserver.cfg"
+	x install --client oc XYMONHOME="$s"; ok "install --client, XYMONCLIENTHOME $v"
+	assert_contains "CMD $c/ext/oc/check.sh" "$(cat "$c/ext/oc/tasks.cfg")" "[S36] XYMONCLIENTHOME $v: the tree as resolved in the task file"
+	x enable --client oc XYMONHOME="$s"; ok "enable --client, XYMONCLIENTHOME $v"
+	assert_equal "$c/ext/oc/tasks.cfg" "$(readlink "$link")" "[S36] XYMONCLIENTHOME $v: the link names the tree as resolved"
+	cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
+	x remove --client oc XYMONHOME="$s"; ok "remove --client, XYMONCLIENTHOME respelt"
+	{ [ -e "$link" ] || [ -L "$link" ]; } && fail "[S36] XYMONCLIENTHOME $v, respelt: remove left the link"
+done
 
 # No ext/: refused, the commands given; the read verbs find it empty.
 mv "$c/ext" "$work/ext.away"
