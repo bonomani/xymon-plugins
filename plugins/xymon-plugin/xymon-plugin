@@ -1009,18 +1009,38 @@ own_client() {
 
 # own_self PLUGIN -- true when PLUGIN is xymon-plugin and XYMONHOME a
 # server's own client tree, where its client part does not go: the
-# server's copy, the same installer, manages that tree (S36). Named, it is
-# refused, with the commands that remove a copy left there; with none
-# named, passed over, said.
+# server's copy, the same installer, manages that tree (S36). Named, it was
+# refused before anything changed (own_named); among those not named, it
+# is passed over, said once.
 own_self() {
 	[ -n "$OWNOF" ] && [ "$1" = "$self" ] || return 1
-	# shellcheck disable=SC2086,SC2116 # NAMES, one line
-	case " $(echo $NAMES) " in *" $self "*)
-		rmc=; [ ! -e "$EXTROOT/$self" ] || rmc="; the copy there is removed, as its owner, by:
-  rm -rf $EXTROOT/$self $TASKDIR/$(tn "$self").cfg"
-		die "$self's client part does not go in the client tree of the Xymon server $OWNOF: the server's copy manages that tree$rmc" ;;
-	esac
+	case " $DONE " in *" $self "*) return 0 ;; esac
+	DONE="$DONE $self"
 	echo "$self is passed over: its client part does not go in the client tree of a Xymon server"
+}
+# own_named -- refuse, before anything changes, a verb that changes
+# something naming xymon-plugin in a server's own client tree (S36), with
+# the commands that remove a copy left there: its directory and a task
+# link in the client's clientlaunch.d/ by hand, and what else it left --
+# a task link in the server's tasks.d/, its manual page's link -- by
+# clean, as for any plugin gone.
+own_named() {
+	[ -n "$OWNOF" ] || return 0
+	# shellcheck disable=SC2086,SC2116 # NAMES, one line
+	case " $(echo $NAMES) " in *" $self "*) ;; *) return 0 ;; esac
+	rmc=
+	if [ -e "$EXTROOT/$self" ] || [ -L "$EXTROOT/$self" ]; then
+		# Its task link from its life as a standalone client, in the
+		# client's clientlaunch.d/, which clean on a server does not read.
+		cl=
+		for l in "$XYMONHOME/etc/clientlaunch.d"/*; do
+			case $(readlink "$l" 2>/dev/null) in "$XYMONHOME/ext/$self/"*) cl="$cl $(shq "$l")" ;; esac
+		done
+		rmc="; a copy left there is removed, as its owner, by:
+  rm -rf $(shq "$EXTROOT/$self")$cl
+  ./xymon-plugin clean --client$(hx) $self"
+	fi
+	die "$self's client part does not go in the client tree of the Xymon server $OWNOF: the server's copy manages that tree$rmc"
 }
 
 # need_home KIND -- a part goes in the tree XYMONHOME names, and only in
@@ -3472,6 +3492,7 @@ esac
 # The installation, named or chosen, once, before anything is looked at in
 # it; status reads it apart.
 case $PART in server|client) [ "$VERB" = status ] || [ "$VERB" = verify ] || [ "$VERB" = outdated ] || need_home "$PART" ;; esac
+[ "$VERB" = clean ] || own_named
 if [ "$PART" = tools ]; then PARTROOT=$TOOLSROOT; else PARTROOT=$EXTROOT; fi
 
 # The plugins named, each checked; or, for install and remove, --all, which

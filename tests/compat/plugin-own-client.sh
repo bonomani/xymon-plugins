@@ -107,19 +107,32 @@ x remove --client oc XYMONHOME="$s"; ok "remove --client"
 x install --client oc XYMONHOME="$c"; refused "install --client named by the client tree"
 assert_contains "is the client tree of the Xymon server $s: name the server, ./xymon-plugin install --client --xymon-home $s" "$out" "[S36] and gives the server's form"
 
-# xymon-plugin: its client part does not go there; a copy left is said
-# with the commands that remove it.
-x install --client xymon-plugin XYMONHOME="$s"; refused "install --client xymon-plugin on a server"
-assert_contains "xymon-plugin's client part does not go in the client tree of the Xymon server $s" "$out" "[S36] xymon-plugin refused, saying why"
-mkdir -p "$c/ext/xymon-plugin"
-cp "$ROOT/plugins/xymon-plugin/PLUGIN" "$c/ext/xymon-plugin/PLUGIN"; echo xymon-plugin/v0.0.1 > "$c/ext/xymon-plugin/VERSION"
-x remove --client xymon-plugin XYMONHOME="$s"; refused "remove --client xymon-plugin on a server"
-assert_contains "rm -rf $c/ext/xymon-plugin $s/etc/tasks.d/xymon-plugin-client.cfg" "$out" "[S36] and gives the commands that remove a copy left"
-for v in enable disable; do
+# xymon-plugin: its client part does not go there. Named, refused before
+# anything changes, another plugin named with it untouched; a copy left
+# is said with the commands that remove it, which do; not named, passed
+# over, said once.
+for v in install update remove enable disable; do
 	x $v --client xymon-plugin XYMONHOME="$s"; refused "$v --client xymon-plugin on a server"
-	assert_contains "xymon-plugin's client part does not go in the client tree" "$out" "[S36] $v of xymon-plugin's copy left: refused"
+	assert_contains "xymon-plugin's client part does not go in the client tree of the Xymon server $s" "$out" "[S36] $v of xymon-plugin: refused, saying why"
+	assert_not_contains "./xymon-plugin install --client" "$out" "[S36] $v of xymon-plugin: no command given that is refused too"
 done
-rm -rf "$c/ext/xymon-plugin"
+x install --client oc xymon-plugin XYMONHOME="$s"; refused "install --client oc xymon-plugin on a server"
+[ ! -e "$c/ext/oc" ] || fail "[S36] oc named with xymon-plugin was installed before the refusal"
+mkdir -p "$c/ext/xymon-plugin" "$c/etc/clientlaunch.d" "$work/man/man8"
+cp "$ROOT/plugins/xymon-plugin/PLUGIN" "$c/ext/xymon-plugin/PLUGIN"; echo xymon-plugin/v0.0.1 > "$c/ext/xymon-plugin/VERSION"
+: > "$c/ext/xymon-plugin/tasks.cfg"; : > "$c/ext/xymon-plugin/xymon-plugin.8"
+ln -s "$c/ext/xymon-plugin/tasks.cfg" "$c/etc/clientlaunch.d/xymon-plugin-client.cfg"
+ln -s "$c/ext/xymon-plugin/xymon-plugin.8" "$work/man/man8/xymon-plugin.8"
+x remove --client xymon-plugin XYMONHOME="$s"; refused "remove --client xymon-plugin on a server"
+assert_contains "rm -rf $c/ext/xymon-plugin $c/etc/clientlaunch.d/xymon-plugin-client.cfg" "$out" "[S36] a copy left: the directory's removal given, and its link in clientlaunch.d/"
+assert_contains "./xymon-plugin clean --client --xymon-home $s xymon-plugin" "$out" "[S36] and clean for what it left elsewhere"
+rm -rf "$c/ext/xymon-plugin" "$c/etc/clientlaunch.d/xymon-plugin-client.cfg"
+x clean --client xymon-plugin XYMONHOME="$s" --yes; ok "clean --client xymon-plugin, the copy removed"
+[ ! -L "$work/man/man8/xymon-plugin.8" ] || fail "[S36] clean left the copy's manual page link"
+x install --client --all XYMONHOME="$s"; ok "install --client --all on a server"
+assert_equal 1 "$(printf '%s\n' "$out" | grep -c 'xymon-plugin is passed over')" "[S36] --all: xymon-plugin passed over, said once"
+x remove --client --all XYMONHOME="$s"; ok "remove --client --all on a server"
+rmdir "$c/etc/clientlaunch.d"
 
 # XYMONCLIENTHOME: a variable, read through the server's xymoncmd; naming
 # nothing, a missing directory, no client's marks, the server's own tree.
