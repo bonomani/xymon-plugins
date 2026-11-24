@@ -225,8 +225,8 @@ refused "[S24]" "status with two parts" "with none, covers every part" status --
 refused "[S24]" "outdated with two parts" "with none, covers every part: the servers, the standalone clients and the tools" outdated --client --tools
 refused "[S24]" "install-client" "install-client is now: ./xymon-plugin install --client" install-client xymon-plugin
 refused "[S24]" "status-client" "status-client is now: ./xymon-plugin status --client" status-client
-refused "[S24]" "enable --client" "the client part has no task" enable --client xymon-plugin XYMONHOME="$c"
-refused "[S24]" "disable --client" "the client part has no task" disable --client xymon-plugin XYMONHOME="$c"
+refused "[S24]" "enable --client of a plugin with no client task" "xymon-plugin has no task to turn on or off" enable --client xymon-plugin XYMONHOME="$c"
+refused "[S24]" "disable --client of a plugin with no client task" "xymon-plugin has no task to turn on or off" disable --client xymon-plugin XYMONHOME="$c"
 
 refused "[S35]" "--venv with --client" "--venv: a client part has no virtualenv" install --client --venv xymon-plugin XYMONHOME="$c"
 refused "[S35]" "DESTDIR with --client" "a client part is not staged yet" install --client xymon-plugin XYMONHOME="$c" DESTDIR="$work/stage"
@@ -464,11 +464,10 @@ assert_contains "Removed $man/man8/xymon-plugin.8." "$out" "[S31] clean --client
 rm -f "$man/man8/gone.8"
 x verify --client XYMONHOME="$c"
 [ "$rc" -eq 0 ] || fail "[S30] verify --client after clean: not 0 ($rc): $out"
-# enable with two parts: no command for the client part, which has no task.
-refused "[S24]" "enable, two parts" "the client part has no task" enable --server --client xymon-plugin XYMONHOME="$c"
-assert_not_contains "enable --client" "$out" "[S24] enable with two parts proposes enable --client"
+# enable with two parts: a command for each, as another verb.
+refused "[S24]" "enable, two parts" "./xymon-plugin enable --client xymon-plugin" enable --server --client xymon-plugin XYMONHOME="$c"
 refused "[S24]" "uninstall-client" "uninstall-client is now: ./xymon-plugin remove --client" uninstall-client xymon-plugin
-refused "[S24]" "enable, no part, on a client's tree" "the client part has no task to turn on or off yet" enable xymon-plugin XYMONHOME="$c"
+refused "[S24]" "enable, no part, on a client's tree" "whose part is named: ./xymon-plugin enable --client" enable xymon-plugin XYMONHOME="$c"
 
 # Detection: the client trees found, on a terminal; the one chosen
 # remembered for the client part, apart from the server's.
@@ -510,13 +509,6 @@ cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$r/"
 mkdir -p "$r/plugins/cneed"
 printf 'name: cneed\nversion: 1.0.0\nsummary: a test\nclient-files: check.sh\nclient-needs: xymon-plugin\n' > "$r/plugins/cneed/PLUGIN"
 : > "$r/plugins/cneed/check.sh"
-# A client part's task is not installed yet: a PLUGIN file naming one, by
-# client-task:, is refused, nothing written.
-mkdir -p "$r/plugins/ctask"
-printf 'name: ctask\nversion: 1.0.0\nsummary: a test\nclient-files: check.sh\nclient-task: ctask.tasks\n' > "$r/plugins/ctask/PLUGIN"
-: > "$r/plugins/ctask/check.sh"; : > "$r/plugins/ctask/ctask.tasks"
-XP="$r/xymon-plugin" refused "[S35]" "a client part with a client-task: line" "ctask's PLUGIN file has a client-task: line: a client part's task is not installed yet" install --client ctask XYMONHOME="$c"
-{ [ -e "$c/ext/ctask" ] || [ -L "$c/ext/ctask" ]; } && fail "[S35] the refused client-task: install left ext/ctask"
 # What it needs is checked as the plugin named is, before anything
 # changes: a directory no install left where xymon-plugin's goes stops the
 # install of cneed, and is left as it is.

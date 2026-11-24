@@ -65,8 +65,9 @@ go, the `plugins` column, the environment and exit statuses:
   standalone Xymon client's tree, run by whoever owns its `ext/`. A
   client tree that is, or may be, a server's own is refused; `status`,
   `verify` and `outdated` read it, whoever owns it; `clean` takes the
-  manual page links a removed client plugin left; `enable` and `disable`
-  do not take it yet.
+  manual page and task links a removed client plugin left; a client
+  part's task, `client-task:`, is installed off and turned on by `enable
+  --client`, a link in the client's `etc/clientlaunch.d/`, as the server's.
 - In `ext/`, of the server or a client, a directory no install left --
   a link, with no `VERSION`, or a `PLUGIN` that is a link or names another
   plugin or part -- is left as it is: remove it by hand. On the server,

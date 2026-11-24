@@ -30,16 +30,13 @@ named holds the detail.
 
 ## The client part, next steps
 
-`--client` installs, updates and removes a client part (#165); `status` and
-`verify` read a client's tree (#172). For a `plugins` column of a client
-host on its Xymon server, in this order:
+`--client` installs, updates and removes a client part (#165); `status`,
+`verify`, `outdated` and `clean` read a client's tree (#172, #181, #182); a
+client part's task, `client-task:`, is a server part's in the client's
+tree, `enable --client` linking it from `clientlaunch.d/`. For a `plugins`
+column of a client host on its Xymon server, next:
 
-1. A client part's task, `client-task:`, installed off in the client's
-   `ext/NAME/`; `clean --client` then takes its task link too.
-2. `enable`/`disable --client` through the client's `clientlaunch.d` (SPEC
-   first: how the link is made, and a client whose `clientlaunch.cfg` does
-   not read the directory).
-3. xymon-plugin's client task sending the client's `plugins` column. To
+1. xymon-plugin's client task sending the client's `plugins` column. To
    decide then: whether each client asks GitHub, or asks its server (with
    "the code comes from a source", below).
 
