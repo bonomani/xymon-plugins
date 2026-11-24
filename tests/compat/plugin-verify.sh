@@ -88,10 +88,10 @@ ln -sf /nowhere "$MANDIR/man8/xymonapi.8"
 v 3 --server XYMONHOME="$home"
 assert_contains "broken: xymonapi: the link $MANDIR/man8/xymonapi.8 points to /nowhere" "$out" "[S30] a link outside pointing elsewhere is broken"
 fix
-ln -sf /nowhere "$home/etc/tasks.d/xymonapi.cfg"
+ln -sf /nowhere "$home/etc/tasks.d/xymonapi-server.cfg"
 v 3 --server XYMONHOME="$home"
-assert_contains "broken: xymonapi: its task link xymonapi.cfg points to /nowhere" "$out" "[S30] the task link pointing elsewhere is broken"
-rm "$home/etc/tasks.d/xymonapi.cfg"; x enable --server xymonapi XYMONHOME="$home"
+assert_contains "broken: xymonapi: its task link xymonapi-server.cfg points to /nowhere" "$out" "[S30] the task link pointing elsewhere is broken"
+rm "$home/etc/tasks.d/xymonapi-server.cfg"; x enable --server xymonapi XYMONHOME="$home"
 v 0 --server XYMONHOME="$home"
 # A module older than requirements.txt asks: a distribution of an old
 # version found first on the path.

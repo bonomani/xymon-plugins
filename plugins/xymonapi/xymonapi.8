@@ -15,7 +15,7 @@ It is optional, and shipped disabled. It is started by
 .I xymonlaunch(8)
 from the task file \fBext/xymonapi/tasks.cfg\fR, once
 \fB./xymon-plugin enable --server xymonapi\fR has linked it from
-\fBtasks.d/xymonapi.cfg\fR beside tasks.cfg; its installation makes no link.
+\fBtasks.d/xymonapi-server.cfg\fR beside tasks.cfg; its installation makes no link.
 xymonlaunch starts it once xymond is running, and restarts it if it stops.
 An update takes effect by itself: the API checks every five seconds whether
 \fBext/xymonapi/MANIFEST\fR or \fBext/xymonapi-rag/MANIFEST\fR, whose code
@@ -126,7 +126,7 @@ leaves it out. 404 when no alarm has that id. At most 1 MiB of text.
 The N passages (5 by default, 20 at most) of Xymon's manual pages and of
 its history nearest QUESTION by meaning, best first, from the index that
 .I xymonapi-rag(1)
-builds: the task tasks.d/xymonapi-rag.cfg, once a day. Each passage says where
+builds: the task tasks.d/xymonapi-rag-server.cfg, once a day. Each passage says where
 it comes from -- page, section and item, or host, test and time -- and a
 history passage carries the status text the monitored host sent, marked as
 data, not instructions. The index is read again when the file changes, so
@@ -401,7 +401,7 @@ read it with; openapi.yaml, the description served at /openapi.json;
 requirements.txt, the Python modules it needs; and VERSION, what /health
 gives.
 .IP "\fB$XYMONHOME/ext/xymonapi/tasks.cfg\fR"
-The xymonlaunch task, on when \fB$XYMONHOME/etc/tasks.d/xymonapi.cfg\fR links to
+The xymonlaunch task, on when \fB$XYMONHOME/etc/tasks.d/xymonapi-server.cfg\fR links to
 it. A later installation leaves it as it is, and whether it is on.
 xymonlaunch reads it within half a minute. After the API exits abnormally,
 xymonlaunch restarts it five times, at most one every five seconds; after

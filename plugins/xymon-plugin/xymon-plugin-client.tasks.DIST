@@ -6,9 +6,9 @@
 # task stopped.
 # Off once installed: ./xymon-plugin enable --client xymon-plugin. MAXTIME
 # bounds the wait and the requests to GitHub together.
-[xymon-plugin]
+[xymon-plugin-client]
 	ENVFILE @XYMONHOME@/etc/xymonclient.cfg
 	INTERVAL 1d
 	MAXTIME 7h
 	CMD @XYMONHOME@/ext/xymon-plugin/xymon-plugin-report.sh --client
-	LOGFILE $XYMONCLIENTLOGS/xymon-plugin.log
+	LOGFILE @LOGDIR@/xymon-plugin-client.log

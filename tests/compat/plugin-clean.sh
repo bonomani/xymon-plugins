@@ -84,7 +84,7 @@ for p in "$home/etc/tasks.d/gone.cfg" "$MANDIR/man8/gone.8" "$home/ext/xymon-plu
 	[ ! -e "$p" ] && [ ! -L "$p" ] || fail "[S31] $p is still there"
 done
 [ -L "$home/etc/tasks.d/admin.cfg" ] && [ -f "$home/etc/tasks.d/gone-notes.cfg" ] || fail "[S31] what is no plugin's was taken"
-[ -L "$home/etc/tasks.d/xymonapi.cfg" ] || [ ! -e "$home/etc/tasks.d/xymonapi.cfg" ] || fail "an installed plugin was touched"
+[ -L "$home/etc/tasks.d/xymonapi-server.cfg" ] || [ ! -e "$home/etc/tasks.d/xymonapi-server.cfg" ] || fail "an installed plugin was touched"
 [ -f "$home/ext/xymonapi/MANIFEST" ] || fail "[S31] an installed plugin's directory was touched"
 c 0 --server gone XYMONHOME="$home"
 assert_contains "Nothing is left that no plugin installed owns." "$out" "[S31] with nothing left, it says so, exit 0"

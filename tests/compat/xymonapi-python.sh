@@ -215,7 +215,7 @@ assert_contains "its Python lacks fastapi" "$(XYMONAPI_PYTHON="$work/nomods" "$R
 rc=0; out=$(XYMONAPI_PYTHON="$work/nomods" "$ROOT/xymon-plugin" enable --server xymonapi XYMONHOME="$s" </dev/null 2>&1) || rc=$?
 [ "$rc" -ne 0 ] || fail "[S26] enable turned on a plugin whose Python lacks its modules"
 assert_contains "update --server --venv xymonapi makes them" "$out" "[S26] and enable refuses it, naming what makes them"
-[ -L "$s/etc/tasks.d/xymonapi.cfg" ] && fail "the refused enable made the link anyway"
+[ -L "$s/etc/tasks.d/xymonapi-server.cfg" ] && fail "the refused enable made the link anyway"
 
 # A Python that has the modules, one of them older than requirements.txt
 # asks: status says which and what it has, and enable refuses it as it does
@@ -234,7 +234,7 @@ rc=0; out=$(XYMONAPI_PYTHON="$work/oldpy" "$ROOT/xymon-plugin" enable --server x
 [ "$rc" -ne 0 ] || fail "[S26] enable turned on a plugin whose Python has a module older than it asks"
 assert_contains "fastapi>=$floor (has 0.10.0)" "$out" "[S26] and enable refuses it, naming the module"
 assert_not_contains "uvicorn>=" "$out" "[S26] a module new enough is not named"
-[ -L "$s/etc/tasks.d/xymonapi.cfg" ] && fail "the refused enable made the link anyway"
+[ -L "$s/etc/tasks.d/xymonapi-server.cfg" ] && fail "the refused enable made the link anyway"
 # The same Python with every module new enough is taken.
 rm -rf "$old/fastapi-0.10.0.dist-info"; mkdir -p "$old/fastapi-99.0.dist-info"
 printf 'Metadata-Version: 2.1\nName: fastapi\nVersion: 99.0\n' > "$old/fastapi-99.0.dist-info/METADATA"

@@ -36,9 +36,50 @@ client part's task, `client-task:`, is a server part's in the client's
 tree, `enable --client` linking it from `clientlaunch.d/`; xymon-plugin's
 client task sends the client's `plugins` column, each client asking GitHub.
 
+Next, in order (decided 2026-11-24, after two double analyses):
+
+1. **Task names by part** (this step): `[NAME-server]` / `NAME-server.cfg`,
+   `[NAME-client]` / `NAME-client.cfg`, xymon-plugin's server task keeping
+   `[xymon-plugin]`; `@LOGDIR@`; `enable` refusing a task name its launcher
+   has; the repository test of task files and plugin names; the old
+   `tasks.d/NAME` rename removed.
+2. **A server's own client tree** (S36, written then). Decided:
+   - a plugin's client part goes into the tree `XYMONCLIENTHOME` names,
+     its task linked from the server's `tasks.d/` as `NAME-client.cfg`,
+     `ENVFILE` the client's `xymonclient.cfg`, `@LOGDIR@` the server's logs;
+   - a missing `ext/` there is not made: refused, printing the commands;
+   - the owner of that tree's `ext/` installs; a value of
+     `XYMONCLIENTHOME` holding a variable is expanded through `xymoncmd`,
+     a missing, unmarked or server-equal tree refused; `DESTDIR` refused;
+   - `enable --client` refused when `ext/NAME` belongs to neither root
+     nor the owner of the server's `tasks.d/`;
+   - every `--client` command of xymon-plugin on a server refused (the
+     server's copy manages that tree), printing the commands that remove
+     an old copy; status, verify, outdated and clean read the tree.
+   Still to ask: how the tree is named on the command line (proposed
+   `XYMONHOME=<server> --client`); whether one ownership check, at install,
+   replaces the enable-time one; a read verb on a tree with no `ext/`
+   reading as "no plugin" rather than failing.
+3. **One manual page per part** (below).
+4. **`clientage`, an example plugin with all three parts**: the client
+   part sends `clientage`, the age of the client's last message (green
+   to 15 min, yellow to 30, red beyond); the server part one `clients`
+   column on the server's host listing the clients behind; the tools part a
+   `clientage` command through the API. To revisit before building, from
+   the analyses: measure on the server with xymond's `clntstamp` (the time
+   of the last client message received); list only hosts with client data;
+   the tools part in Python over `xymonapi_client.py`, not shell and curl;
+   the client part's age from the message's `[clock]` epoch, `stat` not
+   being portable; its client part possibly before step 2, to test it.
+5. **xymon-plugin's column over the server and its client tree**: the
+   column's first line names the trees; `status` warns when a standalone
+   client on the same machine sends under the server's host name. To ask:
+   two `outdated` runs or one printing the client section, and how their
+   exit codes combine.
+
 Later for the client: each client asking its server for the latest
 releases rather than GitHub (2026-11-24, with "the code comes from a
-source" and #29); a server's own client tree; asking instead of refusing
+source" and #29); asking instead of refusing
 a tree in doubt; the dialogue offering client trees; a client's
 authentication (#29); `declared()` staging `client-files:` for `/plugins`;
 an `ext/` owned but not writable (a raw `mkdir` error today).

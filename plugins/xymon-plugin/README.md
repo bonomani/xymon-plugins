@@ -128,8 +128,10 @@ go, the `plugins` column, the environment and exit statuses:
 
 ### Tasks
 
-- `enable --server NAME` links `etc/tasks.d/NAME.cfg` to
-  `ext/NAME/tasks.cfg`, and xymonlaunch starts it within half a minute.
+- `enable --server NAME` links `etc/tasks.d/NAME-server.cfg` to
+  `ext/NAME/tasks.cfg`, and xymonlaunch starts it within half a minute;
+  xymon-plugin's own is `xymon-plugin.cfg`, and a client part's
+  `NAME-client.cfg`. Each task file has one section of that name.
 - `disable --server NAME` removes the link, and xymonlaunch stops it.
 - An update keeps the task file as you left it, and whether it is on.
 - Where an editor replaced the link by a file (`sed -i` does), that file is
