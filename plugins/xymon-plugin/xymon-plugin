@@ -652,6 +652,7 @@ o_fix() {
 # was given.
 o_cmd() {
 	if [ "$1" = server ]; then echo "XYMONHOME=$XYMONHOME ./xymon-plugin $2 --server $3"
+	elif [ "$1" = client ]; then echo "./xymon-plugin $2 --client$(hx) $3"
 	elif [ -n "$PREFIX_GIVEN" ]; then echo "./xymon-plugin $2 --tools $3 PREFIX=$PREFIX"
 	else echo "./xymon-plugin $2 --tools $3"
 	fi
@@ -686,6 +687,20 @@ outdated_names() {
 			case ${d##*/} in venv|"${DIST##*/}") continue ;; esac
 			case $o_l in *" ${d##*/} "*) ;; *) echo "${d##*/}" ;; esac
 		fi
+	done
+}
+
+# outdated_part PART ROOT INDENT -- outdated's lines for the plugins of
+# PART installed in ROOT, each after INDENT: NEWER set when one has a newer
+# release, UNCOMPARED when a VERSION, or ROOT, cannot be read.
+outdated_part() {
+	if l=$(outdated_closed "$2"); then echo "$3$l"; UNCOMPARED=1; fi
+	L=$LIST; [ -n "$NAMES" ] || L=$(outdated_names "$2")
+	for n in $L; do
+		o_rc=0; l=$(outdated_line "$1" "$2" "$n") || o_rc=$?
+		case $o_rc in 0) ;; 7) UNCOMPARED=1 ;; *) exit 1 ;; esac
+		[ -n "$l" ] || continue
+		echo "$3$l"; case $l in *" released: "*) NEWER=1 ;; esac
 	done
 }
 
@@ -938,7 +953,6 @@ need_home() {
 			client)
 				# A server's own client tree: that server named, and what to type.
 				own_refused
-				[ "$VERB" != outdated ] || die "$XYMONHOME is a Xymon client's tree ($CLIENT_MARKS), not a server's: $VERB does not read a client's tree yet"
 				die "$XYMONHOME is a Xymon client's tree ($CLIENT_MARKS), not a server's: a client's tree takes the client part, --client" ;;
 			some) shift; die "$XYMONHOME is not a whole Xymon server's tree: it has $*, and a server's has $SERVER_MARKS" ;;
 			none) die "$XYMONHOME is no Xymon server's tree: none of $SERVER_MARKS is there; to stage one for a package, set DESTDIR" ;;
@@ -3141,11 +3155,10 @@ client_read() {
 # The part acted on: named, one at a time; or, on a terminal, the server
 # part, said, but on a client's tree named, whose part is given; off a
 # terminal a verb that changes something needs it named; status and
-# verify cover every part, outdated the server part and the tools.
+# verify and outdated cover every part.
 if [ "$(( ${SEL_SERVER:-0} + ${SEL_CLIENT:-0} + ${SEL_TOOLS:-0} ))" -gt 1 ]; then
 	case $VERB in
-		status|verify) die "one part at a time: ./xymon-plugin $VERB, with none, covers every part: the servers, the standalone clients and the tools" ;;
-		outdated) die "one part at a time: ./xymon-plugin $VERB, with none, covers the server part and the tools; a client's tree is not read yet" ;;
+		status|verify|outdated) die "one part at a time: ./xymon-plugin $VERB, with none, covers every part: the servers, the standalone clients and the tools" ;;
 	esac
 	rest=$(echo $NAMES)${ALL:+ --all}
 	cmds=
@@ -3181,7 +3194,7 @@ fi
 if [ "$PART" = client ]; then
 	case $VERB in
 		enable|disable) die "the client part has no task to turn on or off yet" ;;
-		outdated|clean) die "$VERB does not read a client's tree yet: install, update, remove, status and verify take --client" ;;
+		clean) die "clean does not read a client's tree yet: install, update, remove, status, verify and outdated take --client" ;;
 	esac
 	[ -z "$VENV_FETCH" ] || die "--venv: a client part has no virtualenv"
 	[ -z "$DESTDIR" ] || die "DESTDIR: a client part is not staged yet, only installed in a client's tree"
@@ -3348,44 +3361,28 @@ EOF
 				[ -n "$t" ] || continue
 				echo "Xymon server $t:"
 				XYMONHOME=$t; server_paths
-				if l=$(outdated_closed "$EXTROOT"); then echo "  $l"; UNCOMPARED=1; fi
-				L=$LIST; [ -n "$NAMES" ] || L=$(outdated_names "$EXTROOT")
-				for n in $L; do
-					o_rc=0; l=$(outdated_line server "$EXTROOT" "$n") || o_rc=$?
-					case $o_rc in 0) ;; 7) UNCOMPARED=1 ;; *) exit 1 ;; esac
-					[ -n "$l" ] || continue
-					echo "  $l"; case $l in *" released: "*) NEWER=1 ;; esac
-				done
+				outdated_part server "$EXTROOT" "  "
 			done <<EOF
-$(xymon_trees | sed -n 's/^server //p')
+$([ "$PART" = client ] || xymon_trees | sed -n 's/^server //p')
+EOF
+			# Then the standalone clients, as status lists them.
+			while IFS= read -r t; do
+				[ -n "$t" ] || continue
+				echo "Xymon client $t:"
+				client_read "$t" || { UNCOMPARED=1; continue; }
+				outdated_part client "$EXTROOT" "  "
+			done <<EOF
+$([ "$PART" = server ] || xymon_trees | sed -n 's/^client //p')
 EOF
 			XYMONHOME=
 		elif [ "$PART" != tools ]; then
-			need_home server
-			echo "Xymon server $XYMONHOME:"
-			if l=$(outdated_closed "$EXTROOT"); then echo "  $l"; UNCOMPARED=1; fi
-			L=$LIST; [ -n "$NAMES" ] || L=$(outdated_names "$EXTROOT")
-			for n in $L; do
-				o_rc=0; l=$(outdated_line server "$EXTROOT" "$n") || o_rc=$?
-				case $o_rc in 0) ;; 7) UNCOMPARED=1 ;; *) exit 1 ;; esac
-				[ -n "$l" ] || continue
-				echo "  $l"; case $l in *" released: "*) NEWER=1 ;; esac
-			done
+			xpart; need_home "$XPART"
+			echo "Xymon $XPART $XYMONHOME:"
+			outdated_part "$XPART" "$EXTROOT" "  "
 		fi
-		if [ "$PART" != server ]; then
-			L=$LIST; [ -n "$NAMES" ] || L=$(outdated_names "$TOOLSROOT")
+		if [ "$PART" = tools ] || [ "$PART" = both ]; then
 			[ "$PART" = tools ] || echo "Your tools, $PREFIX:"
-			if l=$(outdated_closed "$TOOLSROOT"); then
-				UNCOMPARED=1
-				if [ "$PART" = tools ]; then echo "$l"; else echo "  $l"; fi
-			fi
-			for n in $L; do
-				o_rc=0; l=$(outdated_line tools "$TOOLSROOT" "$n") || o_rc=$?
-				case $o_rc in 0) ;; 7) UNCOMPARED=1 ;; *) exit 1 ;; esac
-				[ -n "$l" ] || continue
-				case $l in *" released: "*) NEWER=1 ;; esac
-				if [ "$PART" = tools ]; then echo "$l"; else echo "  $l"; fi
-			done
+			if [ "$PART" = tools ]; then outdated_part tools "$TOOLSROOT" ""; else outdated_part tools "$TOOLSROOT" "  "; fi
 		fi
 		[ -z "${UNCOMPARED:-}" ] || exit 7
 		[ -z "${NEWER:-}" ] || exit 6 ;;

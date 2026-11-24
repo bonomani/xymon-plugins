@@ -34,8 +34,9 @@ named holds the detail.
 `verify` read a client's tree (#172). For a `plugins` column of a client
 host on its Xymon server, in this order:
 
-1. `outdated --client` (and `clean --client`, `verify` then saying what a
-   removed client plugin left).
+1. `clean --client`, for the manual page links a removed client plugin
+   left, `verify --client` saying them (decided 2026-11-24: those links
+   only, until a client part has a task).
 2. `task:` renamed `server-task:`; a client part's task, `client-task:`
    (decided 2026-11-22).
 3. `enable`/`disable --client` through the client's `clientlaunch.d` (SPEC

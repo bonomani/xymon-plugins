@@ -63,9 +63,9 @@ go, the `plugins` column, the environment and exit statuses:
   tree is refused, the command given with `--client`; in a script, name it.
 - `--client` installs, updates and removes a plugin's client part in a
   standalone Xymon client's tree, run by whoever owns its `ext/`. A
-  client tree that is, or may be, a server's own is refused; `status` and
-  `verify` read it, whoever owns it; `enable`, `disable`, `outdated` and
-  `clean` do not take it yet.
+  client tree that is, or may be, a server's own is refused; `status`,
+  `verify` and `outdated` read it, whoever owns it; `enable`, `disable`
+  and `clean` do not take it yet.
 - In `ext/`, of the server or a client, a directory no install left --
   a link, with no `VERSION`, or a `PLUGIN` that is a link or names another
   plugin or part -- is left as it is: remove it by hand. On the server,
@@ -155,7 +155,8 @@ go, the `plugins` column, the environment and exit statuses:
   installed, one line each with the command that fixes it: a file changed or
   missing, one no install wrote, a link pointing elsewhere, a Python module
   older than asked, what no installed plugin owns. It changes nothing.
-- `outdated` says, for what is installed, whether a newer release is
+- `outdated` says, for what is installed -- the servers, the standalone
+  clients and the tools, or the part named -- whether a newer release is
   published on GitHub, with the update that takes it.
 - It reads the releases with `gh`, else `curl` or `wget`, each request of
   `curl` and GNU `wget` bounded in time.

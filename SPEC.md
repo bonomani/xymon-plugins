@@ -450,9 +450,8 @@ replaces, as `install-server` or `install-client`, is refused, naming the
 new form. Without a part named, on a terminal, the server part is said and
 acted on, but a client's tree named is refused, on a terminal too, the
 command given with `--client`; off a terminal, a verb that changes
-something is refused; `status` and `verify` cover every part, the
-server's, a standalone client's tree and the tools; `outdated` the server
-part and the tools, not yet a client's tree. `install`, `remove` and `clean` need a
+something is refused; `status`, `verify` and `outdated` cover every part,
+the server's, a standalone client's tree and the tools. `install`, `remove` and `clean` need a
 plugin named, or `--all`. `install` refuses a plugin installed already, and
 `update` one that is not; `--all`, and a plugin one needs, pass over those
 installed, saying so. `enable` and `disable` refuse the tools and the
@@ -642,16 +641,18 @@ removed off a terminal without `--yes`, an answer N, or a thing left
 unproved.
 
 **S32. `outdated` says what a newer release would update.**
-`outdated` reads, as `status` does (S15), the Xymon servers' and the tools'
-parts installed -- both when neither is named, `--tools` alone; a
-client's tree is not read yet -- and says of each plugin installed the version
+`outdated` reads, as `status` does (S15), the parts installed -- every
+one when none is named: the Xymon servers', the standalone clients' trees
+and the tools'; with one named, that one -- and says of each plugin installed the version
 installed against its latest published release on GitHub: up to date; a
 newer one released, with the update that takes it; installed newer than any
 released; none released; or that its `VERSION` cannot be compared --
 missing, a link, unreadable, in a directory this user cannot enter, holding
 no version -- with what fixes it when the cause is known (a `chmod` named
 with whoever owns what is closed, an `install` or `update`), how to find it
-otherwise, never what it holds. Every directory there that it cannot enter
+otherwise, never what it holds; a client's tree it does not read, as
+`status` says of one (S25), is said, as a `VERSION` that cannot be
+compared. Every directory there that it cannot enter
 is said, but the virtualenv and `/plugins`' stage, the installer's own; so
 are plugins it cannot list, their directory or one above it closed. It
 changes nothing. It reads the releases from GitHub: with `gh` when it
@@ -744,8 +745,8 @@ written by whoever owns its tree, so that the same person updates and
 removes them. `status` and `verify`, which change nothing, read a
 client's tree as a server's (S15, S30), whoever owns its `ext/`, and
 refuse the trees the other verbs refuse: one of another kind, a server's
-own, one in doubt. `outdated` and `clean` refuse `--client`: they do not
-read a client's tree yet.
+own, one in doubt. `outdated` reads a client's tree as a server's (S32);
+`clean` refuses `--client`: it does not read a client's tree yet.
 
 ### Getting the code
 
@@ -792,8 +793,8 @@ brings its test.
   move under `plugins/` as a client part when they get a `PLUGIN` file.
 - **A standalone client's part, the first client step (S35)**; still to
   come:
-  - `outdated` and `clean` cover a client's tree as a server's, `verify`
-    then saying what is left there;
+  - `clean` covers a client's tree as a server's, `verify` then saying
+    what is left there;
   - the `PLUGIN` line `task:` becomes `server-task:`, as the server's other
     lines; a client part's task will be `client-task:`;
   - a server's own client tree, and a client part's task, come after;

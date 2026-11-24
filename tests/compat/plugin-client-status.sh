@@ -162,6 +162,19 @@ assert_not_contains "Xymon server $s" "$out" "[S25] status --client lists no ser
 assert_not_contains "Your tools" "$out" "[S25] status --client lists no tools"
 x status --server
 assert_not_contains "Xymon client" "$out" "[S25] status --server lists no standalone client"
+# outdated reads the same trees (S32), and says the one in doubt, not
+# read, as a VERSION it cannot compare: 7. A gh on PATH answers the
+# release installed.
+mkdir -p "$work/gh"; printf '#!/bin/sh\necho "xymon-plugin/v%s"\n' "$version" > "$work/gh/gh"; chmod 755 "$work/gh/gh"
+PATH="$work/gh:$PATH" x outdated
+assert_equal 7 "$rc" "[S32] outdated with a client tree in doubt: $out"
+assert_contains "Xymon client $c:
+  xymon-plugin: $version installed; up to date" "$out" "[S32] outdated reads the standalone client tree found"
+assert_contains "Xymon client $q/client:
+  not read: $q/client may be a server's own client" "$out" "[S32] and says the one in doubt, not read"
+assert_not_contains "Xymon client $o/client" "$out" "[S32] a server's own client tree is no standalone client"
+PATH="$work/gh:$PATH" x outdated --server
+assert_not_contains "Xymon client" "$out" "[S32] outdated --server reads no client"
 x verify
 assert_equal 0 "$rc" "[S30] verify with nothing named, all ok: $out"
 assert_contains "Xymon client: $c
@@ -192,4 +205,4 @@ for v in status verify; do
 	assert_contains "refused while in doubt" "$out" "[S35] $v --client on a client in doubt is refused"
 done
 
-pass "status and verify read a standalone client's tree as a server's, named or found, changing nothing: its plugins and versions, ok, broken, untidy and an install cut short; an ext/ not the person's read, a tree of another kind, a server's own client and one in doubt refused"
+pass "status, verify and outdated read a standalone client's tree as a server's, named or found, changing nothing: its plugins and versions, ok, broken, untidy and an install cut short; an ext/ not the person's read, a tree of another kind, a server's own client and one in doubt refused"
