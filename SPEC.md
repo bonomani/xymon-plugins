@@ -610,14 +610,14 @@ something is untidy and nothing broken. It needs no terminal, and, as
 the standalone clients' too. In a client's tree (S35) it checks the
 same, but what a client part never has: a task link, a copy `/plugins`
 serves, a virtualenv, a SELinux module, a set-aside directory, a file of
-the administrator's; nor does it say yet what is left there, which comes
-with `clean --client`.
+the administrator's; what is left there is a manual page's link that
+points into the directory of a plugin of that tree that is gone.
 `MANIFEST` lying where the Xymon user can write, `verify` finds what was
 changed by mistake or left behind, not what someone able to write there
 and to rewrite `MANIFEST` too has hidden.
 
 **S31. `clean` takes away what no installed plugin owns.**
-`clean --server` and `clean --tools` need a name, or `--all`, as `remove`
+`clean --server`, `clean --client` and `clean --tools` need a name, or `--all`, as `remove`
 does (S24). They remove what `verify` lists as left (S30), and nothing
 else: never a file in an installed plugin's directory, which `update`
 replaces (S7), nor anything a `data:` or `writes:` line names, which is
@@ -745,8 +745,9 @@ written by whoever owns its tree, so that the same person updates and
 removes them. `status` and `verify`, which change nothing, read a
 client's tree as a server's (S15, S30), whoever owns its `ext/`, and
 refuse the trees the other verbs refuse: one of another kind, a server's
-own, one in doubt. `outdated` reads a client's tree as a server's (S32);
-`clean` refuses `--client`: it does not read a client's tree yet.
+own, one in doubt. `outdated` reads a client's tree as a server's (S32),
+and `clean --client` takes away what `verify` says is left there (S31),
+run as the other verbs that change something.
 
 ### Getting the code
 
@@ -793,8 +794,6 @@ brings its test.
   move under `plugins/` as a client part when they get a `PLUGIN` file.
 - **A standalone client's part, the first client step (S35)**; still to
   come:
-  - `clean` covers a client's tree as a server's, `verify` then saying
-    what is left there;
   - the `PLUGIN` line `task:` becomes `server-task:`, as the server's other
     lines; a client part's task will be `client-task:`;
   - a server's own client tree, and a client part's task, come after;

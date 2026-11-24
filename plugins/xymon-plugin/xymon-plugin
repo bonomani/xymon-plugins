@@ -2832,7 +2832,9 @@ present() { [ -f "$EXTROOT/$1/VERSION" ] || cut_short "$1"; }
 # takes away.
 left() {
 	T=$(printf '\t')
-	if [ "$1" = server ]; then
+	if [ "$1" = client ]; then
+		left_man
+	elif [ "$1" = server ]; then
 		for l in "$TASKDIR"/*; do
 			[ -L "$l" ] || continue
 			case $(readlink "$l") in
@@ -2841,15 +2843,7 @@ left() {
 						&& echo "$t$T$l$T$XYMONHOME/etc/tasks.d/${l##*/}${T}the task link of $t${T}proved" ;;
 			esac
 		done
-		for l in "$(inside "$MANDIR")"/man[1-9]/*; do
-			[ -L "$l" ] || continue
-			case $(readlink "$l") in
-				"$XYMONHOME/ext/"*/*) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%%/*}
-					sec=${l%/*}
-					plain "$t" && ! present "$t" \
-						&& echo "$t$T$l$T$MANDIR/${sec##*/}/${l##*/}${T}a manual page's link of $t${T}proved" ;;
-			esac
-		done
+		left_man
 		for d in "$DIST/plugins"/*; do
 			[ -d "$d" ] && [ ! -L "$d" ] || continue
 			plain "${d##*/}" && ! present "${d##*/}" \
@@ -2883,6 +2877,20 @@ left() {
 		[ -n "$any" ] || [ ! -d "$TOOLSROOT/venv" ] \
 			|| echo "*$T$TOOLSROOT/venv$T$PREFIX/libexec/xymon-plugins/venv${T}the virtualenv, with no plugin installed${T}proved"
 	fi
+}
+
+# left_man -- left's lines for the manual page links in MANDIR that point
+# into the directory, gone, of a plugin of this Xymon tree, server or client.
+left_man() {
+	for l in "$(inside "$MANDIR")"/man[1-9]/*; do
+		[ -L "$l" ] || continue
+		case $(readlink "$l") in
+			"$XYMONHOME/ext/"*/*) t=$(readlink "$l"); t=${t#"$XYMONHOME/ext/"}; t=${t%%/*}
+				sec=${l%/*}
+				plain "$t" && ! present "$t" \
+					&& echo "$t$T$l$T$MANDIR/${sec##*/}/${l##*/}${T}a manual page's link of $t${T}proved" ;;
+		esac
+	done
 }
 
 # verify_left PART -- what is left, untidy, each naming clean.
@@ -2974,8 +2982,7 @@ EOX
 	# A part with nothing installed says so, as status does, rather than a
 	# heading with nothing under it.
 	[ -n "$L" ] || echo "no plugin"
-	# What a client part gone leaves comes with clean --client.
-	[ -n "$NAMES" ] || [ "$1" = client ] || verify_left "$1"
+	[ -n "$NAMES" ] || verify_left "$1"
 }
 
 # installed ROOT PLUGIN -- its VERSION there, read as X.Y.Z, or nothing.
@@ -3179,7 +3186,6 @@ case $VERB in status|verify|outdated) ;; *)
 		rest=$(echo $NAMES)${ALL:+ --all}
 		case $VERB in
 			enable|disable) die "$XYMONHOME is a Xymon client's tree, and the client part has no task to turn on or off yet" ;;
-			clean) die "$XYMONHOME is a Xymon client's tree, and clean does not read a client's tree yet" ;;
 		esac
 		die "$XYMONHOME is a Xymon client's tree, whose part is named: ./xymon-plugin $VERB --client$(hx)${rest:+ $rest}"
 	fi ;;
@@ -3194,7 +3200,6 @@ fi
 if [ "$PART" = client ]; then
 	case $VERB in
 		enable|disable) die "the client part has no task to turn on or off yet" ;;
-		clean) die "clean does not read a client's tree yet: install, update, remove, status, verify and outdated take --client" ;;
 	esac
 	[ -z "$VENV_FETCH" ] || die "--venv: a client part has no virtualenv"
 	[ -z "$DESTDIR" ] || die "DESTDIR: a client part is not staged yet, only installed in a client's tree"

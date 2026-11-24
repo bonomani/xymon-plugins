@@ -64,8 +64,9 @@ go, the `plugins` column, the environment and exit statuses:
 - `--client` installs, updates and removes a plugin's client part in a
   standalone Xymon client's tree, run by whoever owns its `ext/`. A
   client tree that is, or may be, a server's own is refused; `status`,
-  `verify` and `outdated` read it, whoever owns it; `enable`, `disable`
-  and `clean` do not take it yet.
+  `verify` and `outdated` read it, whoever owns it; `clean` takes the
+  manual page links a removed client plugin left; `enable` and `disable`
+  do not take it yet.
 - In `ext/`, of the server or a client, a directory no install left --
   a link, with no `VERSION`, or a `PLUGIN` that is a link or names another
   plugin or part -- is left as it is: remove it by hand. On the server,
