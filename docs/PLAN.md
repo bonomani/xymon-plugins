@@ -34,8 +34,8 @@ named holds the detail.
 `verify` read a client's tree (#172). For a `plugins` column of a client
 host on its Xymon server, in this order:
 
-1. `task:` renamed `server-task:`; a client part's task, `client-task:`
-   (decided 2026-11-22); `clean --client` then takes its task link too.
+1. A client part's task, `client-task:`, installed off in the client's
+   `ext/NAME/`; `clean --client` then takes its task link too.
 2. `enable`/`disable --client` through the client's `clientlaunch.d` (SPEC
    first: how the link is made, and a client whose `clientlaunch.cfg` does
    not read the directory).

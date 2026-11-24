@@ -40,7 +40,7 @@ e=$s/ext d=$e/xymonapi link=$s/etc/tasks.d/xymonapi.cfg
 
 copy() { mkdir -p "$1"; cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$1/"; }
 v2=$work/v2; copy "$v2"
-sed -e 's/^conf: .*/conf: xymonapi-apache.conf xymonapi-lighttpd.conf/; /^task: /d' "$ROOT/plugins/xymonapi/PLUGIN" > "$v2/plugins/xymonapi/PLUGIN"
+sed -e 's/^conf: .*/conf: xymonapi-apache.conf xymonapi-lighttpd.conf/; /^server-task: /d' "$ROOT/plugins/xymonapi/PLUGIN" > "$v2/plugins/xymonapi/PLUGIN"
 
 # x [-r REPO] ARG... -- REPO's xymon-plugin ARG..., the checkout's by
 # default, on the scratch server, off a terminal.

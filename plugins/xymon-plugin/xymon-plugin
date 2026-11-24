@@ -1374,7 +1374,7 @@ manifest_tools() {
 declared() {
 	echo PLUGIN
 	echo README.md
-	for k in server-files tools-files server-manual tools-manual task conf; do
+	for k in server-files tools-files server-manual tools-manual server-task conf; do
 		sed -n "s/^$k: //p" "$1" | tr ' ' '\n'
 	done
 }
@@ -1611,7 +1611,7 @@ merge() {
 }
 
 task() {
-	t=$(field "$1" task); [ -n "$t" ] || return 0
+	t=$(field "$1" server-task); [ -n "$t" ] || return 0
 	tf=$EXTROOT/$1/tasks.cfg
 	link=$TASKDIR/$1.cfg
 	ours "$1"
@@ -1670,7 +1670,7 @@ task() {
 
 # enable PLUGIN, disable PLUGIN -- its task on or off, by its link.
 enable() {
-	[ -n "$(held "$EXTROOT" "$1" task)" ] || die "$1 has no task to enable"
+	[ -n "$(held "$EXTROOT" "$1" server-task)" ] || die "$1 has no task to enable"
 	[ -f "$EXTROOT/$1/tasks.cfg" ] || die "$1 is not installed in $EXTROOT"
 	ours "$1"
 	for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
@@ -1694,7 +1694,7 @@ as Xymon's own tasks.cfg has it; --force makes the link all the same, where the 
 	[ "$1" != "$self" ] || COLUMN=1
 }
 disable() {
-	[ -n "$(held "$EXTROOT" "$1" task)" ] || die "$1 has no task to disable"
+	[ -n "$(held "$EXTROOT" "$1" server-task)" ] || die "$1 has no task to disable"
 	ours "$1"
 	is_on "$1" || { echo "$1 is off already"; return 0; }
 	rm -f "$TASKDIR/$1.cfg"
@@ -1751,7 +1751,7 @@ status() {
 	fi
 	v=$(sed -e 's|^.*/v||' "$2/$3/VERSION")
 	state=
-	if [ "$1" = server ] && [ -n "$(held "$2" "$3" task)" ]; then
+	if [ "$1" = server ] && [ -n "$(held "$2" "$3" server-task)" ]; then
 		if is_on "$3"; then state=", on"; else state=", off"; fi
 	fi
 	# A server part whose Python lacks its modules is said, as enable
@@ -1774,7 +1774,7 @@ status() {
 # installed_tasks -- the plugins named, or every one installed with a task.
 installed_tasks() {
 	for n in $LIST; do
-		if [ -n "$NAMES" ] || { [ -n "$(held "$EXTROOT" "$n" task)" ] && [ -d "$EXTROOT/$n" ]; }; then echo "$n"; fi
+		if [ -n "$NAMES" ] || { [ -n "$(held "$EXTROOT" "$n" server-task)" ] && [ -d "$EXTROOT/$n" ]; }; then echo "$n"; fi
 	done
 }
 
@@ -2218,10 +2218,10 @@ install_server() {
 	# What the install in place put outside its directory, by its record,
 	# for what this one no longer does.
 	was_manual=$(held "$EXTROOT" "$1" server-manual)
-	was_task=$(held "$EXTROOT" "$1" task)
+	was_task=$(held "$EXTROOT" "$1" server-task)
 	was_selinux=$(held "$EXTROOT" "$1" selinux)
 	# Refused before anything is replaced, not halfway through.
-	[ -z "$(field "$1" task)" ] || ours "$1"
+	[ -z "$(field "$1" server-task)" ] || ours "$1"
 	# The task file an admin may have enabled, the web server snippets an
 	# admin may have edited, and each NAME.old outlive the directory: set
 	# aside in AS, the one a run cut short left taken up (aside), and
@@ -2236,7 +2236,7 @@ install_server() {
 	progress "$1"
 	aside "$1"
 	keep="$PROG PLUGIN MANIFEST"
-	if [ -f "$ext/tasks.cfg" ] && [ ! -L "$ext/tasks.cfg" ] && [ -n "$(field "$1" task)" ]; then
+	if [ -f "$ext/tasks.cfg" ] && [ ! -L "$ext/tasks.cfg" ] && [ -n "$(field "$1" server-task)" ]; then
 		put_aside "$ext/tasks.cfg" tasks.cfg cp
 		keep="$keep tasks.cfg"
 	elif [ -f "$ext/tasks.cfg" ]; then
@@ -2293,7 +2293,7 @@ EOF
 	# the record a run cut short may have written anew: its link goes; the
 	# task file, set aside, is kept by aside_back, edited; and so is a file
 	# in the link's place, xymonlaunch's, edited.
-	if [ -z "$(field "$1" task)" ] && { [ -n "$was_task" ] || [ "$(readlink "$TASKDIR/$1.cfg" 2>/dev/null)" = "$XYMONHOME/ext/$1/tasks.cfg" ]; }; then
+	if [ -z "$(field "$1" server-task)" ] && { [ -n "$was_task" ] || [ "$(readlink "$TASKDIR/$1.cfg" 2>/dev/null)" = "$XYMONHOME/ext/$1/tasks.cfg" ]; }; then
 		for l in "$TASKDIR/$1.cfg" "$TASKDIR/$1"; do
 			if [ -f "$l" ] && [ ! -L "$l" ] && ! cmp -s "$l" "$AS/.shipped/tasks.cfg"; then
 				put_aside "$l" tasks.cfg
@@ -2382,6 +2382,7 @@ install_client() {
 	ns=$(needs "$1" client) || exit 1
 	for n in $ns; do known "$n"; install_client "$n"; done
 	[ -n "$(field "$1" client-files)" ] || die "$1 has no client part"
+	[ -z "$(field "$1" client-task)" ] || die "$1's PLUGIN file has a client-task: line: a client part's task is not installed yet"
 	dir=$EXTROOT/$1
 	was_manual=$(held "$EXTROOT" "$1" client-manual)
 	progress "$1"
@@ -2654,7 +2655,7 @@ with_installed() {
 uninstall_server() {
 	needed "$1" server "$EXTROOT"
 	m=$(held "$EXTROOT" "$1" server-manual)
-	t=$(held "$EXTROOT" "$1" task)
+	t=$(held "$EXTROOT" "$1" server-task)
 	se=$(held "$EXTROOT" "$1" selinux)
 	cf=
 	for c in $(held "$EXTROOT" "$1" conf); do
@@ -3022,7 +3023,7 @@ dialogue() {
 		for n in $(all_plugins); do
 			v=$(installed "$EXTROOT" "$n") || continue
 			st=
-			if [ -n "$(held "$EXTROOT" "$n" task)" ]; then
+			if [ -n "$(held "$EXTROOT" "$n" server-task)" ]; then
 				if is_on "$n"; then st=", on"; else st=", off"; fi
 			fi
 			f=$(findings server "$EXTROOT" "$n")
@@ -3073,7 +3074,7 @@ dialogue() {
 		for n in $(all_plugins); do
 			server_installed "$n" || continue
 			any=1
-			[ -n "$(held "$EXTROOT" "$n" task)" ] || continue
+			[ -n "$(held "$EXTROOT" "$n" server-task)" ] || continue
 			if is_on "$n"; then add "turn $n off" "$me disable --server$hx $n"
 			else add "turn $n on" "$me enable --server$hx $n"; fi
 		done
@@ -3129,7 +3130,7 @@ dialogue() {
 	case $cmd in
 		*" install --server "*)
 			n=${cmd##* }
-			if [ -n "$(field "$n" task)" ]; then
+			if [ -n "$(field "$n" server-task)" ]; then
 				ecmd="$me enable --server$hx $n"
 				echo "Turn it on now?"
 				echo "I will run:  $ecmd"
@@ -3302,7 +3303,7 @@ case $VERB in
 		# A plugin named with no task is refused; with none named, those
 		# with no task are passed over.
 		for n in $NAMES; do
-			[ -n "$(held "$EXTROOT" "$n" task)" ] || die "$n has no task to turn on or off"
+			[ -n "$(held "$EXTROOT" "$n" server-task)" ] || die "$n has no task to turn on or off"
 		done
 		[ -n "$NAMES" ] || LIST=$(with_installed "$EXTROOT")
 		# enable refuses a plugin whose Python lacks the modules it needs,

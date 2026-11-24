@@ -510,6 +510,13 @@ cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$r/"
 mkdir -p "$r/plugins/cneed"
 printf 'name: cneed\nversion: 1.0.0\nsummary: a test\nclient-files: check.sh\nclient-needs: xymon-plugin\n' > "$r/plugins/cneed/PLUGIN"
 : > "$r/plugins/cneed/check.sh"
+# A client part's task is not installed yet: a PLUGIN file naming one, by
+# client-task:, is refused, nothing written.
+mkdir -p "$r/plugins/ctask"
+printf 'name: ctask\nversion: 1.0.0\nsummary: a test\nclient-files: check.sh\nclient-task: ctask.tasks\n' > "$r/plugins/ctask/PLUGIN"
+: > "$r/plugins/ctask/check.sh"; : > "$r/plugins/ctask/ctask.tasks"
+XP="$r/xymon-plugin" refused "[S35]" "a client part with a client-task: line" "ctask's PLUGIN file has a client-task: line: a client part's task is not installed yet" install --client ctask XYMONHOME="$c"
+{ [ -e "$c/ext/ctask" ] || [ -L "$c/ext/ctask" ]; } && fail "[S35] the refused client-task: install left ext/ctask"
 # What it needs is checked as the plugin named is, before anything
 # changes: a directory no install left where xymon-plugin's goes stops the
 # install of cneed, and is left as it is.

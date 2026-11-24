@@ -34,7 +34,7 @@ conf=$ext/xymonapi-apache.conf
 v2=$work/v2
 mkdir -p "$v2"
 cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugins" "$v2/"
-t=$(sed -n 's/^task: //p' "$ROOT/plugins/xymonapi/PLUGIN")
+t=$(sed -n 's/^server-task: //p' "$ROOT/plugins/xymonapi/PLUGIN")
 { echo "# v2's first line"; cat "$ROOT/plugins/xymonapi/xymonapi-apache.conf"; } > "$v2/plugins/xymonapi/xymonapi-apache.conf"
 { cat "$ROOT/plugins/xymonapi/$t"; echo "# v2's last line"; } > "$v2/plugins/xymonapi/$t"
 

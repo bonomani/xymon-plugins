@@ -54,7 +54,7 @@ copy() { mkdir -p "$1"; cp -R "$ROOT/xymon-plugin" "$ROOT/LICENSE" "$ROOT/plugin
 # edit DIR SED -- DIR's xymonapi PLUGIN file, through SED.
 edit() { sed -e "$2" "$1/plugins/xymonapi/PLUGIN" > "$work/PLUGIN.e" && mv "$work/PLUGIN.e" "$1/plugins/xymonapi/PLUGIN"; }
 # v2 ships neither the nginx nor the lighttpd snippet, nor a task.
-v2=$work/v2; copy "$v2"; edit "$v2" 's/^conf: .*/conf: xymonapi-apache.conf/; /^task: /d'
+v2=$work/v2; copy "$v2"; edit "$v2" 's/^conf: .*/conf: xymonapi-apache.conf/; /^server-task: /d'
 # v3 ships xymonapi-relay-apache.conf in place of xymonapi-apache.conf.
 v3=$work/v3; copy "$v3"
 cp "$v3/plugins/xymonapi/xymonapi-apache.conf" "$v3/plugins/xymonapi/xymonapi-relay-apache.conf"

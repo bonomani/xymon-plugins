@@ -87,7 +87,7 @@ if [ -e "$link" ] || [ -L "$link" ]; then fail "[S9] uninstall-server left the l
 # An older install's copy in tasks.d: enabled by the admin, it is moved as
 # it was and linked; with its DISABLED line, moved without it, and off.
 mkdir -p "$home/etc/tasks.d"
-sed -e "s|@XYMONHOME@|$home|g" "$ROOT/plugins/xymonapi/$(sed -n 's/^task: *//p' "$ROOT/plugins/xymonapi/PLUGIN")" > "$work/enabled"
+sed -e "s|@XYMONHOME@|$home|g" "$ROOT/plugins/xymonapi/$(sed -n 's/^server-task: *//p' "$ROOT/plugins/xymonapi/PLUGIN")" > "$work/enabled"
 cp "$work/enabled" "$link"
 install migrate
 [ -L "$link" ] || fail "[S6] the older install's enabled task file was not replaced by the link"
