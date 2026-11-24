@@ -1746,8 +1746,9 @@ column() {
 		return 0
 	fi
 	ce=$XYMONHOME/etc/xymonclient.cfg
-	# shellcheck disable=SC2016 # expanded under xymoncmd
-	ct=$("$xc" --env="$ce" /bin/sh -c 'printf %s "$XYMONTMP"' </dev/null 2>/dev/null)
+	# Read from env's output: a xymoncmd before Xymon's #920 expands its
+	# arguments before it reads the file, which a $XYMONTMP given would be.
+	ct=$("$xc" --env="$ce" env </dev/null 2>/dev/null | sed -n 's/^XYMONTMP=//p' | tail -n 1)
 	ch=; [ -z "$ct" ] || ch=$(sed -n 1p "$ct/xymon-plugin.host" 2>/dev/null)
 	if [ -z "$ch" ]; then
 		set -- "$XYMONHOME"/logs/clientlaunch.*.pid
@@ -1755,7 +1756,7 @@ column() {
 	fi
 	[ -n "$ch" ] || { echo "The plugins column is not sent: its task has not run yet to give the host's name, nor is there one $XYMONHOME/logs/clientlaunch.NAME.pid"; return 0; }
 	echo "The plugins column, sent now for $ch:"
-	MACHINEDOTS=$ch XYMON_PLUGINS_WAIT=0 "$xc" --env="$ce" /bin/sh "$r" --client </dev/null 2>&1 | sed -e 's/^/  /'
+	MACHINEDOTS=$ch XYMON_PLUGINS_AT_ONCE=1 XYMON_PLUGINS_WAIT=0 "$xc" --env="$ce" /bin/sh "$r" --client </dev/null 2>&1 | sed -e 's/^/  /'
 	return 0
 }
 

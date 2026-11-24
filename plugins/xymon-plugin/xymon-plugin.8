@@ -124,7 +124,7 @@ as
 .I runclient.sh
 gives it, its
 .B --hostname
-or the system's name, written each run in
+or the system's name, written by the task each run in
 .IR $XYMONTMP/xymon-plugin.host ;
 the log is
 .I xymon-plugin.log
@@ -141,10 +141,13 @@ On a server as on a client, where
 .B XYMSRV
 is 0.0.0.0 the status goes to each server
 .B XYMSERVERS
-names, each read back: one that did not keep it is said and ends the run
-with 1; one that refuses to show its board to this host (xymond's
+names, each read back for that host and that column alone: one that did
+not keep it is said and ends the run with 1; kept blue, the column
+disabled, it is said, and does not; one that refuses to show its board to
+this host (xymond's
 .BR --www-senders )
-is said, and does not.
+is said, and does not \(em whether it kept the status is then not known,
+nor, on a xymond that knows no host at all, told apart from a refusal.
 .SH OPTIONS
 .TP
 .B --version

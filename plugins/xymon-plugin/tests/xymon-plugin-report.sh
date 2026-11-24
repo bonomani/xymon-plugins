@@ -49,7 +49,7 @@ cat > "$bin/xymon" <<'SH'
 #!/bin/sh
 [ -n "${XYMONFAIL:-}" ] && { echo "Could not connect to Xymon daemon@$1" >&2; exit 5; }
 case $2 in
-xymondboard*test=plugins*)
+xymondboard*test=*plugins*)
 	# What xymond kept: the colour sent, unless XYMONDROP says it kept
 	# nothing, as for a host hosts.cfg does not name.
 	printf '%s\n' "$2" >> "$WORK/asked"
@@ -174,7 +174,7 @@ assert_contains "could not send green to 192.0.2.1" "$(cat "$work/log")" "and th
 RC=0; PATH="$bin:$PATH" XYMON="$bin/xymon" XYMSRV=192.0.2.1 XYMONHOME="$home" MACHINEDOTS=localhost MACHINE=bcs-Mac-mini,local \
 	XYMON_PLUGINS_WAIT=0 "$ext/xymon-plugin-report.sh" >"$work/log" 2>&1 || RC=$?
 assert_contains "status+31h localhost.plugins green " "$(first_line "$(sent)")" "[S33] MACHINEDOTS names the host, not MACHINE"
-assert_contains "xymondboard host=localhost test=plugins" "$(cat "$work/asked")" "[S33] and the status is read back for it"
+assert_contains "xymondboard host=^localhost\$ test=^plugins\$" "$(cat "$work/asked")" "[S33] and the status is read back for it, anchored"
 
 # A status xymond does not keep -- a host hosts.cfg does not name -- is
 # said, and ends the reporter with 1: xymon itself ends with 0 then.

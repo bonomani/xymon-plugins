@@ -26,8 +26,9 @@
 # --client: the task of a standalone client's tree, xymonclient.cfg its
 # environment and MACHINEDOTS the name runclient.sh gives; outdated
 # --client, and the name written in $XYMONTMP/xymon-plugin.host, for the
-# installer to send under at once. The status goes to XYMSRV, or, where
-# that is 0.0.0.0, to each server XYMSERVERS names, each read back.
+# installer to send under at once -- not when the installer runs it so,
+# XYMON_PLUGINS_AT_ONCE set. The status goes to XYMSRV, or, where that is
+# 0.0.0.0, to each server XYMSERVERS names, each read back.
 
 here=$(cd "$(dirname "$0")" && pwd)
 part=server; [ "${1:-}" != --client ] || part=client
@@ -35,16 +36,16 @@ log() { printf '%s xymon-plugin-report: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*
 
 for v in XYMON XYMSRV XYMONHOME MACHINEDOTS; do
 	eval "val=\${$v:-}"
-	if [ -z "$val" ]; then log "$v is not set: run as the task, with ENVFILE xymonserver.cfg"; exit 1; fi
+	if [ -z "$val" ]; then log "$v is not set: run as the task, with ENVFILE xymon$part.cfg"; exit 1; fi
 done
 # The server's name as xymonserver.cfg gives it, MACHINEDOTS -- the one
 # hosts.cfg knows it by, and its own columns go under -- not MACHINE,
 # which may be the system's name instead (Homebrew's Xymon: localhost
 # against bcs-Mac-mini,local), under which xymond would keep nothing.
 host=$(printf '%s' "$MACHINEDOTS" | tr . ,)
-if [ "$part" = client ]; then
+if [ "$part" = client ] && [ -z "${XYMON_PLUGINS_AT_ONCE:-}" ]; then
 	ht=${XYMONTMP:-$XYMONHOME/tmp}/xymon-plugin.host
-	printf '%s\n' "$MACHINEDOTS" > "$ht" 2>/dev/null || log "could not write $ht: the installer cannot send the column at once"
+	{ printf '%s\n' "$MACHINEDOTS" > "$ht"; } 2>/dev/null || log "could not write $ht: the installer cannot send the column at once"
 fi
 
 # The wait: 0 to max seconds, from /dev/urandom where it is, else from the
@@ -116,9 +117,12 @@ case $rc in
 	*) color=yellow summary="outdated ended with $rc" ;;
 esac
 # Each server, read back: xymon ends with 0 even where xymond keeps
-# nothing -- a host hosts.cfg does not name. A board read back empty for
-# every host is one xymond refuses to show this host (--www-senders): said,
-# not a failure.
+# nothing -- a host hosts.cfg does not name. xymond reads host= and test=
+# as regular expressions: anchored, the dots escaped, so that web1 is not
+# web10. A column read back blue is kept, disabled. A board read back empty
+# for every host is one xymond refuses to show this host (--www-senders):
+# said, not a failure -- nor can it be told then whether xymond kept it.
+re=$(printf '%s' "$MACHINEDOTS" | sed 's/[].[^$*+?(){}|\\]/\\&/g')
 servers=$XYMSRV
 [ "$XYMSRV" != 0.0.0.0 ] || servers=${XYMSERVERS:-}
 if [ -z "$(printf '%s' "$servers" | tr -d ' ')" ]; then
@@ -126,6 +130,7 @@ if [ -z "$(printf '%s' "$servers" | tr -d ' ')" ]; then
 	exit 1
 fi
 end=0 said=
+set -f
 for srv in $servers; do
 	to=; [ "$srv" = "$XYMSRV" ] || to=" to $srv"
 	if ! "$XYMON" "$srv" "status+31h $host.plugins $color $(date) $summary
@@ -133,16 +138,23 @@ for srv in $servers; do
 $marked"; then
 		said="$said; could not send $color to $srv"; end=1; continue
 	fi
-	if ! kept=$("$XYMON" "$srv" "xymondboard host=$MACHINEDOTS test=plugins fields=color" 2>&1); then
+	if ! kept=$("$XYMON" "$srv" "xymondboard host=^$re\$ test=^plugins\$ fields=color" 2>&1); then
 		said="$said; sent $color$to, which could not be read back: $kept"; continue
 	fi
-	if [ "$kept" != "$color" ]; then
-		if [ -z "$kept" ] && [ -z "$("$XYMON" "$srv" "xymondboard fields=hostname" 2>/dev/null)" ]; then
+	if [ -z "$kept" ]; then
+		if ! b=$("$XYMON" "$srv" "xymondboard fields=hostname" 2>&1); then
+			said="$said; sent $color$to, which could not be read back: $b"; continue
+		fi
+		if [ -z "$b" ]; then
 			said="$said; sent $color$to, which xymond refuses to show to this host: not read back"; continue
 		fi
-		said="$said; sent $color for $MACHINEDOTS$to, which xymond did not keep: is $MACHINEDOTS in hosts.cfg?"; end=1; continue
 	fi
-	said="$said; sent $color$to"
+	case $kept in
+		"$color") said="$said; sent $color$to" ;;
+		blue) said="$said; sent $color$to, kept, the column disabled" ;;
+		*) said="$said; sent $color for $MACHINEDOTS$to, which xymond did not keep: is $MACHINEDOTS in hosts.cfg?"; end=1 ;;
+	esac
 done
+set +f
 log "waited ${wait_s}s; outdated ended with $rc$said"
 exit $end
