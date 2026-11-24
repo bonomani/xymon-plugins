@@ -121,7 +121,7 @@ lifecycle() {
 	[ "$rc" -eq 0 ] || fail "[S35] $l: install --client failed: $out"
 	assert_contains "Target: $c (named by XYMONHOME), part: client" "$out" "[S35] $l: the target and the part are said"
 	d=$c/ext/xymon-plugin
-	assert_equal ".shipped MANIFEST PLUGIN VERSION tasks.cfg xymon-plugin xymon-plugin-report.sh xymon-plugin.8" "$(ls -A "$d" | tr '\n' ' ' | sed 's/ $//')" "[S35] $l: ext/xymon-plugin holds the client part's files, and only those"
+	assert_equal ".shipped MANIFEST PLUGIN VERSION tasks.cfg xymon-plugin xymon-plugin-report.sh xymon-plugin.8" "$(ls -A "$d" | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')" "[S35] $l: ext/xymon-plugin holds the client part's files, and only those"
 	[ -x "$d/xymon-plugin" ] || fail "[S35] $l: the installer is not executable"
 	assert_equal "$version" "$(cat "$d/VERSION")" "[S35] $l: VERSION is the PLUGIN file's"
 	cmp -s "$ROOT/plugins/xymon-plugin/PLUGIN" "$d/PLUGIN" || fail "[S35] $l: PLUGIN is not the checkout's copy"
