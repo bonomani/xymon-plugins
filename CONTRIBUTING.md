@@ -90,11 +90,12 @@ where it runs:
 - In a client part, `@XYMONHOME@` is the client's tree and its task's
   `ENVFILE` is `@XYMONHOME@/etc/xymonclient.cfg`; its `LOGFILE` is
   `@LOGDIR@/NAME-client.log`, `@LOGDIR@` written at install as the
-  client's log directory. In a server part, `@XYMONHOME@` is the server's
+  client's log directory on a standalone client, the server's in a
+  server's own client tree (S36). In a server part, `@XYMONHOME@` is the server's
   tree, its `ENVFILE` `xymonserver.cfg`, its log in `$XYMONSERVERLOGS`.
 - A `NEEDS` in a client part's task names a task of the client's own
-  launcher (`client`); once a server's own client tree takes client parts,
-  the same file is also read by the server's launcher, which knows
+  launcher (`client`); in a server's own client tree (S36) the same file
+  is read by the server's launcher instead, which knows
   `xymonclient` and `xymond` instead, and drops, with a line in its log, a
   task it does not know, the task running all the same. Its own server
   task is read after it, so unknown to it at the first load (S34).

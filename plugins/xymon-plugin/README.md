@@ -67,8 +67,11 @@ go, the `plugins` column, the environment and exit statuses:
   one, on a terminal, the server part is meant, and said, but a client's
   tree is refused, the command given with `--client`; in a script, name it.
 - `--client` installs, updates and removes a plugin's client part in a
-  standalone Xymon client's tree, run by whoever owns its `ext/`. A
-  client tree that is, or may be, a server's own is refused; `status`,
+  standalone Xymon client's tree, run by whoever owns its `ext/`; with
+  `XYMONHOME` naming a Xymon server, in that server's own client tree,
+  its task linked from the server's `tasks.d/` as `NAME-client.cfg`
+  (xymon-plugin itself excepted: the server's copy manages that tree). A
+  client tree named that is, or may be, a server's own is refused; `status`,
   `verify` and `outdated` read it, whoever owns it; `clean` takes the
   manual page and task links a removed client plugin left; a client
   part's task, `client-task:`, is installed off and turned on by `enable

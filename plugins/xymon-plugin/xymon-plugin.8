@@ -46,6 +46,20 @@ on what is installed; it holds no plugin, so
 says of each that it is not in this copy. To install or update plugins,
 run the checkout's or the archive's.
 .PP
+A plugin's client part goes too into a Xymon server's own client tree,
+the one its
+.I xymonserver.cfg
+names as
+.BR XYMONCLIENTHOME ,
+the server named:
+.BR "XYMONHOME=<server> ./xymon-plugin install --client NAME" ;
+its task is linked from the server's
+.IR tasks.d/
+as
+.IR NAME-client.cfg .
+xymon-plugin's own client part is not put there: the server's copy
+manages that tree.
+.PP
 Every verb and setting is described in
 .IR plugins/xymon-plugin/README.md ,
 the short version in

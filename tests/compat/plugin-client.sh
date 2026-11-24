@@ -203,7 +203,7 @@ lifecycle "etc/ a link, as Ubuntu's" "$u"
 # Refusals, each changing nothing.
 s=$work/srv/server
 server_tree "$s"; mkdir -p "$s/ext"
-refused "[S18]" "a server's tree with --client" "is a Xymon server's tree (etc/xymonserver.cfg bin/xymond), not a client's: a server's tree takes the server part, --server" \
+refused "[S36]" "a server's tree naming no client tree, with --client" "names no XYMONCLIENTHOME it can read: the server has no client tree of its own to take a client part" \
 	install --client xymon-plugin XYMONHOME="$s"
 refused "[S18]" "a client's tree with --server" "is a Xymon client's tree (etc/xymonclient.cfg bin/xymonclient.sh), not a server's: a client's tree takes the client part, --client" \
 	install --server xymon-plugin XYMONHOME="$c"

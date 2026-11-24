@@ -127,7 +127,8 @@ The tree `XYMONHOME` names is read for Xymon's marks, a whole pair counting
 before any single mark: a server's, `etc/xymonserver.cfg` and `bin/xymond`,
 which wins when a client's files are there too; else a client's,
 `etc/xymonclient.cfg` and `bin/xymonclient.sh`. `--server` takes a server's
-tree, `--client` a client's, whose `ext/` must be a directory. Any other
+tree, `--client` a client's, whose `ext/` must be a directory -- or a
+server's, standing for its own client tree (S36). Any other
 tree -- of the other kind, with one mark of a pair, or with no marks -- is
 refused before anything changes, naming the marks found or missing and,
 for a tree of the other kind, the part it takes. Under `DESTDIR`, a staging
@@ -171,7 +172,9 @@ refused. A client part's task is the same in its client's tree, with
 xymonlaunch reads, in place of `etc/tasks.d/` and `tasks.cfg`, here and in
 S7, S9 and S13; `enable --client` and `disable --client` turn it on and
 off. In a client part's task file, `@LOGDIR@` is its log directory,
-written at install as `$XYMONCLIENTLOGS`, which xymonlaunch expands.
+written at install as `$XYMONCLIENTLOGS` on a standalone client and
+`$XYMONSERVERLOGS` in a server's own client tree (S36), which xymonlaunch
+expands.
 
 **S7. An update replaces the code and keeps the choices.**
 `update` replaces the plugin's directory as a whole, so a file a
@@ -435,7 +438,8 @@ when it is, and, at the same version, said to have other code when its files dif
 from those `MANIFEST` says were installed (S29), naming the update. A name that is no plugin is refused. `status` changes nothing. It
 says them by section, each always there, empty or not: the Xymon server,
 its own client tree -- the one its `XYMONCLIENTHOME` names -- and the
-person's tools; `--server` and `--tools` keep to theirs. A standalone
+person's tools; `--server` and `--tools` keep to theirs, and `--client`
+with `XYMONHOME` naming a server to its own client tree (S36). A standalone
 client's tree (S35) is said as a server's: with no
 part named, one `XYMONHOME` names stands for the server's sections, and
 without `XYMONHOME` each one found (S25) has its own after the servers';
@@ -509,9 +513,11 @@ terminal, not named, a verb that changes something is refused, listing the
 trees found; `status` lists every installation found and what it holds,
 and never asks. A `XYMONHOME` that is a server's own client tree -- the
 `../server` beside it, or a server found, naming it as its
-`XYMONCLIENTHOME` -- is refused, naming that server; with `--client`, so
+`XYMONCLIENTHOME` -- is refused, naming that server and the forms that
+name it, `--server` or `--client` (S36); with `--client`, so
 is a client tree that may be one: a `../server` beside it, a server's,
-that names another tree or none the command can read, or a
+that names another tree or none the command can read, a server found
+that names its client tree with a variable, or a
 `xymonserver.cfg` in its `etc/`, the refusal saying which. That
 `../server` is the one beside the tree's resolved path, however the tree
 is named: relative, with `.`, or through a link.
@@ -547,7 +553,8 @@ runs them with exactly those.
 **S28. A plugin writes only where this rule says.**
 An install writes a plugin's files under its directory, and outside it
 only: its task link, `etc/tasks.d/NAME-server.cfg` or a client's
-`etc/clientlaunch.d/NAME-client.cfg` (S6, S13); the link to its manual page
+`etc/clientlaunch.d/NAME-client.cfg`, or, for a server's own client tree,
+the server's `etc/tasks.d/NAME-client.cfg` (S6, S13, S36); the link to its manual page
 in `MANDIR` (S20); its command in `$PREFIX/bin` (S4); its copy in the stage
 `/plugins` serves (S19); the virtualenv beside the plugins (S26); and its
 SELinux module (S23); a client part, only its directory, its manual
@@ -769,7 +776,7 @@ task that stops by itself at each update (S7) would stop the one needing it; a t
 comes, one of that part's launcher (`clientlaunch.cfg`'s `client` on a
 client), or none where its launcher has no such thing (cron, launchd).
 A `NEEDS` in a client part's task is the plugin's choice, its pitfalls said
-in CONTRIBUTING.md: once a server's own client tree takes client parts,
+in CONTRIBUTING.md: a server's own client tree taking client parts (S36),
 one file is read by two launchers that know different tasks, a task only
 one knows dropped by the other; and `NAME-client.cfg` is read before
 `NAME-server.cfg`, so its own server task is unknown at the first load.
@@ -804,10 +811,49 @@ changes, the run is refused unless the person running it owns the tree's
 written by whoever owns its tree, so that the same person updates and
 removes them. `status` and `verify`, which change nothing, read a
 client's tree as a server's (S15, S30), whoever owns its `ext/`, and
-refuse the trees the other verbs refuse: one of another kind, a server's
-own, one in doubt. `outdated` reads a client's tree as a server's (S32),
+refuse the trees the other verbs refuse: a server's tree naming no client
+tree of its own, a server's own client tree named as a client's, one in
+doubt; a server's own is read through its server (S36). `outdated` reads a client's tree as a server's (S32),
 and `clean --client` takes away what `verify` says is left there (S31),
 run as the other verbs that change something.
+
+**S36. A client part goes into a server's own client tree too.**
+A Xymon server has a client tree of its own, the one its `xymonserver.cfg`
+names as `XYMONCLIENTHOME`, through which the server's host is monitored.
+`--client` with `XYMONHOME` naming the server installs, updates, removes,
+turns on and off, and reads a plugin's client part there, as on a
+standalone client (S35); that tree named itself is refused, giving this
+form (S25). `XYMONCLIENTHOME` is read as Xymon's installs write it, an
+absolute path, spelt once as the server's `XYMONHOME` is -- its links
+kept, as Homebrew's `opt/`, which names the current version --; a server that names none, a variable --
+which nothing here runs the server's programs to read --, a path not
+absolute, a directory that is not there, one without a client's marks
+(S18), or the server's own tree, is refused, saying what it read. Before a verb changes
+anything: a server with no `ext/` of its own, which every Xymon server
+install makes, is refused as an install incomplete; a client tree with no
+`ext/` -- which Xymon's own installs make, a directory or, as Homebrew's, a
+link to one -- is refused, giving the commands that make it, or what a
+link names; one that is the server's own `ext/` under another name is
+refused, as the client part would take the server part's directory; an
+`ext/` -- what a link names -- owned by another than the owner of the
+server's `tasks.d/`, where its task's link is written, is refused: one
+person writes both, as S35 has it, and the part's task runs as the
+server's xymonlaunch; a `chown` is given only for a directory, not for
+what a link names, which the client tree's owner chose. That person
+runs it. A verb that
+reads finds a tree with no `ext/` empty, saying nothing. Under `DESTDIR`,
+as S35, a client part is refused.
+Its task is started by the server's xymonlaunch, which does not read the
+client's `clientlaunch.cfg`: installed off, `enable --client` links it from
+the server's `tasks.d/` as `NAME-client.cfg` (S6), beside a server part's
+`NAME-server.cfg`, the server's `tasks.cfg` the one read and touched (S13);
+its `@XYMONHOME@` is the client tree, and its `@LOGDIR@` the server's
+logs, `$XYMONSERVERLOGS`, as Xymon's own task for that client has them.
+`xymon-plugin`'s client part does not go there: the server's copy, the
+same installer, manages that tree. Named, it is refused, with the
+commands that remove a copy left there; with none named, passed over. A
+client part there needing it is installed only while the server has
+its copy, and that copy is not removed while one there needs it.
 
 ### Getting the code
 
@@ -836,12 +882,8 @@ brings its test.
   | server | `server-*` | a Xymon server's tree, `ext/NAME/` | the user that may write it, usually root |
   | client | `client-*` | a Xymon client's tree, `ext/NAME/`, its task started from a standalone client's `clientlaunch.d`, or, for a server's own client, from that server's `tasks.d` | the same |
 
-  On a server, a client part's link in `tasks.d` is named `NAME-client.cfg`,
-  and its task is given the client's `xymonclient.cfg` as its `ENVFILE`.
-  A Xymon server has a client tree of its own, the `XYMONCLIENTHOME` its
-  `xymonserver.cfg` names: it belongs to that server, and a plugin's client
-  part installed on the server goes there. A client tree no server names is
-  a standalone client, a monitored host. A client part names what it
+  A client tree no server names is a standalone client, a monitored host;
+  a server's own client tree is S36's. A client part names what it
   needs with `client-needs:`, as S3 has the other parts do; a need the
   target cannot hold, as a server part on a standalone client, refuses the
   install, saying why (S35 for a standalone client). Once built, this
@@ -852,11 +894,8 @@ brings its test.
   server part keeps its runtime files in `XYMONRUNDIR` (S22) and its logs
   in Xymon's log directory. The checks under `checks/`, copied into place by hand today, each
   move under `plugins/` as a client part when they get a `PLUGIN` file.
-- **A standalone client's part, the first client step (S35)**; still to
-  come:
-  - a server's own client tree comes after;
-  - a client tree that may be a server's own (S25) is asked about, once
-    the command can ask, rather than refused.
+- **A client tree that may be a server's own** (S25) is asked about, once
+  the command can ask, rather than refused.
 - **One command, read as a sentence.** `xymon-plugin` (S24) takes a verb
   and the plugins it acts on; still to come is `connect`:
 

@@ -188,12 +188,12 @@ assert_not_contains "Xymon server: " "$out" "[S30] verify --client covers no ser
 cp "$work/page.kept" "$d/xymon-plugin.8"
 export XYMON_PLUGINS_TREES=
 
-# Refused, as by the other client verbs: a server's tree, a server's own
-# client, one in doubt.
+# Refused, as by the other client verbs: a server's tree naming no client
+# tree of its own (S36), a server's own client named directly, one in doubt.
 for v in status verify; do
 	x $v --client XYMONHOME="$s"
-	[ "$rc" -ne 0 ] || fail "[S18] $v --client on a server's tree was taken"
-	assert_contains "is a Xymon server's tree" "$out" "[S18] $v --client on a server's tree is refused"
+	[ "$rc" -ne 0 ] || fail "[S36] $v --client on a server's tree naming no client tree was taken"
+	assert_contains "names no XYMONCLIENTHOME it can read" "$out" "[S36] $v --client on a server's tree naming no client tree is refused"
 	x $v --client XYMONHOME="$o/client"
 	[ "$rc" -ne 0 ] || fail "[S35] $v --client on a server's own client was taken"
 	assert_contains "is the client tree of the Xymon server $o/server" "$out" "[S35] $v --client on a server's own client is refused"
