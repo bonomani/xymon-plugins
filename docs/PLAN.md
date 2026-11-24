@@ -51,15 +51,19 @@ Next, in order (decided 2026-11-24, after two double analyses):
    - the owner of that tree's `ext/` installs; a value of
      `XYMONCLIENTHOME` holding a variable is expanded through `xymoncmd`,
      a missing, unmarked or server-equal tree refused; `DESTDIR` refused;
-   - `enable --client` refused when `ext/NAME` belongs to neither root
-     nor the owner of the server's `tasks.d/`;
    - every `--client` command of xymon-plugin on a server refused (the
      server's copy manages that tree), printing the commands that remove
      an old copy; status, verify, outdated and clean read the tree.
-   Still to ask: how the tree is named on the command line (proposed
-   `XYMONHOME=<server> --client`); whether one ownership check, at install,
-   replaces the enable-time one; a read verb on a tree with no `ext/`
-   reading as "no plugin" rather than failing.
+   Then decided: the tree is named by its server, `XYMONHOME=<server>
+   --client`, the client tree named directly refused, giving that form;
+   one ownership check, for every `--client` command on a server, before
+   anything changes, in place of the one at `enable`: that tree's `ext/`
+   belongs to the owner of the server's `ext/`, or to root, as Xymon's own
+   installs make it, else refused with the `chown`; a read verb finds a
+   client tree with no `ext/` -- a damaged tree, as Xymon's installs make
+   one -- empty, saying nothing. Later, perhaps: an installation named by
+   its top directory (`XYMONTOPDIR`, holding `server/` and `client/`), as a
+   shorthand for its server.
 3. **One manual page per part** (below).
 4. **`clientage`, an example plugin with all three parts**: the client
    part sends `clientage`, the age of the client's last message (green
