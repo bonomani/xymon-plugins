@@ -513,7 +513,8 @@ and never asks. A `XYMONHOME` that is a server's own client tree -- the
 `XYMONCLIENTHOME` -- is refused, naming that server and the forms that
 name it, `--server` or `--client` (S36); with `--client`, so
 is a client tree that may be one: a `../server` beside it, a server's,
-that names another tree or none the command can read, or a
+that names another tree or none the command can read, a server found
+that names its client tree with a variable, or a
 `xymonserver.cfg` in its `etc/`, the refusal saying which. That
 `../server` is the one beside the tree's resolved path, however the tree
 is named: relative, with `.`, or through a link.
@@ -818,10 +819,11 @@ names as `XYMONCLIENTHOME`, through which the server's host is monitored.
 `--client` with `XYMONHOME` naming the server installs, updates, removes,
 turns on and off, and reads a plugin's client part there, as on a
 standalone client (S35); that tree named itself is refused, giving this
-form (S25). A value of `XYMONCLIENTHOME` naming a variable is read
-through the server's `xymoncmd`. A server that names none, or a
-directory that is not there, without a client's marks (S18), or the
-server's own tree, is refused, saying what it read. Before a verb changes
+form (S25). `XYMONCLIENTHOME` is read as Xymon's installs write it, an
+absolute path, taken resolved; a server that names none, a variable --
+which nothing here runs the server's programs to read --, a path not
+absolute, a directory that is not there, one without a client's marks
+(S18), or the server's own tree, is refused, saying what it read. Before a verb changes
 anything: a tree with no `ext/` -- which Xymon's own installs make -- is
 refused, giving the commands that make it and give it to the server's
 `ext/` owner; an `ext/` owned by neither that owner nor root is refused,

@@ -945,6 +945,13 @@ client_home_ok() {
 		o=$(client_home "$s2")
 		die "$XYMONHOME may be a server's own client: the Xymon server $s2 beside it names ${o:-no XYMONCLIENTHOME this command can read}${o:+ as its XYMONCLIENTHOME}; refused while in doubt"
 	fi
+	# A server found that names its client tree with a variable may name
+	# this one: in doubt, as nothing here reads that variable.
+	while IFS= read -r t; do
+		case $(xch "$t") in *'$'*) die "$XYMONHOME may be a server's own client: the Xymon server $t names its client tree with a variable, which this command does not read; refused while in doubt" ;; esac
+	done <<EOF
+$(xymon_trees | sed -n 's/^server //p')
+EOF
 	[ ! -e "$XYMONHOME/etc/xymonserver.cfg" ] \
 		|| die "$XYMONHOME may be a server's own client: its etc/ holds a xymonserver.cfg, as a server's client sharing that server's etc/ does; refused while in doubt"
 	[ "${1:-}" != read ] || return 0
@@ -958,8 +965,9 @@ client_home_ok() {
 
 # own_client -- --client with XYMONHOME a server's tree: the server's own
 # client tree (S36), the one its xymonserver.cfg names as XYMONCLIENTHOME,
-# a variable in it read through the server's xymoncmd, taken resolved.
-# Refused, saying what was read, when it names none, a path not absolute,
+# a path, taken resolved.
+# Refused, saying what was read, when it names none, a variable, a path
+# not absolute,
 # a directory not there, one without a
 # client's marks, or the server's own; and, for a verb that changes
 # something, when that tree's ext/ is not there, or is the owner's of
@@ -969,10 +977,9 @@ client_home_ok() {
 own_client() {
 	srv=$XYMONHOME
 	c=$(xch "$srv")
-	case $c in *'$'*)
-		c=$(env -i PATH=/usr/bin:/bin "$srv/bin/xymoncmd" --env="$srv/etc/xymonserver.cfg" env 2>/dev/null \
-			| sed -n 's/^XYMONCLIENTHOME=//p' | tail -n 1) ;;
-	esac
+	# As Xymon's installs write it, a path: a variable is not read, as
+	# nothing here runs the server's programs to read it.
+	case $c in *'$'*) die "$srv's XYMONCLIENTHOME, $c, names a variable, which this command does not read: write the client tree's path itself" ;; esac
 	[ -n "$c" ] || die "$srv's xymonserver.cfg names no XYMONCLIENTHOME it can read: the server has no client tree of its own to take a client part"
 	# Absolute: a relative one would be read against the current directory,
 	# and written so into the task file and its link.

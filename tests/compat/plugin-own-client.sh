@@ -5,8 +5,8 @@
 #
 # A client part goes into a server's own client tree too (S36): named by
 # its server, XYMONHOME=<server> --client, the tree its xymonserver.cfg
-# names as XYMONCLIENTHOME, a variable in it read through the server's
-# xymoncmd. The part's files go in that tree's ext/, @XYMONHOME@ that
+# names as XYMONCLIENTHOME, an absolute path, taken resolved, a variable
+# refused. The part's files go in that tree's ext/, @XYMONHOME@ that
 # tree; its task, installed off, is linked from the server's tasks.d/ as
 # NAME-client.cfg, beside a server part's NAME-server.cfg, its log in the
 # server's logs; the server's tasks.cfg, not the client's
@@ -142,19 +142,18 @@ assert_equal 1 "$(printf '%s\n' "$out" | grep -c 'xymon-plugin is passed over')"
 x remove --client --all XYMONHOME="$s"; ok "remove --client --all on a server"
 rmdir "$c/etc/clientlaunch.d"
 
-# XYMONCLIENTHOME: a variable, read through the server's xymoncmd; naming
-# nothing, a missing directory, no client's marks, the server's own tree.
-cat > "$s/bin/xymoncmd" <<'SH'
-#!/bin/sh
-case $1 in --env=*) f=${1#--env=}; shift ;; esac
-set -a; XYMONTOPDIR=${f%/server/etc/xymonserver.cfg}; eval "$(grep '^[A-Z_]*=' "$f")"; set +a
-exec "$@"
-SH
-chmod 755 "$s/bin/xymoncmd"
+# XYMONCLIENTHOME: a variable is refused, as nothing here reads it; and a
+# client tree named directly, a server found naming its client tree with
+# a variable, is in doubt. Then naming nothing, a relative path, a missing
+# directory, no client's marks, the server's own tree.
 sed "s|^XYMONCLIENTHOME=.*|XYMONCLIENTHOME=\"\$XYMONTOPDIR/client\"|" "$work/xymonserver.cfg" > "$s/etc/xymonserver.cfg"
-x install --client oc XYMONHOME="$s"; ok "install --client, XYMONCLIENTHOME a variable"
-assert_file_exists "$c/ext/oc/tasks.cfg"
-x remove --client oc XYMONHOME="$s"; ok "remove --client, XYMONCLIENTHOME a variable"
+x install --client oc XYMONHOME="$s"; refused "install --client, XYMONCLIENTHOME a variable"
+assert_contains "XYMONCLIENTHOME, \$XYMONTOPDIR/client, names a variable, which this command does not read: write the client tree's path itself" "$out" "[S36] a variable: refused, saying what was read"
+o=$work/elsewhere/client
+mkdir -p "$o/bin" "$o/etc" "$o/ext"; : > "$o/bin/xymonclient.sh"; : > "$o/etc/xymonclient.cfg"
+XYMON_PLUGINS_TREES=$s x install --client oc XYMONHOME="$o"; refused "install --client in a client tree, a server found naming its own with a variable"
+assert_contains "the Xymon server $s names its client tree with a variable, which this command does not read; refused while in doubt" "$out" "[S25] a server found naming its client tree with a variable: in doubt"
+cp "$work/xymonserver.cfg" "$s/etc/xymonserver.cfg"
 case_refused() {   # case_refused LINE WHY EXPECTED
 	{ grep -v '^XYMONCLIENTHOME=' "$work/xymonserver.cfg"; [ -z "$1" ] || printf '%s\n' "$1"; } > "$s/etc/xymonserver.cfg"
 	x install --client oc XYMONHOME="$s"; refused "install --client, $2"
